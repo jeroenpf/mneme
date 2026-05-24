@@ -1,0 +1,15 @@
+# Binaries
+/mneme
+/cmd/server/server
+*.exe
+
+# Local env / secrets
+.env
+.env.local
+
+# Build artefacts
+web/dist/
+web/node_modules/
+
+# OS
+.DS_Store
