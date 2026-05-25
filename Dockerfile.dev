@@ -1,8 +1,9 @@
 FROM golang:1.25-alpine
 
 WORKDIR /app
-RUN apk add --no-cache git wget
+RUN apk add --no-cache git wget && \
+    go install github.com/air-verse/air@latest
 
 ENV CGO_ENABLED=0
 
-CMD ["go", "run", "./cmd/server"]
+CMD ["air", "-c", ".air.toml"]

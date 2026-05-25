@@ -3,6 +3,9 @@
 /cmd/server/server
 *.exe
 
+# air live reload
+.tmp/
+
 # Local env / secrets
 .env
 .env.local
