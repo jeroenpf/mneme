@@ -5,19 +5,22 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Pinger is the minimal contract Health needs. Implemented by *store.PostgresStore.
+type Pinger interface {
+	Ping(ctx context.Context) error
+}
+
 type Health struct {
-	DB *pgxpool.Pool
+	Store Pinger
 }
 
 func (h *Health) Handler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	dbOK := h.DB.Ping(ctx) == nil
+	dbOK := h.Store.Ping(ctx) == nil
 
 	resp := map[string]bool{"ok": dbOK, "db": dbOK}
 	w.Header().Set("Content-Type", "application/json")
