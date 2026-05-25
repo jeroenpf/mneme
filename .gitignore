@@ -13,6 +13,10 @@
 # Build artefacts
 web/dist/
 web/node_modules/
+web/.vite/
+web/node_modules/.vite/
+internal/web/dist/*
+!internal/web/dist/.gitkeep
 
 # OS
 .DS_Store
