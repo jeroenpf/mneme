@@ -8,10 +8,34 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
+
+// PostgreSQL SQLSTATE codes we translate to typed errors. See
+// https://www.postgresql.org/docs/16/errcodes-appendix.html
+const (
+	pgUniqueViolation     = "23505"
+	pgForeignKeyViolation = "23503"
+)
+
+// translateWriteErr maps known PG SQLSTATEs on documents writes to
+// typed store errors. Returns the original (wrapped) error when no
+// mapping applies.
+func translateWriteErr(op string, err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch {
+		case pgErr.Code == pgUniqueViolation:
+			return ErrDuplicateID
+		case pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "documents_project_fkey":
+			return ErrInvalidProject
+		}
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
 
 // PostgresStore is the production Store implementation. It owns the
 // pgxpool, so callers construct it once at startup and Close() it on
@@ -108,7 +132,7 @@ func (s *PostgresStore) CreateDocument(ctx context.Context, doc *models.Document
 		ensureJSONMap(doc.Meta), ensureJSONMap(doc.Body),
 	)
 	if err := row.Scan(&doc.CreatedAt, &doc.UpdatedAt); err != nil {
-		return fmt.Errorf("insert document: %w", err)
+		return translateWriteErr("insert document", err)
 	}
 	return nil
 }
@@ -142,7 +166,7 @@ func (s *PostgresStore) UpdateDocument(ctx context.Context, doc *models.Document
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
-		return fmt.Errorf("update document: %w", err)
+		return translateWriteErr("update document", err)
 	}
 	return nil
 }
@@ -241,6 +265,44 @@ func (s *PostgresStore) SearchDocuments(ctx context.Context, query string, f Fil
 	}
 	defer rows.Close()
 	return collectDocuments(rows)
+}
+
+func (s *PostgresStore) ListProjects(ctx context.Context) ([]*models.ProjectStats, error) {
+	const q = `
+		SELECT p.id, p.name, p.slug, p.description, p.created_at,
+		       COUNT(d.id) FILTER (WHERE d.status = 'todo')        AS c_todo,
+		       COUNT(d.id) FILTER (WHERE d.status = 'in-progress') AS c_in_progress,
+		       COUNT(d.id) FILTER (WHERE d.status = 'complete')    AS c_complete,
+		       COUNT(d.id) FILTER (WHERE d.status = 'blocked')     AS c_blocked,
+		       COUNT(d.id) FILTER (WHERE d.status = 'archived')    AS c_archived,
+		       COUNT(d.id)                                         AS c_total
+		FROM projects p
+		LEFT JOIN documents d ON d.project = p.slug
+		GROUP BY p.id, p.name, p.slug, p.description, p.created_at
+		ORDER BY p.name`
+
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	defer rows.Close()
+
+	out := []*models.ProjectStats{}
+	for rows.Next() {
+		ps := &models.ProjectStats{}
+		if err := rows.Scan(
+			&ps.ID, &ps.Name, &ps.Slug, &ps.Description, &ps.CreatedAt,
+			&ps.Counts.Todo, &ps.Counts.InProgress, &ps.Counts.Complete,
+			&ps.Counts.Blocked, &ps.Counts.Archived, &ps.Counts.Total,
+		); err != nil {
+			return nil, fmt.Errorf("scan project: %w", err)
+		}
+		out = append(out, ps)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate projects: %w", err)
+	}
+	return out, nil
 }
 
 func collectDocuments(rows pgx.Rows) ([]*models.Document, error) {

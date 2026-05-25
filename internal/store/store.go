@@ -10,6 +10,16 @@ import (
 // ErrNotFound is returned when a document lookup misses.
 var ErrNotFound = errors.New("document not found")
 
+// ErrInvalidProject is returned when a write references a project slug
+// that does not exist in the projects table (FK violation on
+// documents.project).
+var ErrInvalidProject = errors.New("invalid project")
+
+// ErrDuplicateID is returned when CreateDocument hits a PK conflict on
+// documents.id. Callers performing slug allocation should retry with a
+// new candidate.
+var ErrDuplicateID = errors.New("duplicate document id")
+
 // Filter narrows ListDocuments / SearchDocuments. Zero/nil fields are
 // treated as "no constraint".
 type Filter struct {
@@ -46,6 +56,10 @@ type Store interface {
 	// documents.search_vector and orders by ts_rank desc. Additional
 	// Filter fields are AND-ed onto the query.
 	SearchDocuments(ctx context.Context, q string, f Filter) ([]*models.Document, error)
+
+	// ListProjects returns every project with per-status document counts.
+	// Used by /api/v1/projects and the registry UI's stats row.
+	ListProjects(ctx context.Context) ([]*models.ProjectStats, error)
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

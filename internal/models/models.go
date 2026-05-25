@@ -31,6 +31,24 @@ type Project struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// ProjectCounts breaks down a project's document counts by status. The
+// JSON keys mirror the status enum values exactly so the UI can index
+// by status without a translation table.
+type ProjectCounts struct {
+	Todo       int `json:"todo"`
+	InProgress int `json:"in-progress"`
+	Complete   int `json:"complete"`
+	Blocked    int `json:"blocked"`
+	Archived   int `json:"archived"`
+	Total      int `json:"total"`
+}
+
+// ProjectStats is the aggregated row returned by Store.ListProjects.
+type ProjectStats struct {
+	Project
+	Counts ProjectCounts `json:"counts"`
+}
+
 // Embedding mirrors the embeddings row. Phase 2.8 populates this; the
 // shape is fixed in 1.2 so dependent migrations stay stable.
 type Embedding struct {

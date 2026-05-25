@@ -10,9 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-
 	"github.com/jeroenpfeil/mneme/internal/api"
 	"github.com/jeroenpfeil/mneme/internal/config"
 	"github.com/jeroenpfeil/mneme/internal/migrations"
@@ -49,18 +46,9 @@ func run() error {
 	}
 	slog.Info("migrations applied")
 
-	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
-
-	health := &api.Health{Store: st}
-	r.Get("/health", health.Handler)
-
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           r,
+		Handler:           api.Router(cfg, st),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

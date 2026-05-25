@@ -2,9 +2,9 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -159,12 +159,69 @@ func TestCreateDocumentRejectsUnknownProject(t *testing.T) {
 	doc := sampleDoc("orphan", "Orphan")
 	doc.Project = ptr("does-not-exist")
 	err := s.CreateDocument(context.Background(), doc)
-	if err == nil {
-		t.Fatal("expected FK violation, got nil")
+	if !errors.Is(err, store.ErrInvalidProject) {
+		t.Fatalf("expected ErrInvalidProject, got: %v", err)
 	}
-	// Verifies the projects→documents FK is wired and enforced.
-	if !strings.Contains(err.Error(), "documents_project_fkey") {
-		t.Errorf("expected documents_project_fkey violation, got: %v", err)
+}
+
+func TestCreateDocumentRejectsDuplicateID(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.CreateDocument(ctx, sampleDoc("dup", "First")); err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	err := s.CreateDocument(ctx, sampleDoc("dup", "Second"))
+	if !errors.Is(err, store.ErrDuplicateID) {
+		t.Fatalf("expected ErrDuplicateID, got: %v", err)
+	}
+}
+
+func TestListProjectsCounts(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	seedProjects(t, s, "apollo", "hermes")
+
+	mkdoc := func(id, project, status string) *models.Document {
+		d := sampleDoc(id, "T "+id)
+		d.Project = ptr(project)
+		d.Status = status
+		return d
+	}
+	for _, d := range []*models.Document{
+		mkdoc("a1", "apollo", models.StatusTodo),
+		mkdoc("a2", "apollo", models.StatusInProgress),
+		mkdoc("a3", "apollo", models.StatusComplete),
+		mkdoc("a4", "apollo", models.StatusArchived),
+		mkdoc("h1", "hermes", models.StatusBlocked),
+	} {
+		if err := s.CreateDocument(ctx, d); err != nil {
+			t.Fatalf("CreateDocument %s: %v", d.ID, err)
+		}
+	}
+
+	got, err := s.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d projects, want 2", len(got))
+	}
+	byslug := map[string]*models.ProjectStats{}
+	for _, p := range got {
+		byslug[p.Slug] = p
+	}
+	apollo := byslug["apollo"]
+	if apollo.Counts.Total != 4 ||
+		apollo.Counts.Todo != 1 ||
+		apollo.Counts.InProgress != 1 ||
+		apollo.Counts.Complete != 1 ||
+		apollo.Counts.Archived != 1 {
+		t.Errorf("apollo counts wrong: %+v", apollo.Counts)
+	}
+	hermes := byslug["hermes"]
+	if hermes.Counts.Total != 1 || hermes.Counts.Blocked != 1 {
+		t.Errorf("hermes counts wrong: %+v", hermes.Counts)
 	}
 }
 
