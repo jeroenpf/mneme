@@ -441,4 +441,30 @@ func TestSearchDocumentsRanksAndFilters(t *testing.T) {
 	if len(got) != 0 {
 		t.Errorf("expected 0 matches, got %d", len(got))
 	}
+
+	// websearch syntax: OR pulls in 'unrelated' alongside 'title-hit'.
+	got, err = s.SearchDocuments(ctx, "vehicle OR pricing", store.Filter{})
+	if err != nil {
+		t.Fatalf("OR search: %v", err)
+	}
+	if len(got) != 3 {
+		t.Errorf("OR search: got %d matches, want 3 (title-hit, body-hit, unrelated)", len(got))
+	}
+
+	// websearch syntax: -term excludes.
+	got, err = s.SearchDocuments(ctx, "vehicle -inventory", store.Filter{})
+	if err != nil {
+		t.Fatalf("exclusion search: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "title-hit" {
+		t.Errorf("exclusion search: got %+v, want [title-hit]", docIDs(got))
+	}
+}
+
+func docIDs(docs []*models.Document) []string {
+	out := make([]string, 0, len(docs))
+	for _, d := range docs {
+		out = append(out, d.ID)
+	}
+	return out
 }

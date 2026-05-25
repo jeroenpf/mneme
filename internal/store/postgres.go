@@ -246,16 +246,18 @@ func (s *PostgresStore) ListDocuments(ctx context.Context, f Filter) ([]*models.
 
 func (s *PostgresStore) SearchDocuments(ctx context.Context, query string, f Filter) ([]*models.Document, error) {
 	b := &queryBuilder{}
-	// The tsquery arg is added first so $1 is stable for both the WHERE
-	// clause and the ORDER BY ts_rank.
+	// websearch_to_tsquery accepts google-style syntax: AND-by-default,
+	// "quoted phrases", `or` keyword, and `-exclusion` — strictly more
+	// useful than plainto_tsquery for LLM-generated queries while
+	// preserving the same single-term behavior.
 	qRef := b.addArg(query)
 	b.where = append(b.where,
-		"search_vector @@ plainto_tsquery('english', "+qRef+")")
+		"search_vector @@ websearch_to_tsquery('english', "+qRef+")")
 	b.addFilter(f)
 
 	sql := `SELECT ` + documentColumns + ` FROM documents` +
 		b.whereClause() +
-		` ORDER BY ts_rank(search_vector, plainto_tsquery('english', ` + qRef + `)) DESC,` +
+		` ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', ` + qRef + `)) DESC,` +
 		` updated_at DESC` +
 		b.limitOffset(f)
 

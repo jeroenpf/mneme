@@ -12,6 +12,7 @@ import (
 
 	"github.com/jeroenpfeil/mneme/internal/api"
 	"github.com/jeroenpfeil/mneme/internal/config"
+	"github.com/jeroenpfeil/mneme/internal/mcp"
 	"github.com/jeroenpfeil/mneme/internal/migrations"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
@@ -46,9 +47,10 @@ func run() error {
 	}
 	slog.Info("migrations applied")
 
+	mcpSrv := mcp.New(st)
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.Router(cfg, st),
+		Handler:           api.Router(cfg, st, mcpSrv.Handler()),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
