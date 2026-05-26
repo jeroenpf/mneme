@@ -13,5 +13,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['src/**/*.test.ts'],
+    // Auto-restore vi.spyOn / vi.fn mocks between tests so call counts
+    // and implementations don't leak across cases.
+    restoreMocks: true,
   },
 })
