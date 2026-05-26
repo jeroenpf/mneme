@@ -18,3 +18,15 @@ Local AI dev knowledge service. Go + PostgreSQL + Vue3, runs locally on the lapt
 - **Error Handling**: Always wrap errors (`fmt.Errorf("action: %w", err)`) and define typed domain errors (e.g., `ErrNotFound`) for API translation.
 - **Strong Typing**: Use custom types for enums instead of raw strings to leverage compile-time safety.
 - **Context**: Pass `context.Context` down through the entire call stack to handle timeouts gracefully.
+
+## Dev workflow
+
+A top-level `Makefile` wraps the dev loop. Common targets:
+
+- `make dev` — full stack: postgres + Go (live-reload via air) + Vite on `:5273`. Vite proxies `/api` and `/health` to the Go dev container on `:18080` (TLS / `https://mneme.local` lands in Phase 1.8).
+- `make test` — `go test ./...` + Vue/vitest.
+- `make build` — builds the SPA into `web/dist/`, copies into `internal/web/dist/` for `//go:embed`, then builds the Go binary at `cmd/server/server`.
+- `make logs` / `make psql` — backend log tail / psql shell inside the container.
+- `make down` / `make reset` — stop containers / drop the postgres volume (the latter requires `RESET=yes`).
+
+Run `make help` for the full list.
