@@ -13,10 +13,10 @@ import (
 )
 
 // Router builds the top-level HTTP handler. Composes middleware,
-// /health, and the /api/v1 group. If mcpHandler is non-nil it's
-// mounted at /mcp — separated this way so test setups that only
-// exercise the REST surface don't have to construct an MCP server.
-func Router(cfg *config.Config, st store.Store, mcpHandler http.Handler) http.Handler {
+// /health, /api/v1, /mcp, and falls back to the embedded SPA for
+// any remaining path. mcpHandler and webHandler may be nil — useful
+// in test setups that don't need them.
+func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
@@ -50,6 +50,14 @@ func Router(cfg *config.Config, st store.Store, mcpHandler http.Handler) http.Ha
 		// POST (send JSON-RPC) under the same path, so Handle (not
 		// Mount, which strips the prefix) is the right primitive.
 		r.Handle("/mcp", mcpHandler)
+	}
+	if webHandler != nil {
+		// SPA fallback. chi's NotFound catches anything that didn't
+		// match a route — exactly the right hook for vue-router's
+		// history mode (so deep links and reloads serve index.html).
+		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+			webHandler.ServeHTTP(w, r)
+		})
 	}
 	return r
 }

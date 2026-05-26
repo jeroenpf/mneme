@@ -15,6 +15,7 @@ import (
 	"github.com/jeroenpfeil/mneme/internal/mcp"
 	"github.com/jeroenpfeil/mneme/internal/migrations"
 	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpfeil/mneme/internal/web"
 )
 
 func main() {
@@ -50,7 +51,7 @@ func run() error {
 	mcpSrv := mcp.New(st)
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.Router(cfg, st, mcpSrv.Handler()),
+		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler()),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
