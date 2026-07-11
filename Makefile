@@ -7,7 +7,7 @@ WEB     := web
 GO_PKGS := ./...
 
 .DEFAULT_GOAL := help
-.PHONY: help dev up down logs psql seed test build tidy clean reset
+.PHONY: help dev up down logs psql seed test build tidy clean reset setup-host verify-host
 
 help: ## Show this list
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -58,3 +58,9 @@ else
 	@echo "Re-run with: RESET=yes make reset"
 	@exit 1
 endif
+
+setup-host: ## One-time host setup: mkcert CA + cert, LaunchDaemon, lo0 alias, /etc/hosts. Run with sudo.
+	@bash scripts/setup-host.sh
+
+verify-host: ## Scorecard for the mneme.local host setup (non-destructive, no sudo)
+	@bash scripts/verify-host.sh

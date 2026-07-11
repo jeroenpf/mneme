@@ -9,6 +9,7 @@
 # Local env / secrets
 .env
 .env.local
+.certs/
 
 # Build artefacts
 web/dist/
