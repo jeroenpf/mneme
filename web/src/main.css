@@ -63,3 +63,8 @@ html, body, #app {
 .mn-md a:hover {
   color: var(--accent-hover);
 }
+
+/* Anchor targets clear the sticky topbar when scrolled to. */
+.mn-anchor {
+  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
+}
