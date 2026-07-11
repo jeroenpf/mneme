@@ -21,6 +21,23 @@ var implementation = &sdk.Implementation{
 	Version: "1.4.0",
 }
 
+// instructions is surfaced to MCP clients (Claude Code et al.) on connect.
+// Tells the LLM what Mneme is for and which tools to reach for first.
+// Kept terse on purpose — every token here lives in the client's context.
+const instructions = `Mneme is the source of truth for plans, specs, and ongoing project knowledge — anything under ` + "`.architecture/`" + ` or that evolves between sessions.
+
+When editing a plan or spec, prefer structured tools (tick_task, update_task, add_task, update_section, add_section, advance_phase) over push_document. They address blocks by stable ID, are server-validated, and cost ~100× fewer tokens than re-emitting the document.
+
+Typical workflow:
+1. list_documents (optionally filtered by project/type) to discover what exists.
+2. search_documents (websearch syntax: phrases, OR, -exclusion) before assuming something is missing.
+3. get_document only when you need the body.
+4. Mutate with the narrowest tool that fits the change.
+
+push_document is upsert-by-meta.id — reserve it for new documents or full rewrites.
+
+Repo-tracked files (CLAUDE.md, ADRs, READMEs, .architecture/specs/*.md) are not in Mneme; read those from disk.`
+
 // Server holds the SDK Server plus the dependencies its tool handlers
 // close over. It's safe to share across requests — the SDK manages
 // per-session state inside its own machinery.
@@ -32,7 +49,7 @@ type Server struct {
 // New constructs a Server with every Phase 1.4 tool registered.
 func New(st store.Store) *Server {
 	s := &Server{
-		sdk:   sdk.NewServer(implementation, nil),
+		sdk:   sdk.NewServer(implementation, &sdk.ServerOptions{Instructions: instructions}),
 		tools: &tools{store: st},
 	}
 	s.tools.register(s.sdk)
