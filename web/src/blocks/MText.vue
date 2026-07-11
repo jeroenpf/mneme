@@ -1,7 +1,11 @@
 <script setup lang="ts">
-defineProps<{ id?: string; content?: string }>()
+import { computed } from 'vue'
+import { renderInline } from '@/lib/markdown'
+
+const props = defineProps<{ id?: string; content?: string }>()
+const html = computed(() => renderInline(props.content))
 </script>
 
 <template>
-  <p class="mn-body">{{ content }}</p>
+  <p v-if="html" class="mn-body mn-md" v-html="html" />
 </template>

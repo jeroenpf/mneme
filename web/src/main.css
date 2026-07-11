@@ -43,3 +43,23 @@ html, body, #app {
   font-family: var(--font-body);
   min-height: 100%;
 }
+
+/* Inline-markdown output (renderInline) — styled globally because the
+   HTML comes from v-html, where scoped styles need :deep in every block. */
+.mn-md code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 1px 5px;
+  color: var(--accent);
+}
+.mn-md a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-border);
+}
+.mn-md a:hover {
+  color: var(--accent-hover);
+}
