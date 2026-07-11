@@ -12,20 +12,10 @@ INSERT INTO documents
   (id, title, project, type, status, ticket, repo, tags,
    phase_current, phase_total, meta, body, created_at, updated_at)
 VALUES
-  ('mneme-implementation', 'Mneme implementation', 'mneme', 'plan', 'in-progress',
-   NULL, 'jeroenpfeil/mneme', '{go,vue,postgres}', 6, 9,
-   '{"description": "Phase plan for the core service: Go REST plus MCP server, Vue registry and viewer, trusted local TLS. Sub-phases 1.1 through 1.5 are done; the registry UI is in flight."}',
-   '{"sections": []}', now() - interval '50 days', now() - interval '2 hours'),
-
   ('repo-vs-mneme-delineation', 'Repo vs Mneme delineation', 'mneme', 'spec', 'complete',
    NULL, 'jeroenpfeil/mneme', '{architecture,docs}', NULL, NULL,
    '{"description": "Decision record for what lives in git versus Mneme: the repo owns durable present-tense docs about the artifact, Mneme owns evolving work docs. Pointers across the line, never copies."}',
    '{"sections": []}', now() - interval '20 days', now() - interval '1 day'),
-
-  ('hyperion-zigbee-migration', 'Zigbee2MQTT migration', 'hyperion', 'plan', 'in-progress',
-   'HYP-231', 'jeroenpfeil/hyperion', '{zigbee,mqtt}', 2, 6,
-   '{"description": "Move all 40-plus devices off the aging deCONZ stack onto zigbee2mqtt: inventory, coordinator swap, room-by-room re-pairing, automation rewrites, deCONZ decommission."}',
-   '{"sections": []}', now() - interval '15 days', now() - interval '3 days'),
 
   ('hyperion-q2-energy-report', 'Q2 energy consumption report', 'hyperion', 'report', 'complete',
    NULL, NULL, '{energy}', NULL, NULL,
@@ -52,3 +42,194 @@ VALUES
    '{"description": "Accumulated pairing quirks and firmware workarounds from the deCONZ era. Kept for reference; superseded by the zigbee2mqtt migration plan."}',
    '{"sections": []}', now() - interval '60 days', now() - interval '45 days')
 ON CONFLICT (id) DO NOTHING;
+
+-- Rich documents — the phase 1.7 viewer's reference material. Upserted
+-- (not DO NOTHING) so re-running the seed refreshes meta/body on an
+-- already-seeded database. The updated_at trigger stamps them on re-run.
+INSERT INTO documents
+  (id, title, project, type, status, ticket, repo, tags,
+   phase_current, phase_total, meta, body, created_at, updated_at)
+VALUES
+  ('mneme-implementation', 'Mneme implementation', 'mneme', 'plan', 'in-progress',
+   NULL, 'jeroenpfeil/mneme', '{go,vue,postgres}', 6, 9,
+   $$
+   {
+     "description": "Phase plan for the core service: Go REST plus MCP server, Vue registry and viewer, trusted local TLS. Sub-phases 1.1 through 1.6 are done; the document viewer is in flight.",
+     "phases": [
+       { "title": "Scaffolding",      "status": "done" },
+       { "title": "Documents API",    "status": "done" },
+       { "title": "Search",           "status": "done" },
+       { "title": "MCP server",       "status": "done" },
+       { "title": "Vue scaffold",     "status": "done" },
+       { "title": "Registry UI",      "status": "wip"  },
+       { "title": "Document viewer",  "status": "todo" },
+       { "title": "Local TLS",        "status": "todo" },
+       { "title": "Phase 2 prep",     "status": "todo" }
+     ],
+     "custom_fields": {
+       "Complexity": "Medium",
+       "Sessions": "6 of 9",
+       "Scope": "weekend-sized slices"
+     }
+   }
+   $$::jsonb,
+   $$
+   {
+     "sections": [
+       {
+         "type": "section", "id": "overview", "title": "Overview",
+         "children": [
+           { "type": "text", "id": "ov-p1",
+             "content": "Mneme is a **local-first** knowledge service for AI-assisted development. Documents are born over MCP, live in Postgres, and render in a *read-mostly* Vue viewer — see the [delineation spec](/doc/repo-vs-mneme-delineation) for what belongs on which side of the git line. The stack is `Go 1.24` + `pgx/v5` + Vue 3." },
+           { "type": "key-value", "id": "ov-kv", "title": "At a glance",
+             "data": {
+               "Stack": "Go + PostgreSQL + Vue 3",
+               "Transport": "REST for the UI, MCP for mutations",
+               "Host": "macOS laptop, Docker Compose",
+               "Domain": "`https://mneme.local` via a `127.0.0.2` loopback alias"
+             } },
+           { "type": "callout", "id": "ov-c1", "variant": "info",
+             "content": "The UI is a **read-mostly** viewer. Every mutation goes through MCP tools — `push_document`, `update_task`, `advance_phase`." }
+         ]
+       },
+       {
+         "type": "section", "id": "architecture", "title": "Architecture",
+         "children": [
+           { "type": "text", "id": "ar-p1",
+             "content": "Requests fan out from one chi router: REST handlers feed the SPA, the `/mcp` endpoint feeds Claude Code. Both share the same `Store` interface, so the transport layer stays thin." },
+           { "type": "diagram", "id": "ar-d1", "title": "Request flow",
+             "content": "flowchart LR\n  CC[Claude Code] -->|MCP| S[Go server]\n  UI[Vue SPA] -->|REST| S\n  S --> PG[(PostgreSQL)]" },
+           {
+             "type": "section", "id": "api-surface", "title": "API surface",
+             "children": [
+               { "type": "table", "id": "as-t1", "title": "REST endpoints",
+                 "cols": ["Method", "Path", "Purpose"],
+                 "rows": [
+                   ["GET", "`/api/v1/documents`", "list + filter, **cursor** paged"],
+                   ["GET", "`/api/v1/documents/:id`", "single document"],
+                   ["GET", "`/api/v1/projects`", "projects with per-status counts"]
+                 ] },
+               { "type": "code", "id": "as-c1", "lang": "go", "filename": "internal/store/store.go",
+                 "content": "// Store abstracts persistence so handlers stay testable.\ntype Store interface {\n\tGetDocument(ctx context.Context, id string) (*models.Document, error)\n\tListDocuments(ctx context.Context, f models.DocumentFilter) ([]models.Document, string, error)\n\tUpsertDocument(ctx context.Context, doc *models.Document) error\n}" },
+               { "type": "code", "id": "as-c2", "lang": "sql", "filename": "internal/migrations/sql/002_documents.up.sql",
+                 "content": "-- weighted search vector, generated from title/ticket/tags/body\nsearch_vector TSVECTOR GENERATED ALWAYS AS (\n  documents_search_vector(title, ticket, tags, body)\n) STORED;\n\nCREATE INDEX documents_search_vector_idx\n  ON documents USING GIN (search_vector);" }
+             ]
+           },
+           { "type": "callout", "id": "ar-c1", "variant": "warn",
+             "content": "Postgres is tuned for a personal dataset — `shared_buffers=256MB`, `work_mem=8MB`, `max_connections=20`. Do **not** point a fleet at it." }
+         ]
+       },
+       {
+         "type": "subphase", "id": "sp-1-7", "num": "1.7", "title": "Document viewer", "session": 7,
+         "description": "Meta chrome plus a recursive block renderer over `body.sections` — no runtime template compilation.",
+         "tasks": [
+           { "id": "t-171", "title": "`DocumentView.vue` shell — sidebar + content column", "done": true, "tags": ["vue"] },
+           { "id": "t-172", "title": "Meta header from `doc.meta`", "done": true },
+           { "id": "t-173", "title": "Phase tracker sidebar", "done": false,
+             "content": "Built from `meta.phases[]`; scroll-aware active highlight rides the section observer." },
+           { "id": "t-174", "title": "Prism + Mermaid lazy rendering", "done": false, "tags": ["prism", "mermaid"] }
+         ],
+         "children": [
+           { "type": "callout", "id": "sp17-c1", "variant": "note",
+             "content": "Body is structured JSON dispatched via `<component :is>` — the standard Vue runtime is enough. No `@vue/compiler-dom` at runtime." }
+         ]
+       },
+       {
+         "type": "section", "id": "decisions", "title": "Decisions & risks",
+         "children": [
+           { "type": "callout", "id": "de-c1", "variant": "success", "title": "Locked",
+             "content": "The official `modelcontextprotocol/go-sdk` v1 powers the MCP endpoint — stable since phase 1.4." },
+           { "type": "callout", "id": "de-c2", "variant": "danger", "title": "Watch",
+             "content": "The loopback alias `127.0.0.2` must survive reboots or `mneme.local` silently dies — the LaunchDaemon in 1.8 owns this." },
+           { "type": "task-list", "id": "de-t1", "title": "Open follow-ups",
+             "tasks": [
+               { "id": "t-d1", "title": "Graduation export — render a doc to repo markdown", "done": false },
+               { "id": "t-d2", "title": "Snippet hits in `search_documents`", "done": false, "tags": ["search"] }
+             ] },
+           { "type": "text", "id": "de-p1",
+             "content": "Everything else rides the [1.9 backlog](#decisions) until real friction shows up — we do not speculate." }
+         ]
+       }
+     ]
+   }
+   $$::jsonb,
+   now() - interval '50 days', now() - interval '2 hours'),
+
+  ('hyperion-zigbee-migration', 'Zigbee2MQTT migration', 'hyperion', 'plan', 'in-progress',
+   'HYP-231', 'jeroenpfeil/hyperion', '{zigbee,mqtt}', 2, 6,
+   $$
+   {
+     "description": "Move all 40-plus devices off the aging deCONZ stack onto zigbee2mqtt: inventory, coordinator swap, room-by-room re-pairing, automation rewrites, deCONZ decommission.",
+     "phases": [
+       { "title": "Inventory",           "status": "done" },
+       { "title": "Coordinator swap",    "status": "wip"  },
+       { "title": "Re-pair rooms",       "status": "todo" },
+       { "title": "Automation rewrites", "status": "todo" },
+       { "title": "Cutover",             "status": "todo" },
+       { "title": "Decommission",        "status": "todo" }
+     ],
+     "custom_fields": { "Devices": "43", "Coordinator": "SLZB-06M" }
+   }
+   $$::jsonb,
+   $$
+   {
+     "sections": [
+       {
+         "type": "section", "id": "z-overview", "title": "Overview",
+         "children": [
+           { "type": "text", "id": "z-p1",
+             "content": "deCONZ has been **end-of-life** in this house since the ConBee II started dropping its mesh weekly. Target stack: `zigbee2mqtt` on the SLZB-06M PoE coordinator, `ember` driver." },
+           { "type": "table", "id": "z-t1", "title": "Device inventory",
+             "cols": ["Room", "Devices", "Quirks"],
+             "rows": [
+               ["Living room", "12", "2 bulbs stuck on ancient firmware"],
+               ["Kitchen", "8", "power plugs report watts as `state_l1`"],
+               ["Bedrooms", "14", "Aqara sensors — re-pair *slowly*"],
+               ["Utility", "9", "routers first, then end devices"]
+             ] },
+           { "type": "callout", "id": "z-c1", "variant": "warn",
+             "content": "Pair **mains-powered routers before battery end devices** or the mesh forms star-shaped around the coordinator and dies at the first wall." }
+         ]
+       },
+       {
+         "type": "subphase", "id": "z-sp-2", "num": "2", "title": "Coordinator swap", "session": 2,
+         "description": "Bring up zigbee2mqtt against the SLZB-06M without touching the deCONZ network yet.",
+         "tasks": [
+           { "id": "z-t21", "title": "Flash SLZB-06M to latest `ember` firmware", "done": true },
+           { "id": "z-t22", "title": "zigbee2mqtt container + config", "done": true, "tags": ["docker"] },
+           { "id": "z-t23", "title": "Form new network on a **different channel** than deCONZ", "done": false,
+             "content": "deCONZ sits on channel 15 — form on 20 so both meshes coexist during migration." },
+           { "id": "z-t24", "title": "Smoke-pair one sacrificial plug", "done": false }
+         ],
+         "children": [
+           { "type": "code", "id": "z-c2", "lang": "yaml", "filename": "zigbee2mqtt/configuration.yaml",
+             "content": "mqtt:\n  server: mqtt://mosquitto:1883\nserial:\n  adapter: ember\n  port: tcp://slzb-06m.lan:6638\nadvanced:\n  channel: 20\n  transmit_power: 20" },
+           { "type": "diagram", "id": "z-d1", "title": "Swap sequence",
+             "content": "flowchart TD\n  A[deCONZ ch15] -->|keep running| A\n  B[SLZB-06M] --> C[z2m forms ch20]\n  C --> D{smoke pair OK?}\n  D -->|yes| E[room-by-room re-pair]\n  D -->|no| F[check ember firmware]" }
+         ]
+       },
+       {
+         "type": "section", "id": "z-rollback", "title": "Rollback plan",
+         "children": [
+           { "type": "key-value", "id": "z-kv1",
+             "data": {
+               "Trigger": "pairing failure rate above 20 percent in any room",
+               "Fallback": "deCONZ untouched on channel 15 — devices re-join it on reset",
+               "Data loss": "none; automations keep dual entity ids until cutover"
+             } }
+         ]
+       }
+     ]
+   }
+   $$::jsonb,
+   now() - interval '15 days', now() - interval '3 days')
+ON CONFLICT (id) DO UPDATE SET
+  title         = EXCLUDED.title,
+  status        = EXCLUDED.status,
+  ticket        = EXCLUDED.ticket,
+  repo          = EXCLUDED.repo,
+  tags          = EXCLUDED.tags,
+  phase_current = EXCLUDED.phase_current,
+  phase_total   = EXCLUDED.phase_total,
+  meta          = EXCLUDED.meta,
+  body          = EXCLUDED.body;
