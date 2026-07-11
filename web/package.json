@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "marked": "^18.0.6",
+    "mermaid": "^11.16.0",
     "prismjs": "^1.30.0",
     "vue": "^3.5.34",
     "vue-router": "^5.0.7"
