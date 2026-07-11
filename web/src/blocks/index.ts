@@ -9,16 +9,25 @@ import MTable from './MTable.vue'
 import MTaskList from './MTaskList.vue'
 import MText from './MText.vue'
 
-const REGISTRY: Record<string, Component> = {
-  section: MSection,
-  subphase: MSubphase,
-  'task-list': MTaskList,
-  callout: MCallout,
-  code: MCode,
-  table: MTable,
-  diagram: MDiagram,
-  'key-value': MKeyValue,
-  text: MText,
+// Built lazily on first dispatch: the import cycle MSection →
+// BlockRenderer → index → MSection means an eager literal would capture
+// `undefined` for whichever component started the cycle, and nested
+// sections would silently render nothing.
+let registry: Record<string, Component> | null = null
+
+function getRegistry(): Record<string, Component> {
+  registry ??= {
+    section: MSection,
+    subphase: MSubphase,
+    'task-list': MTaskList,
+    callout: MCallout,
+    code: MCode,
+    table: MTable,
+    diagram: MDiagram,
+    'key-value': MKeyValue,
+    text: MText,
+  }
+  return registry
 }
 
 // Dispatcher uses imported Component references (not string names) so
@@ -27,5 +36,5 @@ const REGISTRY: Record<string, Component> = {
 // type-safer.
 export function typeToComponent(type: string | undefined): Component {
   if (!type) return MText
-  return REGISTRY[type] ?? MText
+  return getRegistry()[type] ?? MText
 }

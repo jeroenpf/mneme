@@ -2,6 +2,11 @@
 import { typeToComponent } from './index'
 
 defineProps<{ blocks: Array<Record<string, unknown>> }>()
+
+function blockProps(block: Record<string, unknown>): Record<string, unknown> {
+  const { type: _type, ...rest } = block
+  return rest
+}
 </script>
 
 <template>
@@ -9,6 +14,6 @@ defineProps<{ blocks: Array<Record<string, unknown>> }>()
     v-for="(block, i) in blocks"
     :is="typeToComponent((block as { type?: string }).type)"
     :key="(block as { id?: string }).id ?? i"
-    v-bind="block"
+    v-bind="blockProps(block)"
   />
 </template>

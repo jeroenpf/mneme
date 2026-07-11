@@ -25,6 +25,16 @@ export interface Document {
   updated_at: string
 }
 
+// A task entry inside subphase.tasks[] / task-list.tasks[]. Not a block —
+// no type field; validateBody only checks shape.
+export interface TaskItem {
+  id: string
+  title: string
+  done?: boolean
+  content?: string
+  tags?: string[]
+}
+
 export interface ProjectCounts {
   todo: number
   'in-progress': number
