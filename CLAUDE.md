@@ -8,6 +8,7 @@ Local AI dev knowledge service. Go + PostgreSQL + Vue3, runs locally on the lapt
 
 - **Personal-scale dataset** — Postgres tuned to `shared_buffers=256MB`, `work_mem=8MB`, `max_connections=20`. Right-sized for a single-user dev tool; no reason to consume more.
 - **Local-only by design** — reachable only from this Mac. Phone/iPad/other devices can't hit `mneme.local`. Acceptable: the consumer is Claude Code on the laptop.
+- **Repo owns the code, Mneme owns the work** — git holds durable, present-tense docs about the artifact (README, accepted specs/ADRs); Mneme holds evolving work docs (plans, journals, notes, brainstorms). Docs are born in Mneme and graduate to the repo as md when they harden. Pointers only across the line, never copies; Mneme never ingests repo files. The Vue UI is a read-mostly viewer — mutations go through MCP. Full decision: [`.architecture/specs/2026-07-11-repo-vs-mneme-delineation.md`](.architecture/specs/2026-07-11-repo-vs-mneme-delineation.md).
 - **Pragmatic Dependencies (Go)** — Prefer the standard library, but use high-quality dependencies (e.g., config managers, routers) if they significantly simplify the code. Avoid heavy "magic" frameworks like ORMs; stick to raw SQL (`pgx/v5`).
 - **Vue3 standard runtime** — body is structured JSON dispatched via `<component :is>`, no runtime template compilation.
 
