@@ -7,10 +7,12 @@ import (
 )
 
 type Config struct {
-	DSN          string
-	Port         string
-	Env          string
-	CORSOrigins  []string
+	DSN         string
+	Port        string
+	Env         string
+	CORSOrigins []string
+	TLSCert     string
+	TLSKey      string
 }
 
 func Load() (*Config, error) {
@@ -18,12 +20,30 @@ func Load() (*Config, error) {
 		DSN:         getenv("MNEME_DSN", "postgres://mneme:mneme@localhost:5432/mneme?sslmode=disable"),
 		Port:        getenv("MNEME_PORT", "8080"),
 		Env:         getenv("MNEME_ENV", "development"),
-		CORSOrigins: splitCSV(getenv("MNEME_CORS_ORIGINS", "http://localhost:5173,http://mneme.local")),
+		CORSOrigins: splitCSV(getenv("MNEME_CORS_ORIGINS", "http://localhost:5273,https://mneme.local")),
+		TLSCert:     getenv("MNEME_TLS_CERT", ""),
+		TLSKey:      getenv("MNEME_TLS_KEY", ""),
 	}
 	if c.DSN == "" {
 		return nil, fmt.Errorf("MNEME_DSN must not be empty")
 	}
 	return c, nil
+}
+
+// TLSEnabled reports whether the server should terminate TLS itself: both
+// cert paths configured and both files present. Anything less falls back to
+// plain HTTP so the test suite and first boot (before mkcert has run) work
+// without ceremony.
+func (c *Config) TLSEnabled() bool {
+	if c.TLSCert == "" || c.TLSKey == "" {
+		return false
+	}
+	for _, p := range []string{c.TLSCert, c.TLSKey} {
+		if _, err := os.Stat(p); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 func getenv(key, def string) string {

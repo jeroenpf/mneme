@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -47,6 +49,61 @@ func TestLoadFromEnv(t *testing.T) {
 	want := []string{"http://a.example", "http://b.example", "http://c.example"}
 	if !reflect.DeepEqual(c.CORSOrigins, want) {
 		t.Errorf("CORSOrigins: got %v, want %v (trimming + empty-skip)", c.CORSOrigins, want)
+	}
+}
+
+func TestTLSDisabledByDefault(t *testing.T) {
+	t.Setenv("MNEME_DSN", "postgres://x@y/z")
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.TLSCert != "" || c.TLSKey != "" {
+		t.Errorf("TLS paths: got %q / %q, want empty defaults", c.TLSCert, c.TLSKey)
+	}
+	if c.TLSEnabled() {
+		t.Error("TLSEnabled: got true with no TLS env set")
+	}
+}
+
+func TestTLSEnabled(t *testing.T) {
+	dir := t.TempDir()
+	cert := filepath.Join(dir, "cert.pem")
+	key := filepath.Join(dir, "key.pem")
+	for _, p := range []string{cert, key} {
+		if err := os.WriteFile(p, []byte("pem"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	missing := filepath.Join(dir, "nope.pem")
+
+	cases := []struct {
+		name string
+		cert string
+		key  string
+		want bool
+	}{
+		{"both files exist", cert, key, true},
+		{"cert only", cert, "", false},
+		{"key only", "", key, false},
+		{"cert file missing", missing, key, false},
+		{"key file missing", cert, missing, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("MNEME_DSN", "postgres://x@y/z")
+			t.Setenv("MNEME_TLS_CERT", tc.cert)
+			t.Setenv("MNEME_TLS_KEY", tc.key)
+
+			c, err := Load()
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got := c.TLSEnabled(); got != tc.want {
+				t.Errorf("TLSEnabled: got %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
