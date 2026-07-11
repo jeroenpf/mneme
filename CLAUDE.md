@@ -28,6 +28,7 @@ A top-level `Makefile` wraps the dev loop. Common targets:
 - `make test` — `go test ./...` + Vue/vitest.
 - `make build` — builds the SPA into `web/dist/`, copies into `internal/web/dist/` for `//go:embed`, then builds the Go binary at `cmd/server/server`.
 - `make logs` / `make psql` — backend log tail / psql shell inside the container.
+- `make seed` — load dev sample data (`scripts/dev-seed.sql`) into postgres; idempotent.
 - `make down` / `make reset` — stop containers / drop the postgres volume (the latter requires `RESET=yes`).
 
 Run `make help` for the full list.

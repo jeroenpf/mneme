@@ -7,7 +7,7 @@ WEB     := web
 GO_PKGS := ./...
 
 .DEFAULT_GOAL := help
-.PHONY: help dev up down logs psql test build tidy clean reset
+.PHONY: help dev up down logs psql seed test build tidy clean reset
 
 help: ## Show this list
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -27,6 +27,9 @@ logs: ## Tail backend logs (app + postgres)
 
 psql: ## Open a psql shell inside the postgres container
 	$(COMPOSE) exec postgres psql -U mneme -d mneme
+
+seed: ## Load dev sample data (scripts/dev-seed.sql) into postgres
+	$(COMPOSE) exec -T postgres psql -U mneme -d mneme -v ON_ERROR_STOP=1 < scripts/dev-seed.sql
 
 test: ## Run Go and Vue tests
 	go test $(GO_PKGS)
