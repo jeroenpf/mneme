@@ -44,6 +44,8 @@ Save reusable code patterns and project conventions with save_snippet as you est
 
 At the end of a work session, record what happened with append_journal (summary + what you accomplished + what you deferred); call get_journal at the start of the next session to orient on where you left off.
 
+Before debugging a non-obvious or environment-specific error, call find_solution(query) to check for a known fix; after solving one, record it with log_solution (error_description + solution) so the next session finds it instead of re-debugging.
+
 Repo-tracked files (CLAUDE.md, ADRs, READMEs, .architecture/specs/*.md) are not in Mneme; read those from disk.`
 
 // Server holds the SDK Server plus the dependencies its tool handlers
@@ -147,6 +149,16 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "get_journal",
 		Description: "List dev-journal entries newest-first, optionally filtered by project and/or a since date (YYYY-MM-DD or RFC3339). Use limit for just the most recent few. Returns full entries (summary, accomplished, deferred).",
 	}, t.getJournal)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "log_solution",
+		Description: "Log an error and the fix that worked — the searchable error/solution database. Omit id to create (error_description + solution required; project optional, omit for a global gotcha). Pass id to refine an existing entry. Returns the stored solution.",
+	}, t.logSolution)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "find_solution",
+		Description: "Search the error/solution database for a fix, ranked by relevance — call this BEFORE debugging to check whether an error has a known fix. Returns the top 3 matches by default (pass limit to widen). Optional project/tag filters.",
+	}, t.findSolution)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "list_documents",
