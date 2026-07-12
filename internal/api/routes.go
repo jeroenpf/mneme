@@ -24,7 +24,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.CORSOrigins,
-		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodOptions},
+		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowedHeaders:   []string{"Accept", "Content-Type"},
 		AllowCredentials: false,
 		MaxAge:           300,
@@ -35,6 +35,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 
 	docs := &DocumentsHandler{Store: st}
 	projects := &ProjectsHandler{Store: st}
+	memory := &MemoryHandler{Store: st}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/documents", docs.List)
@@ -44,6 +45,9 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		r.Post("/documents/{id}/archive", docs.Archive)
 		r.Get("/projects", projects.List)
 		r.Post("/projects", projects.Create)
+		r.Get("/memory", memory.List)
+		r.Put("/memory/{scope}/{key}", memory.Upsert)
+		r.Delete("/memory/{scope}/{key}", memory.Delete)
 	})
 
 	if mcpHandler != nil {
