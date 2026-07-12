@@ -1,15 +1,18 @@
-package api
+// Package slug turns free-form text into kebab-case ASCII slugs. It is a
+// leaf package shared by the API (document-ID allocation) and MCP
+// (project-slug normalization) layers, so neither has to import the other.
+package slug
 
 import (
 	"strings"
 	"unicode"
 )
 
-// slugify converts a free-form title into a kebab-case ASCII slug.
+// Make converts a free-form title into a kebab-case ASCII slug.
 // Non-alphanumeric characters become "-", runs of "-" collapse, and
 // leading/trailing "-" are trimmed. Empty input (or input that produces
 // an empty slug, e.g. "***") yields "doc" as a stable fallback.
-func slugify(s string) string {
+func Make(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	prevDash := true // suppresses a leading dash

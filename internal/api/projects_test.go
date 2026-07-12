@@ -59,6 +59,74 @@ func TestListProjectsWithCounts(t *testing.T) {
 	}
 }
 
+func TestCreateProject(t *testing.T) {
+	srv, _ := newServer(t)
+
+	body := map[string]any{"slug": "tradegod", "name": "TradeGod", "description": "Trading bot"}
+	resp := doJSON(t, http.MethodPost, srv.URL+"/api/v1/projects", body)
+	requireStatus(t, resp, http.StatusCreated)
+
+	var got models.Project
+	decodeBody(t, resp, &got)
+	if got.Slug != "tradegod" || got.Name != "TradeGod" {
+		t.Fatalf("got %+v, want tradegod/TradeGod", got)
+	}
+	if got.ID == "" || got.CreatedAt.IsZero() {
+		t.Errorf("id/created_at not populated: %+v", got)
+	}
+	if got.Description == nil || *got.Description != "Trading bot" {
+		t.Errorf("description: got %v", got.Description)
+	}
+
+	// A document may now reference the freshly created project.
+	docBody := map[string]any{
+		"meta": map[string]any{"title": "First", "type": "plan", "project": "tradegod"},
+		"body": map[string]any{},
+	}
+	dresp := doJSON(t, http.MethodPost, srv.URL+"/api/v1/documents", docBody)
+	requireStatus(t, dresp, http.StatusCreated)
+	dresp.Body.Close()
+}
+
+func TestCreateProjectNormalizesSlug(t *testing.T) {
+	srv, _ := newServer(t)
+
+	body := map[string]any{"slug": "TradeGod Bot!", "name": "TradeGod"}
+	resp := doJSON(t, http.MethodPost, srv.URL+"/api/v1/projects", body)
+	requireStatus(t, resp, http.StatusCreated)
+
+	var got models.Project
+	decodeBody(t, resp, &got)
+	if got.Slug != "tradegod-bot" {
+		t.Errorf("slug not normalized: got %q, want %q", got.Slug, "tradegod-bot")
+	}
+}
+
+func TestCreateProjectDuplicate(t *testing.T) {
+	srv, _ := newServer(t)
+	body := map[string]any{"slug": "dup", "name": "Dup"}
+
+	resp := doJSON(t, http.MethodPost, srv.URL+"/api/v1/projects", body)
+	requireStatus(t, resp, http.StatusCreated)
+	resp.Body.Close()
+
+	resp2 := doJSON(t, http.MethodPost, srv.URL+"/api/v1/projects", body)
+	requireStatus(t, resp2, http.StatusConflict)
+	resp2.Body.Close()
+}
+
+func TestCreateProjectRequiresNameAndSlug(t *testing.T) {
+	srv, _ := newServer(t)
+
+	noName := doJSON(t, http.MethodPost, srv.URL+"/api/v1/projects", map[string]any{"slug": "x"})
+	requireStatus(t, noName, http.StatusBadRequest)
+	noName.Body.Close()
+
+	noSlug := doJSON(t, http.MethodPost, srv.URL+"/api/v1/projects", map[string]any{"name": "X"})
+	requireStatus(t, noSlug, http.StatusBadRequest)
+	noSlug.Body.Close()
+}
+
 func TestListProjectsEmpty(t *testing.T) {
 	srv, _ := newServer(t)
 	resp := doJSON(t, http.MethodGet, srv.URL+"/api/v1/projects", nil)

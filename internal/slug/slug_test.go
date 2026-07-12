@@ -1,8 +1,8 @@
-package api
+package slug
 
 import "testing"
 
-func TestSlugify(t *testing.T) {
+func TestMake(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"Vehicle Listing API", "vehicle-listing-api"},
 		{"  Leading/Trailing  ", "leading-trailing"},
@@ -16,9 +16,9 @@ func TestSlugify(t *testing.T) {
 		{"trailing---dashes---", "trailing-dashes"},
 	}
 	for _, tc := range cases {
-		got := slugify(tc.in)
+		got := Make(tc.in)
 		if got != tc.want {
-			t.Errorf("slugify(%q) = %q, want %q", tc.in, got, tc.want)
+			t.Errorf("Make(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }

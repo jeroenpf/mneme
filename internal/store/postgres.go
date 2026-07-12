@@ -269,6 +269,22 @@ func (s *PostgresStore) SearchDocuments(ctx context.Context, query string, f Fil
 	return collectDocuments(rows)
 }
 
+func (s *PostgresStore) CreateProject(ctx context.Context, p *models.Project) error {
+	const q = `
+		INSERT INTO projects (name, slug, description)
+		VALUES ($1, $2, $3)
+		RETURNING id, created_at`
+	row := s.pool.QueryRow(ctx, q, p.Name, p.Slug, p.Description)
+	if err := row.Scan(&p.ID, &p.CreatedAt); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+			return ErrDuplicateProject
+		}
+		return fmt.Errorf("insert project: %w", err)
+	}
+	return nil
+}
+
 func (s *PostgresStore) ListProjects(ctx context.Context) ([]*models.ProjectStats, error) {
 	const q = `
 		SELECT p.id, p.name, p.slug, p.description, p.created_at,

@@ -148,6 +148,68 @@ func TestGetDocumentNotFound(t *testing.T) {
 	}
 }
 
+func TestCreateProjectUnblocksPush(t *testing.T) {
+	cs := newClient(t)
+
+	// Before the project exists, pushing a doc that references it fails
+	// with the "unknown project" affordance.
+	before := callExpectError(t, cs, "push_document", samplePlan("vehicle-api", "tradegod"))
+	if before == "" {
+		t.Fatal("expected unknown-project error before create_project")
+	}
+
+	// create_project registers it, returning the stored row.
+	var proj models.Project
+	call(t, cs, "create_project", map[string]any{
+		"slug": "tradegod", "name": "TradeGod", "description": "Trading bot",
+	}, &proj)
+	if proj.Slug != "tradegod" || proj.Name != "TradeGod" {
+		t.Fatalf("got %+v, want tradegod/TradeGod", proj)
+	}
+	if proj.ID == "" || proj.CreatedAt.IsZero() {
+		t.Errorf("id/created_at not populated: %+v", proj)
+	}
+	if proj.Description == nil || *proj.Description != "Trading bot" {
+		t.Errorf("description: got %v", proj.Description)
+	}
+
+	// Now the same push succeeds.
+	var doc models.Document
+	call(t, cs, "push_document", samplePlan("vehicle-api", "tradegod"), &doc)
+	if doc.Project == nil || *doc.Project != "tradegod" {
+		t.Errorf("doc.project: got %v, want tradegod", doc.Project)
+	}
+}
+
+func TestCreateProjectNormalizesSlug(t *testing.T) {
+	cs := newClient(t)
+	var proj models.Project
+	call(t, cs, "create_project", map[string]any{"slug": "TradeGod Bot!", "name": "TradeGod"}, &proj)
+	if proj.Slug != "tradegod-bot" {
+		t.Errorf("slug not normalized: got %q, want tradegod-bot", proj.Slug)
+	}
+	if proj.Description != nil {
+		t.Errorf("omitted description should be nil, got %v", proj.Description)
+	}
+}
+
+func TestCreateProjectDuplicate(t *testing.T) {
+	cs := newClient(t)
+	call(t, cs, "create_project", map[string]any{"slug": "dup", "name": "Dup"}, nil)
+	msg := callExpectError(t, cs, "create_project", map[string]any{"slug": "dup", "name": "Dup"})
+	if msg == "" {
+		t.Error("expected 'already exists' error on duplicate slug")
+	}
+}
+
+func TestCreateProjectRequiresName(t *testing.T) {
+	cs := newClient(t)
+	msg := callExpectError(t, cs, "create_project", map[string]any{"slug": "x"})
+	if msg == "" {
+		t.Error("expected name-required error")
+	}
+}
+
 func TestSearchDocumentsRankAndOR(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")

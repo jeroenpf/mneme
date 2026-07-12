@@ -53,6 +53,8 @@ func translateStoreErr(err error) error {
 		return errors.New("unknown project — create it before pushing documents that reference it")
 	case errors.Is(err, store.ErrDuplicateID):
 		return errors.New("document id already exists")
+	case errors.Is(err, store.ErrDuplicateProject):
+		return errors.New("project already exists")
 	default:
 		return err
 	}

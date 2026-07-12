@@ -14,6 +14,7 @@ import (
 
 	"github.com/jeroenpfeil/mneme/internal/docmeta"
 	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpfeil/mneme/internal/slug"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
 
@@ -146,7 +147,7 @@ func (h *DocumentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 // createWithSlug derives the document ID from the title and retries on
 // PK conflict (base, base-2, base-3, ...) up to maxSlugAttempts.
 func (h *DocumentsHandler) createWithSlug(ctx context.Context, doc *models.Document) error {
-	base := slugify(doc.Title)
+	base := slug.Make(doc.Title)
 	for i := 0; i < maxSlugAttempts; i++ {
 		candidate := base
 		if i > 0 {

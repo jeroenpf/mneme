@@ -20,6 +20,10 @@ var ErrInvalidProject = errors.New("invalid project")
 // new candidate.
 var ErrDuplicateID = errors.New("duplicate document id")
 
+// ErrDuplicateProject is returned when CreateProject hits a UNIQUE
+// violation on projects.slug — the project already exists.
+var ErrDuplicateProject = errors.New("duplicate project")
+
 // Filter narrows ListDocuments / SearchDocuments. Zero/nil fields are
 // treated as "no constraint".
 type Filter struct {
@@ -60,6 +64,11 @@ type Store interface {
 	// ListProjects returns every project with per-status document counts.
 	// Used by /api/v1/projects and the registry UI's stats row.
 	ListProjects(ctx context.Context) ([]*models.ProjectStats, error)
+
+	// CreateProject inserts a project and fills p.ID and p.CreatedAt from
+	// the DB defaults. Returns ErrDuplicateProject when p.Slug already
+	// exists. The caller is responsible for normalizing p.Slug.
+	CreateProject(ctx context.Context, p *models.Project) error
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

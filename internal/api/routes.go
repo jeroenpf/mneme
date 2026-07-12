@@ -43,6 +43,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		r.Patch("/documents/{id}", docs.Update)
 		r.Post("/documents/{id}/archive", docs.Archive)
 		r.Get("/projects", projects.List)
+		r.Post("/projects", projects.Create)
 	})
 
 	if mcpHandler != nil {

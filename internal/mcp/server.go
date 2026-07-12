@@ -34,7 +34,7 @@ Typical workflow:
 3. get_document only when you need the body.
 4. Mutate with the narrowest tool that fits the change.
 
-push_document is upsert-by-meta.id — reserve it for new documents or full rewrites.
+push_document is upsert-by-meta.id — reserve it for new documents or full rewrites. A document's project must already exist; call create_project(slug, name) once to register a new project before pushing documents that reference it.
 
 Repo-tracked files (CLAUDE.md, ADRs, READMEs, .architecture/specs/*.md) are not in Mneme; read those from disk.`
 
@@ -79,6 +79,11 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "push_document",
 		Description: "Create or upsert a document by meta.id. Validates block types. Returns the stored document.",
 	}, t.pushDocument)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "create_project",
+		Description: "Register a new project (slug + human-friendly name, optional description) so documents can reference it. push_document errors on an unknown project; create it first. Returns the stored project (slug normalized to kebab-case).",
+	}, t.createProject)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "list_documents",

@@ -39,6 +39,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "unknown project")
 	case errors.Is(err, store.ErrDuplicateID):
 		writeError(w, http.StatusConflict, "duplicate id")
+	case errors.Is(err, store.ErrDuplicateProject):
+		writeError(w, http.StatusConflict, "project already exists")
 	default:
 		slog.Error("store error", "err", err)
 		writeError(w, http.StatusInternalServerError, "internal error")

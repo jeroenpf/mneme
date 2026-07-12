@@ -176,6 +176,69 @@ func TestCreateDocumentRejectsDuplicateID(t *testing.T) {
 	}
 }
 
+func TestCreateProject(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	p := &models.Project{Name: "TradeGod", Slug: "tradegod", Description: ptr("Trading bot")}
+	if err := s.CreateProject(ctx, p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if p.ID == "" {
+		t.Error("ID not populated by RETURNING")
+	}
+	if p.CreatedAt.IsZero() {
+		t.Error("CreatedAt not populated by RETURNING")
+	}
+
+	got, err := s.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+	if len(got) != 1 || got[0].Slug != "tradegod" || got[0].Name != "TradeGod" {
+		t.Fatalf("expected [tradegod/TradeGod], got %+v", got)
+	}
+	if got[0].Description == nil || *got[0].Description != "Trading bot" {
+		t.Errorf("description: got %v, want 'Trading bot'", got[0].Description)
+	}
+
+	// The whole point: a document may now reference the new project.
+	doc := sampleDoc("d1", "First")
+	doc.Project = ptr("tradegod")
+	if err := s.CreateDocument(ctx, doc); err != nil {
+		t.Fatalf("CreateDocument referencing new project: %v", err)
+	}
+}
+
+func TestCreateProjectNullDescription(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	p := &models.Project{Name: "hermes", Slug: "hermes"}
+	if err := s.CreateProject(ctx, p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	got, err := s.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+	if len(got) != 1 || got[0].Description != nil {
+		t.Fatalf("expected one project with nil description, got %+v", got)
+	}
+}
+
+func TestCreateProjectRejectsDuplicateSlug(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.CreateProject(ctx, &models.Project{Name: "A", Slug: "dup"}); err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	err := s.CreateProject(ctx, &models.Project{Name: "B", Slug: "dup"})
+	if !errors.Is(err, store.ErrDuplicateProject) {
+		t.Fatalf("expected ErrDuplicateProject, got: %v", err)
+	}
+}
+
 func TestListProjectsCounts(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
