@@ -24,4 +24,13 @@ describe('Topbar', () => {
     expect(link.props('to')).toBe('/memory')
     expect(link.attributes('data-test')).toBe('to-memory')
   })
+
+  it('links to the decisions page', () => {
+    const w = mount(Topbar, { props: { modelValue: '' }, global })
+    const decisions = w
+      .findAllComponents(RouterLinkStub)
+      .find((l) => l.attributes('data-test') === 'to-decisions')
+    expect(decisions).toBeTruthy()
+    expect(decisions!.props('to')).toBe('/decisions')
+  })
 })

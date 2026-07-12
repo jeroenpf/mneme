@@ -233,3 +233,32 @@ ON CONFLICT (id) DO UPDATE SET
   phase_total   = EXCLUDED.phase_total,
   meta          = EXCLUDED.meta,
   body          = EXCLUDED.body;
+
+-- Sample decisions so the decision-log page renders real data. Fixed
+-- UUIDs keep this idempotent (ON CONFLICT (id) DO NOTHING).
+INSERT INTO decisions (id, title, project, decision, rationale, alternatives, consequences, status, created_at)
+VALUES
+  ('00000000-0000-0000-0000-0000000000d1', 'Raw SQL over an ORM', 'mneme',
+   'Use jackc/pgx v5 with hand-written SQL; no ORM.',
+   'Keeps queries explicit and debuggable; avoids ORM "magic" and N+1 surprises on a personal-scale dataset.',
+   'GORM, sqlc, ent.', 'More boilerplate for scans; no compile-time query checking.',
+   'accepted', now() - interval '35 days'),
+  ('00000000-0000-0000-0000-0000000000d2', 'Go server terminates TLS directly', 'mneme',
+   'Serve HTTPS from the Go process with an mkcert leaf cert; no reverse proxy.',
+   'One fewer moving part for a local single-user tool; mkcert is already trusted in the Keychain.',
+   'nginx/Caddy in front; plain HTTP behind Docker.', 'The app owns cert paths and renewal.',
+   'accepted', now() - interval '18 days'),
+  ('00000000-0000-0000-0000-0000000000d3', 'mmWave for room presence', 'hyperion',
+   'Prefer mmWave sensors for room-level presence detection.',
+   'Detects stationary presence that PIR misses; no cameras in living spaces.',
+   'BLE beacons; camera CV.', 'Sensor availability is the current blocker.',
+   'proposed', now() - interval '9 days')
+ON CONFLICT (id) DO NOTHING;
+
+-- Parent task 2.2 #5 (data half): global guidance that get_memory(global)
+-- surfaces, telling Claude Code when to log decisions. DO UPDATE so a
+-- re-seed refreshes the wording.
+INSERT INTO memories (scope, key, value)
+VALUES ('global', 'decision-logging',
+  'Log architecture decisions with log_decision as you make them: tech/library choices, pattern selections, and trade-off resolutions. Capture title + decision + rationale (add alternatives/consequences when they matter). This mutable log is searchable via query_decisions; promote a decision to a repo ADR only once it hardens.')
+ON CONFLICT (scope, project, area, key) DO UPDATE SET value = EXCLUDED.value;

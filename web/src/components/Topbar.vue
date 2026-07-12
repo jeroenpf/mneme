@@ -21,6 +21,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     <span class="brand"><span class="glyph">⬡</span> mneme</span>
     <span class="mn-label">/ registry</span>
     <RouterLink to="/memory" class="nav-link mn-mono-sm" data-test="to-memory">memory →</RouterLink>
+    <RouterLink to="/decisions" class="nav-link mn-mono-sm" data-test="to-decisions">decisions →</RouterLink>
     <input
       ref="input"
       v-model="model"

@@ -17,6 +17,11 @@ const routes: RouteRecordRaw[] = [
     name: 'memory',
     component: () => import('@/pages/MemoryView.vue'),
   },
+  {
+    path: '/decisions',
+    name: 'decisions',
+    component: () => import('@/pages/DecisionsView.vue'),
+  },
 ]
 
 export const router = createRouter({

@@ -40,6 +40,7 @@ function makeRouter(): Router {
       { path: '/', component: RegistryView },
       { path: '/doc/:id', component: defineComponent({ render: () => h('div') }) },
       { path: '/memory', component: defineComponent({ render: () => h('div') }) },
+      { path: '/decisions', component: defineComponent({ render: () => h('div') }) },
     ],
   })
 }
