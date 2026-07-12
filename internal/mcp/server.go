@@ -34,6 +34,8 @@ Typical workflow:
 3. get_document only when you need the body.
 4. Mutate with the narrowest tool that fits the change.
 
+Use search(q, types?) for a single ranked query across every content type (documents, decisions, snippets, solutions, journal) instead of the per-type search tools when you don't know where an answer lives.
+
 push_document is upsert-by-meta.id — reserve it for new documents or full rewrites. A document's project must already exist; call create_project(slug, name) once to register a new project before pushing documents that reference it.
 
 At the START of every session, call get_context_bundle(project, area?) — one call returns merged memory, the active plan's status, recent decisions, relevant snippets, and recent journal entries, as both structured data and a paste-ready digest. Prefer it over calling get_memory / get_decisions / get_snippets / get_journal individually at startup.
@@ -181,6 +183,11 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "search_documents",
 		Description: "Full-text search across documents. Returns ranked matches without bodies.",
 	}, t.searchDocuments)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "search",
+		Description: "Unified full-text search across documents, decisions, snippets, solutions, and journal — ranked by relevance, newest-first on ties. Args: q (required); types (optional subset of documents|decisions|snippets|solutions|journal, default all); project (optional scope); limit (default 10). Returns ranked hits with type, id, title, excerpt, project, score. Superset of search_documents.",
+	}, t.search)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "tick_task",
