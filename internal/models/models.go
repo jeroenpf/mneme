@@ -219,3 +219,18 @@ func ParseSince(s string) (time.Time, error) {
 	}
 	return time.Time{}, fmt.Errorf("since must be an ISO date (YYYY-MM-DD) or an RFC3339 timestamp")
 }
+
+// Solution mirrors the solutions row — an error and the fix that worked,
+// logged with log_solution and retrieved with find_solution. Project is
+// nil for a global (cross-project) gotcha. ErrorDescription + Solution are
+// required; SourceURL is an optional link (empty = none).
+type Solution struct {
+	ID               string    `json:"id"`
+	Project          *string   `json:"project,omitempty"`
+	ErrorDescription string    `json:"error_description"`
+	Solution         string    `json:"solution"`
+	Tags             []string  `json:"tags"`
+	SourceURL        string    `json:"source_url"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
