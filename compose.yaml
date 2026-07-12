@@ -1,6 +1,7 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: mneme
       POSTGRES_PASSWORD: mneme
@@ -27,6 +28,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
