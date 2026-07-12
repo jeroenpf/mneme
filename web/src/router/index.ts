@@ -22,6 +22,11 @@ const routes: RouteRecordRaw[] = [
     name: 'decisions',
     component: () => import('@/pages/DecisionsView.vue'),
   },
+  {
+    path: '/snippets',
+    name: 'snippets',
+    component: () => import('@/pages/SnippetsView.vue'),
+  },
 ]
 
 export const router = createRouter({

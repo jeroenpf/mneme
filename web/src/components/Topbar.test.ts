@@ -33,4 +33,13 @@ describe('Topbar', () => {
     expect(decisions).toBeTruthy()
     expect(decisions!.props('to')).toBe('/decisions')
   })
+
+  it('links to the snippets page', () => {
+    const w = mount(Topbar, { props: { modelValue: '' }, global })
+    const snippets = w
+      .findAllComponents(RouterLinkStub)
+      .find((l) => l.attributes('data-test') === 'to-snippets')
+    expect(snippets).toBeTruthy()
+    expect(snippets!.props('to')).toBe('/snippets')
+  })
 })

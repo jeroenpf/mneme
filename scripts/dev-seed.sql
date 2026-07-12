@@ -262,3 +262,31 @@ INSERT INTO memories (scope, key, value)
 VALUES ('global', 'decision-logging',
   'Log architecture decisions with log_decision as you make them: tech/library choices, pattern selections, and trade-off resolutions. Capture title + decision + rationale (add alternatives/consequences when they matter). This mutable log is searchable via query_decisions; promote a decision to a repo ADR only once it hardens.')
 ON CONFLICT (scope, project, area, key) DO UPDATE SET value = EXCLUDED.value;
+
+-- Sample snippets so the snippet-library page renders real data. Fixed
+-- UUIDs keep this idempotent (ON CONFLICT (id) DO NOTHING). Languages stay
+-- within the grammars web/src/lib/highlight.ts loads (go, sql, typescript)
+-- so previews highlight without touching that file. NULL project = global.
+INSERT INTO snippets (id, title, project, language, content, tags, description, created_at)
+VALUES
+  ('00000000-0000-0000-0000-0000000000f1', 'Typed store error translation', 'mneme', 'go',
+   E'var pgErr *pgconn.PgError\nif errors.As(err, &pgErr) && pgErr.Code == pgForeignKeyViolation {\n\treturn ErrInvalidProject\n}',
+   ARRAY['errors', 'pgx'],
+   'Map a Postgres FK violation to a typed domain error at the store boundary.',
+   now() - interval '20 days'),
+  ('00000000-0000-0000-0000-0000000000f2', 'Weighted FTS search_vector', 'mneme', 'sql',
+   E'CREATE INDEX snippets_fts_idx ON snippets\n  USING GIN (search_vector);\nSELECT * FROM snippets\nWHERE search_vector @@ websearch_to_tsquery($1);',
+   ARRAY['postgres', 'fts'],
+   'Query the generated tsvector column with a GIN index for ranked search.',
+   now() - interval '12 days'),
+  ('00000000-0000-0000-0000-0000000000f3', 'errgroup bounded fan-out', NULL, 'go',
+   E'g, ctx := errgroup.WithContext(ctx)\ng.SetLimit(8)\nfor _, item := range items {\n\tg.Go(func() error { return handle(ctx, item) })\n}\nreturn g.Wait()',
+   ARRAY['concurrency'],
+   'Parallelize independent calls with a concurrency cap; first error cancels the rest.',
+   now() - interval '6 days'),
+  ('00000000-0000-0000-0000-0000000000f4', 'Debounced ref composable', 'hyperion', 'typescript',
+   E'export function useDebounced<T>(src: Ref<T>, ms = 200): Ref<T> {\n  const out = ref(src.value) as Ref<T>\n  watch(src, (v) => setTimeout(() => (out.value = v), ms))\n  return out\n}',
+   ARRAY['vue', 'composable'],
+   'Debounce a reactive source ref for search-as-you-type inputs.',
+   now() - interval '3 days')
+ON CONFLICT (id) DO NOTHING;
