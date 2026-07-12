@@ -24,6 +24,13 @@ var ErrDuplicateID = errors.New("duplicate document id")
 // violation on projects.slug — the project already exists.
 var ErrDuplicateProject = errors.New("duplicate project")
 
+// MemoryFilter narrows ListMemory. A nil field is "no constraint".
+type MemoryFilter struct {
+	Scope   *models.MemoryScope
+	Project *string
+	Area    *string
+}
+
 // Filter narrows ListDocuments / SearchDocuments. Zero/nil fields are
 // treated as "no constraint".
 type Filter struct {
@@ -69,6 +76,21 @@ type Store interface {
 	// the DB defaults. Returns ErrDuplicateProject when p.Slug already
 	// exists. The caller is responsible for normalizing p.Slug.
 	CreateProject(ctx context.Context, p *models.Project) error
+
+	// ListMemory returns raw (un-merged) memory entries matching the
+	// filter, ordered by (scope, project, area, key). The hierarchy
+	// merge lives in the MCP get_memory handler, not here.
+	ListMemory(ctx context.Context, f MemoryFilter) ([]*models.Memory, error)
+
+	// SetMemory upserts a memory entry by (scope, project, area, key),
+	// filling m.ID and m.UpdatedAt from the DB. Returns ErrInvalidProject
+	// when a project/area-scoped entry references an unknown project slug.
+	SetMemory(ctx context.Context, m *models.Memory) error
+
+	// DeleteMemory removes the entry with the given exact identity.
+	// project/area are nil for scopes that don't use them. Returns
+	// ErrNotFound when no row matched.
+	DeleteMemory(ctx context.Context, scope models.MemoryScope, project, area *string, key string) error
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

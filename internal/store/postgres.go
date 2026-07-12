@@ -285,6 +285,75 @@ func (s *PostgresStore) CreateProject(ctx context.Context, p *models.Project) er
 	return nil
 }
 
+func (s *PostgresStore) SetMemory(ctx context.Context, m *models.Memory) error {
+	const q = `
+		INSERT INTO memories (scope, project, area, key, value)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (scope, project, area, key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+		RETURNING id, updated_at`
+	row := s.pool.QueryRow(ctx, q, m.Scope, m.Project, m.Area, m.Key, m.Value)
+	if err := row.Scan(&m.ID, &m.UpdatedAt); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) &&
+			pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "memories_project_fkey" {
+			return ErrInvalidProject
+		}
+		return fmt.Errorf("set memory: %w", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) ListMemory(ctx context.Context, f MemoryFilter) ([]*models.Memory, error) {
+	var b queryBuilder
+	if f.Scope != nil {
+		b.where = append(b.where, "scope = "+b.addArg(string(*f.Scope)))
+	}
+	if f.Project != nil {
+		b.where = append(b.where, "project = "+b.addArg(*f.Project))
+	}
+	if f.Area != nil {
+		b.where = append(b.where, "area = "+b.addArg(*f.Area))
+	}
+	q := `SELECT id, scope, project, area, key, value, updated_at FROM memories`
+	if len(b.where) > 0 {
+		q += " WHERE " + strings.Join(b.where, " AND ")
+	}
+	q += " ORDER BY scope, project NULLS FIRST, area NULLS FIRST, key"
+
+	rows, err := s.pool.Query(ctx, q, b.args...)
+	if err != nil {
+		return nil, fmt.Errorf("list memory: %w", err)
+	}
+	defer rows.Close()
+	out := []*models.Memory{}
+	for rows.Next() {
+		m := &models.Memory{}
+		if err := rows.Scan(&m.ID, &m.Scope, &m.Project, &m.Area, &m.Key, &m.Value, &m.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan memory: %w", err)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (s *PostgresStore) DeleteMemory(ctx context.Context, scope models.MemoryScope, project, area *string, key string) error {
+	const q = `
+		DELETE FROM memories
+		WHERE scope = $1
+		  AND project IS NOT DISTINCT FROM $2
+		  AND area    IS NOT DISTINCT FROM $3
+		  AND key = $4`
+	tag, err := s.pool.Exec(ctx, q, scope, project, area, key)
+	if err != nil {
+		return fmt.Errorf("delete memory: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *PostgresStore) ListProjects(ctx context.Context) ([]*models.ProjectStats, error) {
 	const q = `
 		SELECT p.id, p.name, p.slug, p.description, p.created_at,

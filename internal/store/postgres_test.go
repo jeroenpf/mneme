@@ -76,6 +76,8 @@ func newStore(t *testing.T) *store.PostgresStore {
 
 func ptr[T any](v T) *T { return &v }
 
+func ptrScope(s models.MemoryScope) *models.MemoryScope { return &s }
+
 // seedProjects inserts the given slugs into the projects table.
 // documents.project has an FK to projects.slug, so any doc that sets
 // Project must have its slug seeded first.
@@ -530,4 +532,84 @@ func docIDs(docs []*models.Document) []string {
 		out = append(out, d.ID)
 	}
 	return out
+}
+
+func TestSetMemoryGlobalUpsert(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	m := &models.Memory{Scope: models.ScopeGlobal, Key: "editor", Value: "vscode"}
+	if err := s.SetMemory(ctx, m); err != nil {
+		t.Fatalf("SetMemory: %v", err)
+	}
+	if m.ID == "" || m.UpdatedAt.IsZero() {
+		t.Errorf("id/updated_at not populated: %+v", m)
+	}
+
+	// Re-set same (scope,project,area,key) — must UPDATE, not duplicate.
+	m2 := &models.Memory{Scope: models.ScopeGlobal, Key: "editor", Value: "neovim"}
+	if err := s.SetMemory(ctx, m2); err != nil {
+		t.Fatalf("SetMemory upsert: %v", err)
+	}
+	got, err := s.ListMemory(ctx, store.MemoryFilter{Scope: ptrScope(models.ScopeGlobal)})
+	if err != nil {
+		t.Fatalf("ListMemory: %v", err)
+	}
+	if len(got) != 1 || got[0].Value != "neovim" {
+		t.Fatalf("expected single upserted row 'neovim', got %+v", got)
+	}
+}
+
+func TestSetMemoryProjectScopeAndFilter(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+
+	if err := s.SetMemory(ctx, &models.Memory{Scope: models.ScopeGlobal, Key: "k", Value: "g"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMemory(ctx, &models.Memory{Scope: models.ScopeProject, Project: ptr("apollo"), Key: "k", Value: "p"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMemory(ctx, &models.Memory{Scope: models.ScopeArea, Project: ptr("apollo"), Area: ptr("billing"), Key: "k", Value: "a"}); err != nil {
+		t.Fatal(err)
+	}
+
+	proj, err := s.ListMemory(ctx, store.MemoryFilter{Scope: ptrScope(models.ScopeProject), Project: ptr("apollo")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(proj) != 1 || proj[0].Value != "p" {
+		t.Errorf("project filter: got %+v", proj)
+	}
+	all, err := s.ListMemory(ctx, store.MemoryFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Errorf("unfiltered: got %d rows, want 3", len(all))
+	}
+}
+
+func TestSetMemoryUnknownProject(t *testing.T) {
+	s := newStore(t)
+	err := s.SetMemory(context.Background(),
+		&models.Memory{Scope: models.ScopeProject, Project: ptr("ghost"), Key: "k", Value: "v"})
+	if !errors.Is(err, store.ErrInvalidProject) {
+		t.Fatalf("expected ErrInvalidProject, got %v", err)
+	}
+}
+
+func TestDeleteMemory(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.SetMemory(ctx, &models.Memory{Scope: models.ScopeGlobal, Key: "k", Value: "v"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteMemory(ctx, models.ScopeGlobal, nil, nil, "k"); err != nil {
+		t.Fatalf("DeleteMemory: %v", err)
+	}
+	if err := s.DeleteMemory(ctx, models.ScopeGlobal, nil, nil, "k"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("second delete: expected ErrNotFound, got %v", err)
+	}
 }
