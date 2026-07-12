@@ -41,6 +41,17 @@ type DecisionFilter struct {
 	Limit   int // 0 → no limit
 }
 
+// SnippetFilter narrows ListSnippets / SearchSnippets. A nil/empty field
+// is "no constraint". Project nil does NOT mean "global only" — it means
+// "any project". Tags matches snippets containing ALL listed tags
+// (tags @> filter).
+type SnippetFilter struct {
+	Project  *string
+	Language *string
+	Tags     []string
+	Limit    int // 0 → no limit
+}
+
 // Filter narrows ListDocuments / SearchDocuments. Zero/nil fields are
 // treated as "no constraint".
 type Filter struct {
@@ -122,6 +133,27 @@ type Store interface {
 	// SearchDecisions runs websearch_to_tsquery('english', q) against
 	// decisions.search_vector, ordered by ts_rank desc then newest-first.
 	SearchDecisions(ctx context.Context, q string, f DecisionFilter) ([]*models.Decision, error)
+
+	// CreateSnippet inserts a snippet and fills sn.ID/sn.CreatedAt/
+	// sn.UpdatedAt from the DB. Returns ErrInvalidProject when a
+	// project-scoped snippet references an unknown slug.
+	CreateSnippet(ctx context.Context, sn *models.Snippet) error
+
+	// GetSnippet returns ErrNotFound when id has no row.
+	GetSnippet(ctx context.Context, id string) (*models.Snippet, error)
+
+	// UpdateSnippet writes all mutable columns by id (updated_at is
+	// trigger-managed). Returns ErrNotFound when id has no row and
+	// ErrInvalidProject on an unknown project slug.
+	UpdateSnippet(ctx context.Context, sn *models.Snippet) error
+
+	// ListSnippets returns snippets newest-first, filtered by the
+	// non-nil SnippetFilter fields.
+	ListSnippets(ctx context.Context, f SnippetFilter) ([]*models.Snippet, error)
+
+	// SearchSnippets runs websearch_to_tsquery('english', q) against
+	// snippets.search_vector, ordered by ts_rank desc then newest-first.
+	SearchSnippets(ctx context.Context, q string, f SnippetFilter) ([]*models.Snippet, error)
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

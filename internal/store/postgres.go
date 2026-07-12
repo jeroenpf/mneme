@@ -544,3 +544,144 @@ func (s *PostgresStore) SearchDecisions(ctx context.Context, query string, f Dec
 	defer rows.Close()
 	return collectDecisions(rows)
 }
+
+// translateSnippetWriteErr maps the snippets FK violation to a typed
+// error; anything else is wrapped. snippets has its own FK constraint
+// name, so the documents-oriented translateWriteErr can't be reused.
+func translateSnippetWriteErr(op string, err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) &&
+		pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "snippets_project_fkey" {
+		return ErrInvalidProject
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
+
+// snippetColumns is the SELECT list for every snippet Get/List/Search.
+// Keep in lockstep with scanSnippet.
+const snippetColumns = `
+	id, title, project, language, content, tags, description,
+	created_at, updated_at`
+
+func scanSnippet(row pgx.Row) (*models.Snippet, error) {
+	sn := &models.Snippet{}
+	err := row.Scan(
+		&sn.ID, &sn.Title, &sn.Project, &sn.Language, &sn.Content,
+		&sn.Tags, &sn.Description, &sn.CreatedAt, &sn.UpdatedAt,
+	)
+	return sn, err
+}
+
+func collectSnippets(rows pgx.Rows) ([]*models.Snippet, error) {
+	out := []*models.Snippet{}
+	for rows.Next() {
+		sn, err := scanSnippet(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan snippet: %w", err)
+		}
+		out = append(out, sn)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate snippets: %w", err)
+	}
+	return out, nil
+}
+
+// snippetWhere appends the project/language/tags constraints shared by
+// ListSnippets and SearchSnippets.
+func snippetWhere(b *queryBuilder, f SnippetFilter) {
+	if f.Project != nil {
+		b.where = append(b.where, "project = "+b.addArg(*f.Project))
+	}
+	if f.Language != nil {
+		b.where = append(b.where, "language = "+b.addArg(*f.Language))
+	}
+	if len(f.Tags) > 0 {
+		b.where = append(b.where, "tags @> "+b.addArg(f.Tags))
+	}
+}
+
+func snippetLimit(b *queryBuilder, f SnippetFilter) string {
+	if f.Limit > 0 {
+		return " LIMIT " + b.addArg(f.Limit)
+	}
+	return ""
+}
+
+func (s *PostgresStore) CreateSnippet(ctx context.Context, sn *models.Snippet) error {
+	const q = `
+		INSERT INTO snippets (title, project, language, content, tags, description)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, sn.Title, sn.Project, sn.Language, sn.Content, ensureTags(sn.Tags), sn.Description)
+	if err := row.Scan(&sn.ID, &sn.CreatedAt, &sn.UpdatedAt); err != nil {
+		return translateSnippetWriteErr("create snippet", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) GetSnippet(ctx context.Context, id string) (*models.Snippet, error) {
+	q := `SELECT ` + snippetColumns + ` FROM snippets WHERE id = $1`
+	sn, err := scanSnippet(s.pool.QueryRow(ctx, q, id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get snippet: %w", err)
+	}
+	return sn, nil
+}
+
+func (s *PostgresStore) UpdateSnippet(ctx context.Context, sn *models.Snippet) error {
+	const q = `
+		UPDATE snippets
+		SET title = $2, project = $3, language = $4, content = $5,
+		    tags = $6, description = $7
+		WHERE id = $1
+		RETURNING updated_at`
+	row := s.pool.QueryRow(ctx, q, sn.ID, sn.Title, sn.Project, sn.Language, sn.Content, ensureTags(sn.Tags), sn.Description)
+	if err := row.Scan(&sn.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return translateSnippetWriteErr("update snippet", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) ListSnippets(ctx context.Context, f SnippetFilter) ([]*models.Snippet, error) {
+	b := &queryBuilder{}
+	snippetWhere(b, f)
+	q := `SELECT ` + snippetColumns + ` FROM snippets` +
+		b.whereClause() +
+		` ORDER BY created_at DESC` +
+		snippetLimit(b, f)
+
+	rows, err := s.pool.Query(ctx, q, b.args...)
+	if err != nil {
+		return nil, fmt.Errorf("list snippets: %w", err)
+	}
+	defer rows.Close()
+	return collectSnippets(rows)
+}
+
+func (s *PostgresStore) SearchSnippets(ctx context.Context, query string, f SnippetFilter) ([]*models.Snippet, error) {
+	b := &queryBuilder{}
+	qRef := b.addArg(query)
+	b.where = append(b.where,
+		"search_vector @@ websearch_to_tsquery('english', "+qRef+")")
+	snippetWhere(b, f)
+
+	sql := `SELECT ` + snippetColumns + ` FROM snippets` +
+		b.whereClause() +
+		` ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', ` + qRef + `)) DESC,` +
+		` created_at DESC` +
+		snippetLimit(b, f)
+
+	rows, err := s.pool.Query(ctx, sql, b.args...)
+	if err != nil {
+		return nil, fmt.Errorf("search snippets: %w", err)
+	}
+	defer rows.Close()
+	return collectSnippets(rows)
+}

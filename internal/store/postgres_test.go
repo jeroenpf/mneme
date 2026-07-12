@@ -753,3 +753,158 @@ func TestSearchDecisions(t *testing.T) {
 		t.Fatalf("expected Sanctum decision ranked first, got %+v", hits)
 	}
 }
+
+func TestCreateSnippetAndList(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+
+	sn := &models.Snippet{
+		Title:       "Cursor pagination",
+		Project:     ptr("apollo"),
+		Language:    "typescript",
+		Content:     "const after = cursor ? { id: { gt: cursor } } : {}",
+		Tags:        []string{"pagination", "apollo"},
+		Description: "Keyset pagination helper.",
+	}
+	if err := s.CreateSnippet(ctx, sn); err != nil {
+		t.Fatalf("CreateSnippet: %v", err)
+	}
+	if sn.ID == "" || sn.CreatedAt.IsZero() || sn.UpdatedAt.IsZero() {
+		t.Errorf("id/timestamps not populated: %+v", sn)
+	}
+
+	got, err := s.ListSnippets(ctx, store.SnippetFilter{Project: ptr("apollo")})
+	if err != nil {
+		t.Fatalf("ListSnippets: %v", err)
+	}
+	if len(got) != 1 || got[0].Title != "Cursor pagination" {
+		t.Fatalf("expected 1 snippet, got %+v", got)
+	}
+	if len(got[0].Tags) != 2 {
+		t.Errorf("tags not round-tripped: %+v", got[0].Tags)
+	}
+}
+
+func TestCreateSnippetGlobal(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	sn := &models.Snippet{Title: "errgroup fan-out", Language: "go", Content: "g, ctx := errgroup.WithContext(ctx)"}
+	if err := s.CreateSnippet(ctx, sn); err != nil {
+		t.Fatalf("CreateSnippet global: %v", err)
+	}
+	got, err := s.ListSnippets(ctx, store.SnippetFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Project != nil {
+		t.Fatalf("expected 1 global snippet (nil project), got %+v", got)
+	}
+	if len(got[0].Tags) != 0 {
+		t.Errorf("expected empty tags, got %+v", got[0].Tags)
+	}
+}
+
+func TestCreateSnippetUnknownProject(t *testing.T) {
+	s := newStore(t)
+	err := s.CreateSnippet(context.Background(),
+		&models.Snippet{Title: "t", Project: ptr("ghost"), Content: "c"})
+	if !errors.Is(err, store.ErrInvalidProject) {
+		t.Fatalf("expected ErrInvalidProject, got %v", err)
+	}
+}
+
+func TestUpdateSnippet(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	sn := &models.Snippet{Title: "t", Language: "go", Content: "old"}
+	if err := s.CreateSnippet(ctx, sn); err != nil {
+		t.Fatal(err)
+	}
+
+	sn.Content = "new content"
+	sn.Tags = []string{"updated"}
+	if err := s.UpdateSnippet(ctx, sn); err != nil {
+		t.Fatalf("UpdateSnippet: %v", err)
+	}
+
+	got, err := s.GetSnippet(ctx, sn.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Content != "new content" || len(got.Tags) != 1 || got.Tags[0] != "updated" {
+		t.Fatalf("update not persisted: %+v", got)
+	}
+}
+
+func TestUpdateSnippetNotFound(t *testing.T) {
+	s := newStore(t)
+	err := s.UpdateSnippet(context.Background(),
+		&models.Snippet{ID: "00000000-0000-0000-0000-000000000000", Title: "t", Content: "c"})
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestListSnippetsFilterAndOrder(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	// older 'go' first, then newer 'sql' — expect newest-first ordering.
+	if err := s.CreateSnippet(ctx, &models.Snippet{Title: "first", Project: ptr("apollo"), Language: "go", Content: "c", Tags: []string{"http"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateSnippet(ctx, &models.Snippet{Title: "second", Project: ptr("apollo"), Language: "sql", Content: "c", Tags: []string{"query"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := s.ListSnippets(ctx, store.SnippetFilter{Project: ptr("apollo")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].Title != "second" {
+		t.Fatalf("expected newest-first [second, first], got %+v", all)
+	}
+
+	lang := "go"
+	byLang, err := s.ListSnippets(ctx, store.SnippetFilter{Language: &lang})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byLang) != 1 || byLang[0].Title != "first" {
+		t.Fatalf("language filter: got %+v", byLang)
+	}
+
+	byTag, err := s.ListSnippets(ctx, store.SnippetFilter{Tags: []string{"query"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byTag) != 1 || byTag[0].Title != "second" {
+		t.Fatalf("tag filter: got %+v", byTag)
+	}
+}
+
+func TestSearchSnippets(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.CreateSnippet(ctx, &models.Snippet{
+		Title: "Cursor pagination", Language: "typescript", Content: "keyset on id",
+		Description: "Stable pages under concurrent inserts.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateSnippet(ctx, &models.Snippet{
+		Title: "Errgroup fan-out", Language: "go", Content: "g, ctx := errgroup.WithContext(ctx)",
+		Description: "Bounded concurrency for parallel calls.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := s.SearchSnippets(ctx, "cursor pagination", store.SnippetFilter{})
+	if err != nil {
+		t.Fatalf("SearchSnippets: %v", err)
+	}
+	if len(hits) == 0 || hits[0].Title != "Cursor pagination" {
+		t.Fatalf("expected pagination snippet ranked first, got %+v", hits)
+	}
+}
