@@ -685,3 +685,121 @@ func (s *PostgresStore) SearchSnippets(ctx context.Context, query string, f Snip
 	defer rows.Close()
 	return collectSnippets(rows)
 }
+
+// translateJournalWriteErr maps the journal FK violation to a typed
+// error; anything else is wrapped. journal_entries has its own FK
+// constraint name, so the documents-oriented translateWriteErr can't be
+// reused.
+func translateJournalWriteErr(op string, err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) &&
+		pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "journal_entries_project_fkey" {
+		return ErrInvalidProject
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
+
+// journalColumns is the SELECT list for every journal Get/List.
+// Keep in lockstep with scanJournalEntry.
+const journalColumns = `
+	id, project, session_ref, summary, accomplished, deferred,
+	created_at, updated_at`
+
+func scanJournalEntry(row pgx.Row) (*models.JournalEntry, error) {
+	e := &models.JournalEntry{}
+	err := row.Scan(
+		&e.ID, &e.Project, &e.SessionRef, &e.Summary,
+		&e.Accomplished, &e.Deferred, &e.CreatedAt, &e.UpdatedAt,
+	)
+	return e, err
+}
+
+func collectJournalEntries(rows pgx.Rows) ([]*models.JournalEntry, error) {
+	out := []*models.JournalEntry{}
+	for rows.Next() {
+		e, err := scanJournalEntry(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan journal entry: %w", err)
+		}
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate journal entries: %w", err)
+	}
+	return out, nil
+}
+
+// journalWhere appends the project/since constraints shared by any journal
+// list query.
+func journalWhere(b *queryBuilder, f JournalFilter) {
+	if f.Project != nil {
+		b.where = append(b.where, "project = "+b.addArg(*f.Project))
+	}
+	if f.Since != nil {
+		b.where = append(b.where, "created_at >= "+b.addArg(*f.Since))
+	}
+}
+
+func journalLimit(b *queryBuilder, f JournalFilter) string {
+	if f.Limit > 0 {
+		return " LIMIT " + b.addArg(f.Limit)
+	}
+	return ""
+}
+
+func (s *PostgresStore) CreateJournalEntry(ctx context.Context, e *models.JournalEntry) error {
+	const q = `
+		INSERT INTO journal_entries (project, session_ref, summary, accomplished, deferred)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, e.Project, e.SessionRef, e.Summary, ensureTags(e.Accomplished), ensureTags(e.Deferred))
+	if err := row.Scan(&e.ID, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		return translateJournalWriteErr("create journal entry", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) GetJournalEntry(ctx context.Context, id string) (*models.JournalEntry, error) {
+	q := `SELECT ` + journalColumns + ` FROM journal_entries WHERE id = $1`
+	e, err := scanJournalEntry(s.pool.QueryRow(ctx, q, id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get journal entry: %w", err)
+	}
+	return e, nil
+}
+
+func (s *PostgresStore) UpdateJournalEntry(ctx context.Context, e *models.JournalEntry) error {
+	const q = `
+		UPDATE journal_entries
+		SET project = $2, session_ref = $3, summary = $4,
+		    accomplished = $5, deferred = $6
+		WHERE id = $1
+		RETURNING updated_at`
+	row := s.pool.QueryRow(ctx, q, e.ID, e.Project, e.SessionRef, e.Summary, ensureTags(e.Accomplished), ensureTags(e.Deferred))
+	if err := row.Scan(&e.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return translateJournalWriteErr("update journal entry", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) ListJournalEntries(ctx context.Context, f JournalFilter) ([]*models.JournalEntry, error) {
+	b := &queryBuilder{}
+	journalWhere(b, f)
+	q := `SELECT ` + journalColumns + ` FROM journal_entries` +
+		b.whereClause() +
+		` ORDER BY created_at DESC` +
+		journalLimit(b, f)
+
+	rows, err := s.pool.Query(ctx, q, b.args...)
+	if err != nil {
+		return nil, fmt.Errorf("list journal entries: %w", err)
+	}
+	defer rows.Close()
+	return collectJournalEntries(rows)
+}

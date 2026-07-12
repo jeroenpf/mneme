@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
@@ -50,6 +51,15 @@ type SnippetFilter struct {
 	Language *string
 	Tags     []string
 	Limit    int // 0 → no limit
+}
+
+// JournalFilter narrows ListJournalEntries. A nil/zero field is "no
+// constraint". Project nil means "any project" (not "global only").
+// Since bounds created_at from below (created_at >= Since).
+type JournalFilter struct {
+	Project *string
+	Since   *time.Time
+	Limit   int // 0 → no limit
 }
 
 // Filter narrows ListDocuments / SearchDocuments. Zero/nil fields are
@@ -154,6 +164,23 @@ type Store interface {
 	// SearchSnippets runs websearch_to_tsquery('english', q) against
 	// snippets.search_vector, ordered by ts_rank desc then newest-first.
 	SearchSnippets(ctx context.Context, q string, f SnippetFilter) ([]*models.Snippet, error)
+
+	// CreateJournalEntry inserts an entry and fills e.ID/e.CreatedAt/
+	// e.UpdatedAt from the DB. Returns ErrInvalidProject when a
+	// project-scoped entry references an unknown slug.
+	CreateJournalEntry(ctx context.Context, e *models.JournalEntry) error
+
+	// GetJournalEntry returns ErrNotFound when id has no row.
+	GetJournalEntry(ctx context.Context, id string) (*models.JournalEntry, error)
+
+	// UpdateJournalEntry writes all mutable columns by id (updated_at is
+	// trigger-managed). Returns ErrNotFound when id has no row and
+	// ErrInvalidProject on an unknown project slug.
+	UpdateJournalEntry(ctx context.Context, e *models.JournalEntry) error
+
+	// ListJournalEntries returns entries newest-first, filtered by the
+	// non-nil JournalFilter fields.
+	ListJournalEntries(ctx context.Context, f JournalFilter) ([]*models.JournalEntry, error)
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

@@ -908,3 +908,141 @@ func TestSearchSnippets(t *testing.T) {
 		t.Fatalf("expected pagination snippet ranked first, got %+v", hits)
 	}
 }
+
+func TestCreateJournalEntryAndList(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+
+	e := &models.JournalEntry{
+		Project:      ptr("apollo"),
+		SessionRef:   "sp-3-1",
+		Summary:      "Wired the pagination endpoint",
+		Accomplished: []string{"cursor pagination", "integration tests"},
+		Deferred:     []string{"rate limiting"},
+	}
+	if err := s.CreateJournalEntry(ctx, e); err != nil {
+		t.Fatalf("CreateJournalEntry: %v", err)
+	}
+	if e.ID == "" || e.CreatedAt.IsZero() || e.UpdatedAt.IsZero() {
+		t.Errorf("id/timestamps not populated: %+v", e)
+	}
+
+	got, err := s.ListJournalEntries(ctx, store.JournalFilter{Project: ptr("apollo")})
+	if err != nil {
+		t.Fatalf("ListJournalEntries: %v", err)
+	}
+	if len(got) != 1 || got[0].Summary != "Wired the pagination endpoint" {
+		t.Fatalf("expected 1 entry, got %+v", got)
+	}
+	if len(got[0].Accomplished) != 2 || len(got[0].Deferred) != 1 {
+		t.Errorf("arrays not round-tripped: %+v", got[0])
+	}
+}
+
+func TestCreateJournalEntryGlobal(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	e := &models.JournalEntry{Summary: "Refactored the migration runner"}
+	if err := s.CreateJournalEntry(ctx, e); err != nil {
+		t.Fatalf("CreateJournalEntry global: %v", err)
+	}
+	got, err := s.ListJournalEntries(ctx, store.JournalFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Project != nil {
+		t.Fatalf("expected 1 global entry (nil project), got %+v", got)
+	}
+	if len(got[0].Accomplished) != 0 || len(got[0].Deferred) != 0 {
+		t.Errorf("expected empty arrays, got %+v", got[0])
+	}
+}
+
+func TestCreateJournalEntryUnknownProject(t *testing.T) {
+	s := newStore(t)
+	err := s.CreateJournalEntry(context.Background(),
+		&models.JournalEntry{Project: ptr("ghost"), Summary: "s"})
+	if !errors.Is(err, store.ErrInvalidProject) {
+		t.Fatalf("expected ErrInvalidProject, got %v", err)
+	}
+}
+
+func TestUpdateJournalEntry(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	e := &models.JournalEntry{Summary: "old summary", Accomplished: []string{"a"}}
+	if err := s.CreateJournalEntry(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+
+	e.Summary = "new summary"
+	e.Deferred = []string{"later"}
+	if err := s.UpdateJournalEntry(ctx, e); err != nil {
+		t.Fatalf("UpdateJournalEntry: %v", err)
+	}
+
+	got, err := s.GetJournalEntry(ctx, e.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary != "new summary" || len(got.Deferred) != 1 || got.Deferred[0] != "later" {
+		t.Fatalf("update not persisted: %+v", got)
+	}
+}
+
+func TestUpdateJournalEntryNotFound(t *testing.T) {
+	s := newStore(t)
+	err := s.UpdateJournalEntry(context.Background(),
+		&models.JournalEntry{ID: "00000000-0000-0000-0000-000000000000", Summary: "s"})
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestListJournalEntriesFilterAndOrder(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	if err := s.CreateJournalEntry(ctx, &models.JournalEntry{Project: ptr("apollo"), Summary: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateJournalEntry(ctx, &models.JournalEntry{Project: ptr("apollo"), Summary: "second"}); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := s.ListJournalEntries(ctx, store.JournalFilter{Project: ptr("apollo")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].Summary != "second" {
+		t.Fatalf("expected newest-first [second, first], got %+v", all)
+	}
+}
+
+func TestListJournalEntriesSince(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	e := &models.JournalEntry{Summary: "only entry"}
+	if err := s.CreateJournalEntry(ctx, e); err != nil {
+		t.Fatal(err)
+	}
+
+	future := e.CreatedAt.Add(time.Hour)
+	none, err := s.ListJournalEntries(ctx, store.JournalFilter{Since: &future})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(none) != 0 {
+		t.Fatalf("since=future should exclude the entry, got %+v", none)
+	}
+
+	past := e.CreatedAt.Add(-time.Hour)
+	one, err := s.ListJournalEntries(ctx, store.JournalFilter{Since: &past})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(one) != 1 {
+		t.Fatalf("since=past should include the entry, got %+v", one)
+	}
+}
