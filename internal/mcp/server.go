@@ -42,6 +42,8 @@ Record durable decisions with log_decision as you make them (tech/library choice
 
 Save reusable code patterns and project conventions with save_snippet as you establish them, and consult get_snippets / search_snippets before re-implementing one so the codebase stays consistent.
 
+At the end of a work session, record what happened with append_journal (summary + what you accomplished + what you deferred); call get_journal at the start of the next session to orient on where you left off.
+
 Repo-tracked files (CLAUDE.md, ADRs, READMEs, .architecture/specs/*.md) are not in Mneme; read those from disk.`
 
 // Server holds the SDK Server plus the dependencies its tool handlers
@@ -135,6 +137,16 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "search_snippets",
 		Description: "Full-text search snippets ranked by relevance — answers \"how do we do X in this project?\". Searches title, description, content. Optional project/language/tag filters.",
 	}, t.searchSnippets)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "append_journal",
+		Description: "Append a dev-journal entry — the per-session log of what was built, deferred, and changed. Omit id to create (summary required; project optional, omit for a global entry; session_ref is a free-text phase/session id). Pass id to refine the current session's entry as you go. Returns the stored entry.",
+	}, t.appendJournal)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "get_journal",
+		Description: "List dev-journal entries newest-first, optionally filtered by project and/or a since date (YYYY-MM-DD or RFC3339). Use limit for just the most recent few. Returns full entries (summary, accomplished, deferred).",
+	}, t.getJournal)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "list_documents",
