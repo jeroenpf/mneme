@@ -43,6 +43,7 @@ function makeRouter(): Router {
       { path: '/decisions', component: defineComponent({ render: () => h('div') }) },
       { path: '/snippets', component: defineComponent({ render: () => h('div') }) },
       { path: '/journal', component: defineComponent({ render: () => h('div') }) },
+      { path: '/solutions', component: defineComponent({ render: () => h('div') }) },
     ],
   })
 }

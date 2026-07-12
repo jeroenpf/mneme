@@ -317,3 +317,30 @@ VALUES
    ARRAY['document the setup-host flow'],
    now() - interval '1 day')
 ON CONFLICT (id) DO NOTHING;
+
+-- Sample solutions so the error/solution browser renders real data.
+-- Fixed UUIDs keep this idempotent (ON CONFLICT (id) DO NOTHING). NULL
+-- project = a global/cross-project gotcha.
+INSERT INTO solutions (id, project, error_description, solution, tags, source_url, created_at)
+VALUES
+  ('00000000-0000-0000-0000-0000000000b1', 'mneme',
+   'mneme.dev resolves slowly (~5s stall) on macOS before hitting /etc/hosts',
+   'macOS routes *.local through mDNS; use a non-.local host (mneme.dev) mapped in /etc/hosts instead of mneme.local',
+   ARRAY['macos', 'dns', 'tls'], '',
+   now() - interval '9 days'),
+  ('00000000-0000-0000-0000-0000000000b2', NULL,
+   'https://mneme.dev:8443 refuses connections while the container is healthy',
+   'Docker Desktop port forwarder wedged; restart Docker Desktop entirely (a container recreate does not fix it)',
+   ARRAY['docker', 'macos'], '',
+   now() - interval '5 days'),
+  ('00000000-0000-0000-0000-0000000000b3', 'mneme',
+   'pgx scan fails: cannot scan NULL into *string for a nullable column',
+   'Model nullable FK columns as *string, not string; only non-null text columns use a plain string field',
+   ARRAY['go', 'pgx', 'postgres'], '',
+   now() - interval '2 days'),
+  ('00000000-0000-0000-0000-0000000000b4', 'hyperion',
+   'zigbee2mqtt cannot open the coordinator after a host reboot',
+   'The USB device path changed; pin it via /dev/serial/by-id in the compose device mapping',
+   ARRAY['zigbee', 'docker'], 'https://www.zigbee2mqtt.io/guide/configuration/adapter-settings.html',
+   now() - interval '4 days')
+ON CONFLICT (id) DO NOTHING;

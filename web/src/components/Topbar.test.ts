@@ -51,4 +51,13 @@ describe('Topbar', () => {
     expect(journal).toBeTruthy()
     expect(journal!.props('to')).toBe('/journal')
   })
+
+  it('links to the solutions page', () => {
+    const w = mount(Topbar, { props: { modelValue: '' }, global })
+    const solutions = w
+      .findAllComponents(RouterLinkStub)
+      .find((l) => l.attributes('data-test') === 'to-solutions')
+    expect(solutions).toBeTruthy()
+    expect(solutions!.props('to')).toBe('/solutions')
+  })
 })

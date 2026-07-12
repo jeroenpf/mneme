@@ -24,6 +24,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     <RouterLink to="/decisions" class="nav-link mn-mono-sm" data-test="to-decisions">decisions →</RouterLink>
     <RouterLink to="/snippets" class="nav-link mn-mono-sm" data-test="to-snippets">snippets →</RouterLink>
     <RouterLink to="/journal" class="nav-link mn-mono-sm" data-test="to-journal">journal →</RouterLink>
+    <RouterLink to="/solutions" class="nav-link mn-mono-sm" data-test="to-solutions">solutions →</RouterLink>
     <input
       ref="input"
       v-model="model"
