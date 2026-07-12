@@ -1,0 +1,32 @@
+package mcp
+
+import (
+	"context"
+	"errors"
+	"strings"
+
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jeroenpfeil/mneme/internal/bundle"
+)
+
+type getContextBundleInput struct {
+	Project string `json:"project" jsonschema:"the project slug to assemble a session context bundle for"`
+	Area    string `json:"area,omitempty" jsonschema:"optional area within the project; adds area-scoped memory"`
+}
+
+func (t *tools) getContextBundle(ctx context.Context, _ *sdk.CallToolRequest, in getContextBundleInput) (*sdk.CallToolResult, *bundle.Bundle, error) {
+	project := strings.TrimSpace(in.Project)
+	if project == "" {
+		return nil, nil, errors.New("project is required")
+	}
+	var areaPtr *string
+	if a := strings.TrimSpace(in.Area); a != "" {
+		areaPtr = &a
+	}
+	b, err := bundle.New(t.store).Assemble(ctx, project, areaPtr)
+	if err != nil {
+		return nil, nil, translateStoreErr(err)
+	}
+	return nil, b, nil
+}

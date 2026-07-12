@@ -36,6 +36,8 @@ Typical workflow:
 
 push_document is upsert-by-meta.id — reserve it for new documents or full rewrites. A document's project must already exist; call create_project(slug, name) once to register a new project before pushing documents that reference it.
 
+At the START of every session, call get_context_bundle(project, area?) — one call returns merged memory, the active plan's status, recent decisions, relevant snippets, and recent journal entries, as both structured data and a paste-ready digest. Prefer it over calling get_memory / get_decisions / get_snippets / get_journal individually at startup.
+
 At session start, call get_memory(scope) to load persistent context (global, or project/area for the active project) instead of asking the user to re-explain. Use set_memory to record durable facts worth carrying across sessions.
 
 Record durable decisions with log_decision as you make them (tech/library choices, pattern selections, trade-off resolutions) so the "why" stays searchable via query_decisions. This is the mutable decision log — distinct from hardened ADRs that graduate to the repo as markdown.
@@ -159,6 +161,11 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "find_solution",
 		Description: "Search the error/solution database for a fix, ranked by relevance — call this BEFORE debugging to check whether an error has a known fix. Returns the top 3 matches by default (pass limit to widen). Optional project/tag filters.",
 	}, t.findSolution)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "get_context_bundle",
+		Description: "Assemble everything needed to start a session on a project in one call: merged memory (global+project+area), the active plan's status, recent decisions, relevant snippets, and recent journal entries — returned as structured data plus a paste-ready markdown digest. Call this FIRST in every session. Args: project (required), area (optional).",
+	}, t.getContextBundle)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "list_documents",
