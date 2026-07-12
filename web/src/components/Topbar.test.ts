@@ -60,4 +60,13 @@ describe('Topbar', () => {
     expect(solutions).toBeTruthy()
     expect(solutions!.props('to')).toBe('/solutions')
   })
+
+  it('links to the bundle page', () => {
+    const w = mount(Topbar, { props: { modelValue: '' }, global })
+    const bundle = w
+      .findAllComponents(RouterLinkStub)
+      .find((l) => l.attributes('data-test') === 'to-bundle')
+    expect(bundle).toBeTruthy()
+    expect(bundle!.props('to')).toBe('/bundle')
+  })
 })
