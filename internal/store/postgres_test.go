@@ -613,3 +613,143 @@ func TestDeleteMemory(t *testing.T) {
 		t.Fatalf("second delete: expected ErrNotFound, got %v", err)
 	}
 }
+
+func TestCreateDecisionAndList(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+
+	d := &models.Decision{
+		Title:     "Use pgx over database/sql",
+		Project:   ptr("apollo"),
+		Decision:  "Adopt jackc/pgx v5 directly.",
+		Rationale: "Native Postgres types and better performance.",
+		Status:    models.DecisionAccepted,
+	}
+	if err := s.CreateDecision(ctx, d); err != nil {
+		t.Fatalf("CreateDecision: %v", err)
+	}
+	if d.ID == "" || d.CreatedAt.IsZero() || d.UpdatedAt.IsZero() {
+		t.Errorf("id/timestamps not populated: %+v", d)
+	}
+
+	got, err := s.ListDecisions(ctx, store.DecisionFilter{Project: ptr("apollo")})
+	if err != nil {
+		t.Fatalf("ListDecisions: %v", err)
+	}
+	if len(got) != 1 || got[0].Title != "Use pgx over database/sql" {
+		t.Fatalf("expected 1 decision, got %+v", got)
+	}
+}
+
+func TestCreateDecisionGlobal(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	d := &models.Decision{Title: "Raw SQL only", Decision: "No ORMs.", Status: models.DecisionAccepted}
+	if err := s.CreateDecision(ctx, d); err != nil {
+		t.Fatalf("CreateDecision global: %v", err)
+	}
+	got, err := s.ListDecisions(ctx, store.DecisionFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Project != nil {
+		t.Fatalf("expected 1 global decision (nil project), got %+v", got)
+	}
+}
+
+func TestCreateDecisionUnknownProject(t *testing.T) {
+	s := newStore(t)
+	err := s.CreateDecision(context.Background(),
+		&models.Decision{Title: "t", Project: ptr("ghost"), Decision: "d", Status: models.DecisionAccepted})
+	if !errors.Is(err, store.ErrInvalidProject) {
+		t.Fatalf("expected ErrInvalidProject, got %v", err)
+	}
+}
+
+func TestUpdateDecision(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	d := &models.Decision{Title: "t", Decision: "d", Status: models.DecisionProposed}
+	if err := s.CreateDecision(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+
+	d.Status = models.DecisionAccepted
+	d.Rationale = "ratified in review"
+	if err := s.UpdateDecision(ctx, d); err != nil {
+		t.Fatalf("UpdateDecision: %v", err)
+	}
+
+	got, err := s.GetDecision(ctx, d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != models.DecisionAccepted || got.Rationale != "ratified in review" {
+		t.Fatalf("update not persisted: %+v", got)
+	}
+}
+
+func TestUpdateDecisionNotFound(t *testing.T) {
+	s := newStore(t)
+	err := s.UpdateDecision(context.Background(),
+		&models.Decision{ID: "00000000-0000-0000-0000-000000000000", Title: "t", Decision: "d", Status: models.DecisionAccepted})
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestListDecisionsFilterAndOrder(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	// older proposed, then newer accepted — expect newest-first ordering.
+	if err := s.CreateDecision(ctx, &models.Decision{Title: "first", Project: ptr("apollo"), Decision: "d", Status: models.DecisionProposed}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateDecision(ctx, &models.Decision{Title: "second", Project: ptr("apollo"), Decision: "d", Status: models.DecisionAccepted}); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := s.ListDecisions(ctx, store.DecisionFilter{Project: ptr("apollo")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].Title != "second" {
+		t.Fatalf("expected newest-first [second, first], got %+v", all)
+	}
+
+	accepted := models.DecisionAccepted
+	only, err := s.ListDecisions(ctx, store.DecisionFilter{Status: &accepted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(only) != 1 || only[0].Title != "second" {
+		t.Fatalf("status filter: got %+v", only)
+	}
+}
+
+func TestSearchDecisions(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.CreateDecision(ctx, &models.Decision{
+		Title: "Choose Sanctum for API auth", Decision: "Use Laravel Sanctum.",
+		Rationale: "Token auth without the OAuth ceremony of Passport.", Status: models.DecisionAccepted,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateDecision(ctx, &models.Decision{
+		Title: "Cursor pagination", Decision: "Keyset pagination on id.",
+		Rationale: "Stable pages under concurrent inserts.", Status: models.DecisionAccepted,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := s.SearchDecisions(ctx, "sanctum auth", store.DecisionFilter{})
+	if err != nil {
+		t.Fatalf("SearchDecisions: %v", err)
+	}
+	if len(hits) == 0 || hits[0].Title != "Choose Sanctum for API auth" {
+		t.Fatalf("expected Sanctum decision ranked first, got %+v", hits)
+	}
+}

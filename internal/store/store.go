@@ -31,6 +31,16 @@ type MemoryFilter struct {
 	Area    *string
 }
 
+// DecisionFilter narrows ListDecisions / SearchDecisions. A nil field is
+// "no constraint". Project nil does NOT mean "global only" — it means
+// "any project"; there is no dedicated global-only filter (callers that
+// need it can filter the returned slice on Project == nil).
+type DecisionFilter struct {
+	Project *string
+	Status  *models.DecisionStatus
+	Limit   int // 0 → no limit
+}
+
 // Filter narrows ListDocuments / SearchDocuments. Zero/nil fields are
 // treated as "no constraint".
 type Filter struct {
@@ -91,6 +101,27 @@ type Store interface {
 	// project/area are nil for scopes that don't use them. Returns
 	// ErrNotFound when no row matched.
 	DeleteMemory(ctx context.Context, scope models.MemoryScope, project, area *string, key string) error
+
+	// CreateDecision inserts a decision and fills d.ID/d.CreatedAt/
+	// d.UpdatedAt from the DB. Returns ErrInvalidProject when a
+	// project-scoped decision references an unknown slug.
+	CreateDecision(ctx context.Context, d *models.Decision) error
+
+	// GetDecision returns ErrNotFound when id has no row.
+	GetDecision(ctx context.Context, id string) (*models.Decision, error)
+
+	// UpdateDecision writes all mutable columns by id (updated_at is
+	// trigger-managed). Returns ErrNotFound when id has no row and
+	// ErrInvalidProject on an unknown project slug.
+	UpdateDecision(ctx context.Context, d *models.Decision) error
+
+	// ListDecisions returns decisions newest-first, filtered by the
+	// non-nil DecisionFilter fields.
+	ListDecisions(ctx context.Context, f DecisionFilter) ([]*models.Decision, error)
+
+	// SearchDecisions runs websearch_to_tsquery('english', q) against
+	// decisions.search_vector, ordered by ts_rank desc then newest-first.
+	SearchDecisions(ctx context.Context, q string, f DecisionFilter) ([]*models.Decision, error)
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

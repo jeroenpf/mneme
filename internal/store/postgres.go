@@ -406,3 +406,141 @@ func collectDocuments(rows pgx.Rows) ([]*models.Document, error) {
 	}
 	return out, nil
 }
+
+// translateDecisionWriteErr maps the decisions FK violation to a typed
+// error; anything else is wrapped. decisions has its own FK constraint
+// name, so the documents-oriented translateWriteErr can't be reused.
+func translateDecisionWriteErr(op string, err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) &&
+		pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "decisions_project_fkey" {
+		return ErrInvalidProject
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
+
+// decisionColumns is the SELECT list for every decision Get/List/Search.
+// Keep in lockstep with scanDecision.
+const decisionColumns = `
+	id, title, project, decision, rationale, alternatives,
+	consequences, status, created_at, updated_at`
+
+func scanDecision(row pgx.Row) (*models.Decision, error) {
+	d := &models.Decision{}
+	err := row.Scan(
+		&d.ID, &d.Title, &d.Project, &d.Decision, &d.Rationale,
+		&d.Alternatives, &d.Consequences, &d.Status, &d.CreatedAt, &d.UpdatedAt,
+	)
+	return d, err
+}
+
+func collectDecisions(rows pgx.Rows) ([]*models.Decision, error) {
+	out := []*models.Decision{}
+	for rows.Next() {
+		d, err := scanDecision(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan decision: %w", err)
+		}
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate decisions: %w", err)
+	}
+	return out, nil
+}
+
+// decisionWhere appends the project/status constraints shared by
+// ListDecisions and SearchDecisions.
+func decisionWhere(b *queryBuilder, f DecisionFilter) {
+	if f.Project != nil {
+		b.where = append(b.where, "project = "+b.addArg(*f.Project))
+	}
+	if f.Status != nil {
+		b.where = append(b.where, "status = "+b.addArg(string(*f.Status)))
+	}
+}
+
+func decisionLimit(b *queryBuilder, f DecisionFilter) string {
+	if f.Limit > 0 {
+		return " LIMIT " + b.addArg(f.Limit)
+	}
+	return ""
+}
+
+func (s *PostgresStore) CreateDecision(ctx context.Context, d *models.Decision) error {
+	const q = `
+		INSERT INTO decisions (title, project, decision, rationale, alternatives, consequences, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, d.Title, d.Project, d.Decision, d.Rationale, d.Alternatives, d.Consequences, d.Status)
+	if err := row.Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		return translateDecisionWriteErr("create decision", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) GetDecision(ctx context.Context, id string) (*models.Decision, error) {
+	q := `SELECT ` + decisionColumns + ` FROM decisions WHERE id = $1`
+	d, err := scanDecision(s.pool.QueryRow(ctx, q, id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get decision: %w", err)
+	}
+	return d, nil
+}
+
+func (s *PostgresStore) UpdateDecision(ctx context.Context, d *models.Decision) error {
+	const q = `
+		UPDATE decisions
+		SET title = $2, project = $3, decision = $4, rationale = $5,
+		    alternatives = $6, consequences = $7, status = $8
+		WHERE id = $1
+		RETURNING updated_at`
+	row := s.pool.QueryRow(ctx, q, d.ID, d.Title, d.Project, d.Decision, d.Rationale, d.Alternatives, d.Consequences, d.Status)
+	if err := row.Scan(&d.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return translateDecisionWriteErr("update decision", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) ListDecisions(ctx context.Context, f DecisionFilter) ([]*models.Decision, error) {
+	b := &queryBuilder{}
+	decisionWhere(b, f)
+	q := `SELECT ` + decisionColumns + ` FROM decisions` +
+		b.whereClause() +
+		` ORDER BY created_at DESC` +
+		decisionLimit(b, f)
+
+	rows, err := s.pool.Query(ctx, q, b.args...)
+	if err != nil {
+		return nil, fmt.Errorf("list decisions: %w", err)
+	}
+	defer rows.Close()
+	return collectDecisions(rows)
+}
+
+func (s *PostgresStore) SearchDecisions(ctx context.Context, query string, f DecisionFilter) ([]*models.Decision, error) {
+	b := &queryBuilder{}
+	qRef := b.addArg(query)
+	b.where = append(b.where,
+		"search_vector @@ websearch_to_tsquery('english', "+qRef+")")
+	decisionWhere(b, f)
+
+	sql := `SELECT ` + decisionColumns + ` FROM decisions` +
+		b.whereClause() +
+		` ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', ` + qRef + `)) DESC,` +
+		` created_at DESC` +
+		decisionLimit(b, f)
+
+	rows, err := s.pool.Query(ctx, sql, b.args...)
+	if err != nil {
+		return nil, fmt.Errorf("search decisions: %w", err)
+	}
+	defer rows.Close()
+	return collectDecisions(rows)
+}
