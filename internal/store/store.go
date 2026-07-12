@@ -215,6 +215,11 @@ type Store interface {
 	// solutions.search_vector, ordered by ts_rank desc then newest-first.
 	SearchSolutions(ctx context.Context, q string, f SolutionFilter) ([]*models.Solution, error)
 
+	// Search runs a unified FTS query across the requested content types
+	// (all of SearchTypes when Types is empty), ranked cross-type by
+	// reciprocal rank. Returns ErrInvalidSearchType for an unknown type.
+	Search(ctx context.Context, q string, f SearchFilter) ([]*models.SearchHit, error)
+
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.
 	Ping(ctx context.Context) error

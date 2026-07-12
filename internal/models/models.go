@@ -234,3 +234,16 @@ type Solution struct {
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
+
+// SearchHit is one ranked result from the unified Search across content
+// types. Title/Excerpt are per-type projections; Score is the reciprocal-
+// rank fusion score (higher = more relevant).
+type SearchHit struct {
+	Type      string    `json:"type"`
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	Excerpt   string    `json:"excerpt"`
+	Project   *string   `json:"project,omitempty"`
+	Score     float64   `json:"score"`
+	UpdatedAt time.Time `json:"updated_at"`
+}

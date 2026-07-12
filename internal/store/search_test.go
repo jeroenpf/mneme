@@ -2,9 +2,11 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpfeil/mneme/internal/store"
 )
 
 // TestJournalFTSColumn proves migration 012 added a working search_vector to
@@ -30,5 +32,125 @@ func TestJournalFTSColumn(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("expected 1 journal FTS match, got %d", n)
+	}
+}
+
+func seedSearchCorpus(t *testing.T, s *store.PostgresStore) {
+	t.Helper()
+	ctx := context.Background()
+	if err := s.CreateDocument(ctx, &models.Document{
+		ID: "zigbee-plan", Title: "Zigbee migration plan", Project: ptr("apollo"),
+		Type: models.TypePlan, Status: models.StatusInProgress,
+		Tags: []string{}, Meta: map[string]any{}, Body: map[string]any{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// The decision text carries the bare token "zigbee" so a "zigbee" query
+	// matches it. Postgres tokenizes "zigbee2mqtt" as a single numword
+	// lexeme that does NOT match "zigbee" (discovered during execution — see
+	// the plan's note), hence the extra bare word alongside the realistic
+	// product name.
+	if err := s.CreateDecision(ctx, &models.Decision{
+		Title: "Use zigbee2mqtt", Project: ptr("apollo"),
+		Decision: "adopt zigbee2mqtt for the zigbee mesh", Status: models.DecisionAccepted,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateSnippet(ctx, &models.Snippet{
+		Title: "zigbee pairing helper", Project: ptr("apollo"),
+		Language: "go", Content: "// zigbee pair", Tags: []string{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateSolution(ctx, &models.Solution{
+		Project: ptr("apollo"), ErrorDescription: "zigbee coordinator offline",
+		Solution: "reflash the stick", Tags: []string{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateJournalEntry(ctx, &models.JournalEntry{
+		Project: ptr("apollo"), Summary: "zigbee coordinator swap done",
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSearchSpansAllTypes(t *testing.T) {
+	s := newStore(t)
+	seedProjects(t, s, "apollo")
+	seedSearchCorpus(t, s)
+
+	hits, err := s.Search(context.Background(), "zigbee", store.SearchFilter{})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	got := map[string]bool{}
+	for _, h := range hits {
+		got[h.Type] = true
+		if h.Title == "" || h.Score <= 0 {
+			t.Errorf("bad hit: %+v", h)
+		}
+	}
+	for _, ty := range store.SearchTypes {
+		if !got[ty] {
+			t.Errorf("expected a %s hit, got types %v", ty, got)
+		}
+	}
+}
+
+func TestSearchTypeAndProjectFilter(t *testing.T) {
+	s := newStore(t)
+	seedProjects(t, s, "apollo", "hyperion")
+	seedSearchCorpus(t, s)
+	// a decision under a different project that must be filtered out by project
+	if err := s.CreateDecision(context.Background(), &models.Decision{
+		Title: "zigbee elsewhere", Project: ptr("hyperion"),
+		Decision: "zigbee", Status: models.DecisionAccepted,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// types filter: only decisions
+	hits, err := s.Search(context.Background(), "zigbee",
+		store.SearchFilter{Types: []string{"decisions"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range hits {
+		if h.Type != "decisions" {
+			t.Errorf("types filter leaked: %+v", h)
+		}
+	}
+	// project filter: only apollo decisions
+	hits, err = s.Search(context.Background(), "zigbee",
+		store.SearchFilter{Types: []string{"decisions"}, Project: ptr("apollo")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range hits {
+		if h.Project == nil || *h.Project != "apollo" {
+			t.Errorf("project filter leaked: %+v", h)
+		}
+	}
+}
+
+func TestSearchUnknownTypeErrors(t *testing.T) {
+	s := newStore(t)
+	_, err := s.Search(context.Background(), "x", store.SearchFilter{Types: []string{"bogus"}})
+	if !errors.Is(err, store.ErrInvalidSearchType) {
+		t.Fatalf("expected ErrInvalidSearchType, got %v", err)
+	}
+}
+
+func TestSearchLimit(t *testing.T) {
+	s := newStore(t)
+	seedProjects(t, s, "apollo")
+	seedSearchCorpus(t, s)
+	hits, err := s.Search(context.Background(), "zigbee", store.SearchFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("limit=2 should cap at 2, got %d", len(hits))
 	}
 }
