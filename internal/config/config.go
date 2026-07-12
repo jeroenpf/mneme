@@ -20,7 +20,7 @@ func Load() (*Config, error) {
 		DSN:         getenv("MNEME_DSN", "postgres://mneme:mneme@localhost:5432/mneme?sslmode=disable"),
 		Port:        getenv("MNEME_PORT", "8080"),
 		Env:         getenv("MNEME_ENV", "development"),
-		CORSOrigins: splitCSV(getenv("MNEME_CORS_ORIGINS", "http://localhost:5273,https://mneme.local")),
+		CORSOrigins: splitCSV(getenv("MNEME_CORS_ORIGINS", "http://localhost:5273,https://mneme.dev:8443")),
 		TLSCert:     getenv("MNEME_TLS_CERT", ""),
 		TLSKey:      getenv("MNEME_TLS_KEY", ""),
 	}
