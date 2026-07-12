@@ -38,6 +38,8 @@ push_document is upsert-by-meta.id — reserve it for new documents or full rewr
 
 At session start, call get_memory(scope) to load persistent context (global, or project/area for the active project) instead of asking the user to re-explain. Use set_memory to record durable facts worth carrying across sessions.
 
+Record durable decisions with log_decision as you make them (tech/library choices, pattern selections, trade-off resolutions) so the "why" stays searchable via query_decisions. This is the mutable decision log — distinct from hardened ADRs that graduate to the repo as markdown.
+
 Repo-tracked files (CLAUDE.md, ADRs, READMEs, .architecture/specs/*.md) are not in Mneme; read those from disk.`
 
 // Server holds the SDK Server plus the dependencies its tool handlers
@@ -101,6 +103,21 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "delete_memory",
 		Description: "Delete a memory key at a scope. Same scope args as set_memory.",
 	}, t.deleteMemory)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "log_decision",
+		Description: "Record an architecture decision (ADR) — the mutable decision log Claude Code writes as a session side-effect. Omit id to create (title + decision required; project optional, omit for a global decision; status defaults to accepted). Pass id to update an existing decision, e.g. flip status proposed→accepted→deprecated. Returns the stored decision.",
+	}, t.logDecision)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "get_decisions",
+		Description: "List decisions newest-first, optionally filtered by project and/or status. Returns full records (rationale, alternatives, consequences).",
+	}, t.getDecisions)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "query_decisions",
+		Description: "Full-text search decisions ranked by relevance — answers \"why did we choose X?\". Searches title, decision, rationale, alternatives, consequences. Optional project scope.",
+	}, t.queryDecisions)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "list_documents",
