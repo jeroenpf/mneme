@@ -62,6 +62,15 @@ type JournalFilter struct {
 	Limit   int // 0 → no limit
 }
 
+// SolutionFilter narrows ListSolutions / SearchSolutions. A nil/empty
+// field is "no constraint". Project nil means "any project" (not "global
+// only"). Tags matches solutions containing ALL listed tags (tags @> filter).
+type SolutionFilter struct {
+	Project *string
+	Tags    []string
+	Limit   int // 0 → no limit
+}
+
 // Filter narrows ListDocuments / SearchDocuments. Zero/nil fields are
 // treated as "no constraint".
 type Filter struct {
@@ -181,6 +190,27 @@ type Store interface {
 	// ListJournalEntries returns entries newest-first, filtered by the
 	// non-nil JournalFilter fields.
 	ListJournalEntries(ctx context.Context, f JournalFilter) ([]*models.JournalEntry, error)
+
+	// CreateSolution inserts a solution and fills sol.ID/sol.CreatedAt/
+	// sol.UpdatedAt from the DB. Returns ErrInvalidProject when a
+	// project-scoped solution references an unknown slug.
+	CreateSolution(ctx context.Context, sol *models.Solution) error
+
+	// GetSolution returns ErrNotFound when id has no row.
+	GetSolution(ctx context.Context, id string) (*models.Solution, error)
+
+	// UpdateSolution writes all mutable columns by id (updated_at is
+	// trigger-managed). Returns ErrNotFound when id has no row and
+	// ErrInvalidProject on an unknown project slug.
+	UpdateSolution(ctx context.Context, sol *models.Solution) error
+
+	// ListSolutions returns solutions newest-first, filtered by the
+	// non-nil SolutionFilter fields.
+	ListSolutions(ctx context.Context, f SolutionFilter) ([]*models.Solution, error)
+
+	// SearchSolutions runs websearch_to_tsquery('english', q) against
+	// solutions.search_vector, ordered by ts_rank desc then newest-first.
+	SearchSolutions(ctx context.Context, q string, f SolutionFilter) ([]*models.Solution, error)
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

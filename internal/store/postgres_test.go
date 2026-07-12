@@ -1046,3 +1046,160 @@ func TestListJournalEntriesSince(t *testing.T) {
 		t.Fatalf("since=past should include the entry, got %+v", one)
 	}
 }
+
+func TestCreateSolutionAndList(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+
+	sol := &models.Solution{
+		Project:          ptr("apollo"),
+		ErrorDescription: "pgx scan fails: cannot scan NULL into *string",
+		Solution:         "Model nullable FK columns as *string, not string",
+		Tags:             []string{"go", "pgx"},
+		SourceURL:        "https://example.test/pgx-null",
+	}
+	if err := s.CreateSolution(ctx, sol); err != nil {
+		t.Fatalf("CreateSolution: %v", err)
+	}
+	if sol.ID == "" || sol.CreatedAt.IsZero() || sol.UpdatedAt.IsZero() {
+		t.Errorf("id/timestamps not populated: %+v", sol)
+	}
+
+	got, err := s.ListSolutions(ctx, store.SolutionFilter{Project: ptr("apollo")})
+	if err != nil {
+		t.Fatalf("ListSolutions: %v", err)
+	}
+	if len(got) != 1 || got[0].Solution != "Model nullable FK columns as *string, not string" {
+		t.Fatalf("expected 1 entry, got %+v", got)
+	}
+	if len(got[0].Tags) != 2 || got[0].SourceURL != "https://example.test/pgx-null" {
+		t.Errorf("fields not round-tripped: %+v", got[0])
+	}
+}
+
+func TestCreateSolutionGlobal(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	sol := &models.Solution{
+		ErrorDescription: "mneme.dev resolves slowly on macOS",
+		Solution:         "Use a non-.local host; .local routes through mDNS",
+	}
+	if err := s.CreateSolution(ctx, sol); err != nil {
+		t.Fatalf("CreateSolution global: %v", err)
+	}
+	got, err := s.ListSolutions(ctx, store.SolutionFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Project != nil {
+		t.Fatalf("expected 1 global entry (nil project), got %+v", got)
+	}
+	if len(got[0].Tags) != 0 || got[0].SourceURL != "" {
+		t.Errorf("expected empty tags + source_url, got %+v", got[0])
+	}
+}
+
+func TestCreateSolutionUnknownProject(t *testing.T) {
+	s := newStore(t)
+	err := s.CreateSolution(context.Background(),
+		&models.Solution{Project: ptr("ghost"), ErrorDescription: "e", Solution: "s"})
+	if !errors.Is(err, store.ErrInvalidProject) {
+		t.Fatalf("expected ErrInvalidProject, got %v", err)
+	}
+}
+
+func TestUpdateSolution(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	sol := &models.Solution{ErrorDescription: "old error", Solution: "old fix", Tags: []string{"a"}}
+	if err := s.CreateSolution(ctx, sol); err != nil {
+		t.Fatal(err)
+	}
+
+	sol.Solution = "new fix"
+	sol.Tags = []string{"b", "c"}
+	if err := s.UpdateSolution(ctx, sol); err != nil {
+		t.Fatalf("UpdateSolution: %v", err)
+	}
+
+	got, err := s.GetSolution(ctx, sol.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Solution != "new fix" || len(got.Tags) != 2 {
+		t.Fatalf("update not persisted: %+v", got)
+	}
+}
+
+func TestUpdateSolutionNotFound(t *testing.T) {
+	s := newStore(t)
+	err := s.UpdateSolution(context.Background(),
+		&models.Solution{ID: "00000000-0000-0000-0000-000000000000", ErrorDescription: "e", Solution: "s"})
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestListSolutionsFilterAndOrder(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	if err := s.CreateSolution(ctx, &models.Solution{Project: ptr("apollo"), ErrorDescription: "first", Solution: "f", Tags: []string{"docker"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateSolution(ctx, &models.Solution{Project: ptr("apollo"), ErrorDescription: "second", Solution: "s", Tags: []string{"docker", "macos"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := s.ListSolutions(ctx, store.SolutionFilter{Project: ptr("apollo")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].ErrorDescription != "second" {
+		t.Fatalf("expected newest-first [second, first], got %+v", all)
+	}
+
+	tagged, err := s.ListSolutions(ctx, store.SolutionFilter{Tags: []string{"macos"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tagged) != 1 || tagged[0].ErrorDescription != "second" {
+		t.Fatalf("tag filter: expected only [second], got %+v", tagged)
+	}
+}
+
+func TestSearchSolutionsRankedAndLimit(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	for i := 0; i < 4; i++ {
+		if err := s.CreateSolution(ctx, &models.Solution{
+			ErrorDescription: "container startup timeout on boot",
+			Solution:         "raise the healthcheck start_period",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// unrelated entry that must NOT match the query
+	if err := s.CreateSolution(ctx, &models.Solution{
+		ErrorDescription: "certificate expired", Solution: "regenerate with mkcert",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := s.SearchSolutions(ctx, "startup timeout", store.SolutionFilter{})
+	if err != nil {
+		t.Fatalf("SearchSolutions: %v", err)
+	}
+	if len(hits) != 4 {
+		t.Fatalf("expected 4 timeout matches, got %d: %+v", len(hits), hits)
+	}
+
+	capped, err := s.SearchSolutions(ctx, "startup timeout", store.SolutionFilter{Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(capped) != 2 {
+		t.Fatalf("expected limit=2 to cap at 2, got %d", len(capped))
+	}
+}

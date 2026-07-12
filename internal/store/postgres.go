@@ -803,3 +803,141 @@ func (s *PostgresStore) ListJournalEntries(ctx context.Context, f JournalFilter)
 	defer rows.Close()
 	return collectJournalEntries(rows)
 }
+
+// translateSolutionWriteErr maps the solutions FK violation to a typed
+// error; anything else is wrapped. solutions has its own FK constraint
+// name, so the documents-oriented translateWriteErr can't be reused.
+func translateSolutionWriteErr(op string, err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) &&
+		pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "solutions_project_fkey" {
+		return ErrInvalidProject
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
+
+// solutionColumns is the SELECT list for every solution Get/List/Search.
+// Keep in lockstep with scanSolution.
+const solutionColumns = `
+	id, project, error_description, solution, tags, source_url,
+	created_at, updated_at`
+
+func scanSolution(row pgx.Row) (*models.Solution, error) {
+	sol := &models.Solution{}
+	err := row.Scan(
+		&sol.ID, &sol.Project, &sol.ErrorDescription, &sol.Solution,
+		&sol.Tags, &sol.SourceURL, &sol.CreatedAt, &sol.UpdatedAt,
+	)
+	return sol, err
+}
+
+func collectSolutions(rows pgx.Rows) ([]*models.Solution, error) {
+	out := []*models.Solution{}
+	for rows.Next() {
+		sol, err := scanSolution(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan solution: %w", err)
+		}
+		out = append(out, sol)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate solutions: %w", err)
+	}
+	return out, nil
+}
+
+// solutionWhere appends the project/tag constraints shared by ListSolutions
+// and SearchSolutions.
+func solutionWhere(b *queryBuilder, f SolutionFilter) {
+	if f.Project != nil {
+		b.where = append(b.where, "project = "+b.addArg(*f.Project))
+	}
+	if len(f.Tags) > 0 {
+		b.where = append(b.where, "tags @> "+b.addArg(f.Tags))
+	}
+}
+
+func solutionLimit(b *queryBuilder, f SolutionFilter) string {
+	if f.Limit > 0 {
+		return " LIMIT " + b.addArg(f.Limit)
+	}
+	return ""
+}
+
+func (s *PostgresStore) CreateSolution(ctx context.Context, sol *models.Solution) error {
+	const q = `
+		INSERT INTO solutions (project, error_description, solution, tags, source_url)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, created_at, updated_at`
+	row := s.pool.QueryRow(ctx, q, sol.Project, sol.ErrorDescription, sol.Solution, ensureTags(sol.Tags), sol.SourceURL)
+	if err := row.Scan(&sol.ID, &sol.CreatedAt, &sol.UpdatedAt); err != nil {
+		return translateSolutionWriteErr("create solution", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) GetSolution(ctx context.Context, id string) (*models.Solution, error) {
+	q := `SELECT ` + solutionColumns + ` FROM solutions WHERE id = $1`
+	sol, err := scanSolution(s.pool.QueryRow(ctx, q, id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get solution: %w", err)
+	}
+	return sol, nil
+}
+
+func (s *PostgresStore) UpdateSolution(ctx context.Context, sol *models.Solution) error {
+	const q = `
+		UPDATE solutions
+		SET project = $2, error_description = $3, solution = $4,
+		    tags = $5, source_url = $6
+		WHERE id = $1
+		RETURNING updated_at`
+	row := s.pool.QueryRow(ctx, q, sol.ID, sol.Project, sol.ErrorDescription, sol.Solution, ensureTags(sol.Tags), sol.SourceURL)
+	if err := row.Scan(&sol.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return translateSolutionWriteErr("update solution", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) ListSolutions(ctx context.Context, f SolutionFilter) ([]*models.Solution, error) {
+	b := &queryBuilder{}
+	solutionWhere(b, f)
+	q := `SELECT ` + solutionColumns + ` FROM solutions` +
+		b.whereClause() +
+		` ORDER BY created_at DESC` +
+		solutionLimit(b, f)
+
+	rows, err := s.pool.Query(ctx, q, b.args...)
+	if err != nil {
+		return nil, fmt.Errorf("list solutions: %w", err)
+	}
+	defer rows.Close()
+	return collectSolutions(rows)
+}
+
+func (s *PostgresStore) SearchSolutions(ctx context.Context, query string, f SolutionFilter) ([]*models.Solution, error) {
+	b := &queryBuilder{}
+	qRef := b.addArg(query)
+	b.where = append(b.where,
+		"search_vector @@ websearch_to_tsquery('english', "+qRef+")")
+	solutionWhere(b, f)
+
+	sql := `SELECT ` + solutionColumns + ` FROM solutions` +
+		b.whereClause() +
+		` ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', ` + qRef + `)) DESC,` +
+		` created_at DESC` +
+		solutionLimit(b, f)
+
+	rows, err := s.pool.Query(ctx, sql, b.args...)
+	if err != nil {
+		return nil, fmt.Errorf("search solutions: %w", err)
+	}
+	defer rows.Close()
+	return collectSolutions(rows)
+}
