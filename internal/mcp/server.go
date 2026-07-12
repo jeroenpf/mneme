@@ -36,6 +36,8 @@ Typical workflow:
 
 push_document is upsert-by-meta.id — reserve it for new documents or full rewrites. A document's project must already exist; call create_project(slug, name) once to register a new project before pushing documents that reference it.
 
+At session start, call get_memory(scope) to load persistent context (global, or project/area for the active project) instead of asking the user to re-explain. Use set_memory to record durable facts worth carrying across sessions.
+
 Repo-tracked files (CLAUDE.md, ADRs, READMEs, .architecture/specs/*.md) are not in Mneme; read those from disk.`
 
 // Server holds the SDK Server plus the dependencies its tool handlers
@@ -84,6 +86,21 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "create_project",
 		Description: "Register a new project (slug + human-friendly name, optional description) so documents can reference it. push_document errors on an unknown project; create it first. Returns the stored project (slug normalized to kebab-case).",
 	}, t.createProject)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "get_memory",
+		Description: "Load persistent memory for a scope as a flat key/value object. scope=global returns global keys; scope=project (with project) merges global+project; scope=area (with project+area) merges global+project+area, most-specific winning. Call at session start to orient.",
+	}, t.getMemory)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "set_memory",
+		Description: "Upsert a memory key/value at a scope (global | project | area). project required for project/area scope; area required for area scope. Returns the stored entry.",
+	}, t.setMemory)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "delete_memory",
+		Description: "Delete a memory key at a scope. Same scope args as set_memory.",
+	}, t.deleteMemory)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "list_documents",
