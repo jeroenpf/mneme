@@ -39,6 +39,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 	decisions := &DecisionsHandler{Store: st}
 	snippets := &SnippetsHandler{Store: st}
 	journal := &JournalHandler{Store: st}
+	solutions := &SolutionsHandler{Store: st}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/documents", docs.List)
@@ -54,6 +55,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		r.Get("/decisions", decisions.List)
 		r.Get("/snippets", snippets.List)
 		r.Get("/journal", journal.List)
+		r.Get("/solutions", solutions.List)
 	})
 
 	if mcpHandler != nil {
