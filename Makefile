@@ -14,7 +14,8 @@ help: ## Show this list
 		| awk 'BEGIN{FS=":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
 dev: up ## Start full stack: postgres + Go (via air) + Vite. Ctrl-C stops Vite; backend stays running.
-	cd $(WEB) && npm install --silent && npm run dev
+	cd $(WEB) && npm install --silent && \
+		NODE_EXTRA_CA_CERTS="$$(mkcert -CAROOT)/rootCA.pem" npm run dev
 
 up: ## Bring up backend containers in the background
 	$(COMPOSE) up -d
@@ -62,5 +63,5 @@ endif
 setup-host: ## One-time host setup: mkcert CA + cert, LaunchDaemon, lo0 alias, /etc/hosts. Run with sudo.
 	@bash scripts/setup-host.sh
 
-verify-host: ## Scorecard for the mneme.local host setup (non-destructive, no sudo)
+verify-host: ## Scorecard for the mneme.dev host setup (non-destructive, no sudo)
 	@bash scripts/verify-host.sh

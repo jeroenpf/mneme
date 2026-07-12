@@ -3,7 +3,10 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 
-const API_TARGET = process.env.VITE_API_TARGET ?? 'http://localhost:18080'
+// Default target is the TLS endpoint. Cert validation stays ON: Node does
+// not read the macOS Keychain, so `make dev` passes the mkcert root CA via
+// NODE_EXTRA_CA_CERTS. Escape hatch: VITE_API_TARGET=http://localhost:8080.
+const API_TARGET = process.env.VITE_API_TARGET ?? 'https://mneme.dev:8443'
 
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
