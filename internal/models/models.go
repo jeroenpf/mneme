@@ -173,3 +173,21 @@ func ValidateDecisionStatus(s DecisionStatus) error {
 		return fmt.Errorf("status must be one of proposed, accepted, deprecated")
 	}
 }
+
+// Snippet mirrors the snippets row — a reusable code pattern or project
+// convention Claude Code saves with save_snippet and retrieves with
+// get_snippets / search_snippets. Project is nil for a global
+// (cross-project) snippet. Language is free-text, lowercased at the write
+// boundary; the Vue viewer maps it to a Prism grammar, falling back to
+// plaintext for unknown languages.
+type Snippet struct {
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Project     *string   `json:"project,omitempty"`
+	Language    string    `json:"language"`
+	Content     string    `json:"content"`
+	Tags        []string  `json:"tags"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}

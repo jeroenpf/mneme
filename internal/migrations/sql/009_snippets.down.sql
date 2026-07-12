@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS snippets;
+DROP FUNCTION IF EXISTS snippets_search_vector(TEXT, TEXT, TEXT);
