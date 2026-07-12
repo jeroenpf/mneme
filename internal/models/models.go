@@ -133,3 +133,43 @@ const (
 	StatusBlocked    = "blocked"
 	StatusArchived   = "archived"
 )
+
+// DecisionStatus is the lifecycle state of a decision-log entry. A
+// decision starts proposed, becomes accepted once ratified, and is
+// deprecated when a later decision supersedes it.
+type DecisionStatus string
+
+const (
+	DecisionProposed   DecisionStatus = "proposed"
+	DecisionAccepted   DecisionStatus = "accepted"
+	DecisionDeprecated DecisionStatus = "deprecated"
+)
+
+// Decision mirrors the decisions row — the mutable ADR log Claude Code
+// writes as a session side-effect. Project is nil for a global
+// (cross-project) decision.
+type Decision struct {
+	ID           string         `json:"id"`
+	Title        string         `json:"title"`
+	Project      *string        `json:"project,omitempty"`
+	Decision     string         `json:"decision"`
+	Rationale    string         `json:"rationale"`
+	Alternatives string         `json:"alternatives"`
+	Consequences string         `json:"consequences"`
+	Status       DecisionStatus `json:"status"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+}
+
+// ValidateDecisionStatus enforces the status CHECK at the API/MCP
+// boundary so callers get a friendly message instead of a raw CHECK
+// violation. "" is invalid — callers wanting a default substitute
+// DecisionAccepted before calling.
+func ValidateDecisionStatus(s DecisionStatus) error {
+	switch s {
+	case DecisionProposed, DecisionAccepted, DecisionDeprecated:
+		return nil
+	default:
+		return fmt.Errorf("status must be one of proposed, accepted, deprecated")
+	}
+}

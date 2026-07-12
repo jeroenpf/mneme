@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS decisions;
+DROP FUNCTION IF EXISTS decisions_search_vector(TEXT, TEXT, TEXT, TEXT, TEXT);
