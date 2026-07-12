@@ -206,3 +206,16 @@ type JournalEntry struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
+
+// ParseSince parses a since-filter value: either an RFC3339 timestamp or a
+// plain ISO date (YYYY-MM-DD). Used by the journal REST + MCP surfaces to
+// turn a query/arg string into a created_at lower bound.
+func ParseSince(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse(time.DateOnly, s); err == nil {
+		return t, nil
+	}
+	return time.Time{}, fmt.Errorf("since must be an ISO date (YYYY-MM-DD) or an RFC3339 timestamp")
+}

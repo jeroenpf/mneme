@@ -38,6 +38,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 	memory := &MemoryHandler{Store: st}
 	decisions := &DecisionsHandler{Store: st}
 	snippets := &SnippetsHandler{Store: st}
+	journal := &JournalHandler{Store: st}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/documents", docs.List)
@@ -52,6 +53,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		r.Delete("/memory/{scope}/{key}", memory.Delete)
 		r.Get("/decisions", decisions.List)
 		r.Get("/snippets", snippets.List)
+		r.Get("/journal", journal.List)
 	})
 
 	if mcpHandler != nil {
