@@ -40,6 +40,8 @@ At session start, call get_memory(scope) to load persistent context (global, or 
 
 Record durable decisions with log_decision as you make them (tech/library choices, pattern selections, trade-off resolutions) so the "why" stays searchable via query_decisions. This is the mutable decision log — distinct from hardened ADRs that graduate to the repo as markdown.
 
+Save reusable code patterns and project conventions with save_snippet as you establish them, and consult get_snippets / search_snippets before re-implementing one so the codebase stays consistent.
+
 Repo-tracked files (CLAUDE.md, ADRs, READMEs, .architecture/specs/*.md) are not in Mneme; read those from disk.`
 
 // Server holds the SDK Server plus the dependencies its tool handlers
@@ -118,6 +120,21 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "query_decisions",
 		Description: "Full-text search decisions ranked by relevance — answers \"why did we choose X?\". Searches title, decision, rationale, alternatives, consequences. Optional project scope.",
 	}, t.queryDecisions)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "save_snippet",
+		Description: "Save a reusable code pattern or project convention — the snippet library that keeps Claude Code consistent without re-explaining. Omit id to create (title + content required; project optional, omit for a global snippet; language free-text like go/typescript/sql). Pass id to update an existing snippet (refine the pattern). Returns the stored snippet.",
+	}, t.saveSnippet)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "get_snippets",
+		Description: "List snippets newest-first, optionally filtered by project, language, and/or tag. Returns full records including content.",
+	}, t.getSnippets)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "search_snippets",
+		Description: "Full-text search snippets ranked by relevance — answers \"how do we do X in this project?\". Searches title, description, content. Optional project/language/tag filters.",
+	}, t.searchSnippets)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "list_documents",
