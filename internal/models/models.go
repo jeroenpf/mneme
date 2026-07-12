@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Document mirrors the documents row. Nullable text/int columns are
 // represented as pointers so JSON encoding produces null rather than "".
@@ -62,6 +65,56 @@ type Embedding struct {
 	SourceTitle string    `json:"source_title"`
 	Model       string    `json:"model"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// MemoryScope is the hierarchy level a memory entry lives at. More
+// specific scopes override less specific ones when merged: global <
+// project < area. Keep the values in sync with the memories_scope_shape
+// CHECK in migrations/007_memories.up.sql.
+type MemoryScope string
+
+const (
+	ScopeGlobal  MemoryScope = "global"
+	ScopeProject MemoryScope = "project"
+	ScopeArea    MemoryScope = "area"
+)
+
+// Memory mirrors a memories row. Project/Area are pointers so the JSON
+// (and the DB) can represent "absent" for scopes that don't use them.
+type Memory struct {
+	ID        string      `json:"id"`
+	Scope     MemoryScope `json:"scope"`
+	Project   *string     `json:"project,omitempty"`
+	Area      *string     `json:"area,omitempty"`
+	Key       string      `json:"key"`
+	Value     string      `json:"value"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+// ValidateMemoryScoping enforces the memories_scope_shape invariants at
+// the API/MCP boundary so callers get a friendly message instead of a
+// raw CHECK violation. project/area are trimmed inputs; "" means absent.
+func ValidateMemoryScoping(scope MemoryScope, project, area string) error {
+	switch scope {
+	case ScopeGlobal:
+		if project != "" || area != "" {
+			return fmt.Errorf("global scope takes no project or area")
+		}
+	case ScopeProject:
+		if project == "" {
+			return fmt.Errorf("project scope requires a project")
+		}
+		if area != "" {
+			return fmt.Errorf("project scope takes no area")
+		}
+	case ScopeArea:
+		if project == "" || area == "" {
+			return fmt.Errorf("area scope requires both project and area")
+		}
+	default:
+		return fmt.Errorf("scope must be one of global, project, area")
+	}
+	return nil
 }
 
 // Document type / status constants — keep in sync with the CHECK
