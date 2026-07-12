@@ -48,3 +48,37 @@ export async function apiGet<T>(path: string): Promise<T> {
   }
   return (await res.json()) as T
 }
+
+// apiSend backs the mutating verbs. It tolerates a 204 No Content (empty
+// body) response — DELETE returns one — resolving to undefined in that
+// case. Same error envelope as apiGet.
+async function apiSend<T>(method: string, path: string, body?: unknown): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers:
+        body === undefined
+          ? { Accept: 'application/json' }
+          : { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  } catch (err) {
+    throw new ApiError(0, err instanceof Error ? err.message : 'network error')
+  }
+  if (!res.ok) {
+    let msg = `request failed: ${res.status}`
+    try {
+      const b = (await res.json()) as { error?: string }
+      if (b.error) msg = b.error
+    } catch {
+      // non-JSON body; keep the status-based message
+    }
+    throw new ApiError(res.status, msg)
+  }
+  if (res.status === 204) return undefined as T
+  return (await res.json()) as T
+}
+
+export const apiPut = <T>(path: string, body: unknown): Promise<T> => apiSend<T>('PUT', path, body)
+export const apiDelete = (path: string): Promise<void> => apiSend<void>('DELETE', path)

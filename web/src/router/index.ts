@@ -12,6 +12,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/DocumentView.vue'),
     props: true,
   },
+  {
+    path: '/memory',
+    name: 'memory',
+    component: () => import('@/pages/MemoryView.vue'),
+  },
 ]
 
 export const router = createRouter({

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiGet, buildQuery } from './client'
+import { ApiError, apiDelete, apiGet, apiPut, buildQuery } from './client'
 
 describe('buildQuery', () => {
   it('returns empty string when no params', () => {
@@ -58,5 +58,84 @@ describe('apiGet', () => {
   it('throws ApiError for transport failures', async () => {
     ;(globalThis.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new TypeError('boom'))
     await expect(apiGet('/x')).rejects.toBeInstanceOf(ApiError)
+  })
+})
+
+describe('apiPut', () => {
+  const originalFetch = globalThis.fetch
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn()
+  })
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  it('sends the JSON body and returns the parsed entry', async () => {
+    ;(globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: '1', value: 'neovim' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    await expect(apiPut('/api/v1/memory/global/editor', { value: 'neovim' })).resolves.toEqual({
+      id: '1',
+      value: 'neovim',
+    })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/v1/memory/global/editor',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ value: 'neovim' }),
+      }),
+    )
+  })
+
+  it('throws ApiError with the server message on 4xx', async () => {
+    ;(globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'unknown project' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    await expect(apiPut('/x', { value: 'v' })).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 400,
+      message: 'unknown project',
+    })
+  })
+})
+
+describe('apiDelete', () => {
+  const originalFetch = globalThis.fetch
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn()
+  })
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  it('resolves on 204 No Content (empty body)', async () => {
+    ;(globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    )
+    await expect(apiDelete('/api/v1/memory/global/k')).resolves.toBeUndefined()
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/v1/memory/global/k',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('throws ApiError on non-2xx', async () => {
+    ;(globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    await expect(apiDelete('/x')).rejects.toBeInstanceOf(ApiError)
   })
 })

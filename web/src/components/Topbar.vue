@@ -20,6 +20,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   <header class="topbar">
     <span class="brand"><span class="glyph">⬡</span> mneme</span>
     <span class="mn-label">/ registry</span>
+    <RouterLink to="/memory" class="nav-link mn-mono-sm" data-test="to-memory">memory →</RouterLink>
     <input
       ref="input"
       v-model="model"
@@ -47,6 +48,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: var(--text-primary);
 }
 .glyph {
+  color: var(--accent);
+}
+.nav-link {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.nav-link:hover {
   color: var(--accent);
 }
 .search {
