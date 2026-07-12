@@ -290,3 +290,30 @@ VALUES
    'Debounce a reactive source ref for search-as-you-type inputs.',
    now() - interval '3 days')
 ON CONFLICT (id) DO NOTHING;
+
+-- Sample journal entries so the dev-journal timeline renders real data.
+-- Fixed UUIDs keep this idempotent (ON CONFLICT (id) DO NOTHING). NULL
+-- project = a global/cross-project session entry.
+INSERT INTO journal_entries (id, project, session_ref, summary, accomplished, deferred, created_at)
+VALUES
+  ('00000000-0000-0000-0000-0000000000a1', 'mneme', 'sp-2-2',
+   'Built the decision log end to end.',
+   ARRAY['decisions migration + store', 'log_decision / query_decisions', 'Vue decision page'],
+   ARRAY['ranked search tuning'],
+   now() - interval '10 days'),
+  ('00000000-0000-0000-0000-0000000000a2', 'mneme', 'sp-2-3',
+   'Shipped the snippet library.',
+   ARRAY['snippets migration + FTS', 'save_snippet / search_snippets', 'copyable syntax-highlighted browser'],
+   ARRAY['broaden Prism grammar set'],
+   now() - interval '3 days'),
+  ('00000000-0000-0000-0000-0000000000a3', 'hyperion', 'sp-1-4',
+   'Migrated the coordinator onto zigbee2mqtt.',
+   ARRAY['device inventory', 'coordinator swap'],
+   ARRAY['room-by-room re-pairing'],
+   now() - interval '6 days'),
+  ('00000000-0000-0000-0000-0000000000a4', NULL, '',
+   'Sorted out local TLS + hostname plumbing for the dev stack.',
+   ARRAY['mkcert CA + leaf cert', 'mneme.dev hosts entry'],
+   ARRAY['document the setup-host flow'],
+   now() - interval '1 day')
+ON CONFLICT (id) DO NOTHING;

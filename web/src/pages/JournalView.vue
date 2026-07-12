@@ -1,0 +1,183 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { groupJournal, useJournal } from '@/composables/useJournal'
+import JournalEntryCard from '@/components/JournalEntryCard.vue'
+
+const { items, loading, error, refresh } = useJournal()
+
+const projectFilter = ref('') // '' = all
+
+const filtered = computed(() =>
+  items.value.filter((e) => projectFilter.value === '' || (e.project ?? '') === projectFilter.value),
+)
+const groups = computed(() => groupJournal(filtered.value))
+const isEmpty = computed(() => items.value.length === 0)
+
+const projects = computed(() => {
+  const set = new Set<string>()
+  for (const e of items.value) set.add(e.project ?? '')
+  return [...set].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)))
+})
+
+const projectLabel = (slug: string) => (slug === '' ? 'global' : slug)
+</script>
+
+<template>
+  <div>
+    <header class="topbar">
+      <RouterLink to="/" class="brand"><span class="glyph">⬡</span> mneme</RouterLink>
+      <span class="mn-label">/ journal</span>
+      <RouterLink to="/" class="nav-link mn-mono-sm" data-test="to-registry">registry →</RouterLink>
+      <RouterLink to="/decisions" class="nav-link-tight mn-mono-sm" data-test="to-decisions">decisions →</RouterLink>
+      <RouterLink to="/snippets" class="nav-link-tight mn-mono-sm" data-test="to-snippets">snippets →</RouterLink>
+    </header>
+
+    <main class="content">
+      <p class="mn-body-sm intro">
+        The dev journal — what each session built, deferred, and changed. Claude Code writes it with
+        <span class="mn-code-inline">append_journal</span> and reads it with
+        <span class="mn-code-inline">get_journal</span>. Read-only here.
+      </p>
+
+      <p v-if="loading" class="mn-mono-sm py-8 text-center">loading journal…</p>
+
+      <div v-else-if="error" class="error mn-body-sm" data-test="error">
+        <p>could not load the journal: {{ error.message }}</p>
+        <button class="retry mn-mono-sm" @click="refresh">retry</button>
+      </div>
+
+      <template v-else>
+        <p v-if="isEmpty" class="mn-body-sm empty" data-test="empty">
+          no journal entries yet — write one over MCP with
+          <span class="mn-code-inline">append_journal</span>.
+        </p>
+
+        <template v-else>
+          <div class="filters">
+            <select v-model="projectFilter" class="filter mn-mono-sm" aria-label="filter by project" data-test="project-filter">
+              <option value="">all projects</option>
+              <option v-for="p in projects" :key="p || '_global'" :value="p">{{ projectLabel(p) }}</option>
+            </select>
+          </div>
+
+          <section v-for="group in groups" :key="group.project || '_global'" class="group" data-test="group">
+            <h2 class="group-title mn-h3">
+              <span class="scope-prefix mn-mono-sm">project /</span> {{ projectLabel(group.project) }}
+            </h2>
+            <div class="cards">
+              <JournalEntryCard v-for="e in group.entries" :key="e.id" :entry="e" />
+            </div>
+          </section>
+        </template>
+      </template>
+    </main>
+  </div>
+</template>
+
+<style scoped>
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--topbar-height);
+  padding: 0 var(--space-6);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.glyph {
+  color: var(--accent);
+}
+.nav-link {
+  margin-left: auto;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.nav-link-tight {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.nav-link:hover,
+.nav-link-tight:hover {
+  color: var(--accent);
+}
+
+.content {
+  max-width: var(--content-max);
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+.intro {
+  color: var(--text-muted);
+  margin-top: calc(-1 * var(--space-2));
+}
+.error {
+  border: 1px solid var(--red-border);
+  background: var(--red-dim);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  color: var(--text-secondary);
+}
+.retry {
+  margin-top: var(--space-2);
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.empty {
+  color: var(--text-muted);
+}
+
+.filters {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.filter {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+}
+.filter:focus {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.group-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.scope-prefix {
+  color: var(--text-faint);
+}
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>

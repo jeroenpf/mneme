@@ -27,6 +27,11 @@ const routes: RouteRecordRaw[] = [
     name: 'snippets',
     component: () => import('@/pages/SnippetsView.vue'),
   },
+  {
+    path: '/journal',
+    name: 'journal',
+    component: () => import('@/pages/JournalView.vue'),
+  },
 ]
 
 export const router = createRouter({

@@ -42,4 +42,13 @@ describe('Topbar', () => {
     expect(snippets).toBeTruthy()
     expect(snippets!.props('to')).toBe('/snippets')
   })
+
+  it('links to the journal page', () => {
+    const w = mount(Topbar, { props: { modelValue: '' }, global })
+    const journal = w
+      .findAllComponents(RouterLinkStub)
+      .find((l) => l.attributes('data-test') === 'to-journal')
+    expect(journal).toBeTruthy()
+    expect(journal!.props('to')).toBe('/journal')
+  })
 })
