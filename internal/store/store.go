@@ -117,6 +117,9 @@ type Store interface {
 	// exists. The caller is responsible for normalizing p.Slug.
 	CreateProject(ctx context.Context, p *models.Project) error
 
+	// GetProject returns the project with the given slug, or ErrNotFound.
+	GetProject(ctx context.Context, slug string) (*models.Project, error)
+
 	// ListMemory returns raw (un-merged) memory entries matching the
 	// filter, ordered by (scope, project, area, key). The hierarchy
 	// merge lives in the MCP get_memory handler, not here.

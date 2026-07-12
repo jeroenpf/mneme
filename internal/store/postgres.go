@@ -285,6 +285,19 @@ func (s *PostgresStore) CreateProject(ctx context.Context, p *models.Project) er
 	return nil
 }
 
+func (s *PostgresStore) GetProject(ctx context.Context, slug string) (*models.Project, error) {
+	const q = `SELECT id, name, slug, description, created_at FROM projects WHERE slug = $1`
+	p := &models.Project{}
+	err := s.pool.QueryRow(ctx, q, slug).Scan(&p.ID, &p.Name, &p.Slug, &p.Description, &p.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get project: %w", err)
+	}
+	return p, nil
+}
+
 func (s *PostgresStore) SetMemory(ctx context.Context, m *models.Memory) error {
 	const q = `
 		INSERT INTO memories (scope, project, area, key, value)

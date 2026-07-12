@@ -1203,3 +1203,25 @@ func TestSearchSolutionsRankedAndLimit(t *testing.T) {
 		t.Fatalf("expected limit=2 to cap at 2, got %d", len(capped))
 	}
 }
+
+func TestGetProject(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+
+	got, err := s.GetProject(ctx, "apollo")
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if got.Slug != "apollo" {
+		t.Fatalf("expected slug apollo, got %+v", got)
+	}
+}
+
+func TestGetProjectNotFound(t *testing.T) {
+	s := newStore(t)
+	_, err := s.GetProject(context.Background(), "ghost")
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
