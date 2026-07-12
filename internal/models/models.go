@@ -191,3 +191,18 @@ type Snippet struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
+
+// JournalEntry mirrors the journal_entries row — a per-session dev-journal
+// entry Claude Code writes with append_journal and retrieves with
+// get_journal. Project is nil for a global (cross-project) entry.
+// Summary is required; session_ref is free-text (e.g. "sp-2-4").
+type JournalEntry struct {
+	ID           string    `json:"id"`
+	Project      *string   `json:"project,omitempty"`
+	SessionRef   string    `json:"session_ref"`
+	Summary      string    `json:"summary"`
+	Accomplished []string  `json:"accomplished"`
+	Deferred     []string  `json:"deferred"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
