@@ -229,6 +229,55 @@ func orthoVec(dim int) []float32 {
 	return v
 }
 
+func TestSearchSurfacesSimilarity(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	// FTS-only hit: a doc with the query word but no embedding.
+	if err := s.CreateDocument(ctx, &models.Document{
+		ID: "fts-doc", Title: "zigbee coordinator notes", Project: ptr("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{}, Body: map[string]any{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Vector-only hit: reachable by embedding (identical to the query vector),
+	// title carries no query word.
+	qv := fakeVec(0.5)
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{{
+		SourceType: "documents", SourceID: "vec-doc", ChunkID: "full",
+		ChunkText: "semantic match", Embedding: qv, Project: ptr("apollo"),
+		SourceTitle: "Vector doc", Model: "fake",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := s.Search(ctx, "zigbee", store.SearchFilter{Vector: qv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vec, fts *models.SearchHit
+	for _, h := range hits {
+		switch h.ID {
+		case "vec-doc":
+			vec = h
+		case "fts-doc":
+			fts = h
+		}
+	}
+	if vec == nil || vec.Similarity == nil {
+		t.Fatalf("vector hit should carry a similarity, got %+v", vec)
+	}
+	if *vec.Similarity < 0.99 {
+		t.Errorf("identical vectors should have similarity ~1.0, got %v", *vec.Similarity)
+	}
+	if fts == nil {
+		t.Fatalf("expected the FTS-only doc among hits")
+	}
+	if fts.Similarity != nil {
+		t.Errorf("FTS-only hit should have nil similarity, got %v", *fts.Similarity)
+	}
+}
+
 func TestSearchVectorFloorDropsWeakMatches(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()

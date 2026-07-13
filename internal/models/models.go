@@ -237,13 +237,17 @@ type Solution struct {
 
 // SearchHit is one ranked result from the unified Search across content
 // types. Title/Excerpt are per-type projections; Score is the reciprocal-
-// rank fusion score (higher = more relevant).
+// rank fusion score (higher = more relevant). Similarity is the raw cosine
+// similarity (0–1, higher = closer) of the best-matching chunk when the hit
+// was reached via the vector side; nil for FTS-only hits. It makes the
+// semantic relevance floor observable.
 type SearchHit struct {
-	Type      string    `json:"type"`
-	ID        string    `json:"id"`
-	Title     string    `json:"title"`
-	Excerpt   string    `json:"excerpt"`
-	Project   *string   `json:"project,omitempty"`
-	Score     float64   `json:"score"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Type       string    `json:"type"`
+	ID         string    `json:"id"`
+	Title      string    `json:"title"`
+	Excerpt    string    `json:"excerpt"`
+	Project    *string   `json:"project,omitempty"`
+	Score      float64   `json:"score"`
+	Similarity *float64  `json:"similarity,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }

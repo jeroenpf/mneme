@@ -116,7 +116,7 @@ func (s *PostgresStore) Search(ctx context.Context, q string, f SearchFilter) ([
 		args = append(args, limit)
 		limitRef := fmt.Sprintf("$%d", len(args))
 		sql := "WITH " + ftsCTE + `
-SELECT type, id, title, excerpt, project, fts_score AS score, updated_at
+SELECT type, id, title, excerpt, project, fts_score AS score, NULL::float8 AS similarity, updated_at
 FROM franked
 ORDER BY score DESC, updated_at DESC
 LIMIT ` + limitRef
@@ -157,7 +157,7 @@ vhits AS (
   ORDER BY source_type, source_id, embedding <=> ` + qvecRef + `
 ),
 vranked AS (
-  SELECT type, id, title, excerpt, project, updated_at,
+  SELECT type, id, title, excerpt, project, updated_at, sim,
          1.0 / (` + fmt.Sprintf("%d", rrfK) + ` + row_number() OVER (ORDER BY sim DESC)) AS vec_score
   FROM vhits
 ),
@@ -169,10 +169,11 @@ fused AS (
     coalesce(f.excerpt, v.excerpt)       AS excerpt,
     coalesce(f.project, v.project)       AS project,
     coalesce(f.updated_at, v.updated_at) AS updated_at,
-    coalesce(f.fts_score, 0) + coalesce(v.vec_score, 0) AS score
+    coalesce(f.fts_score, 0) + coalesce(v.vec_score, 0) AS score,
+    v.sim                                AS similarity
   FROM franked f FULL OUTER JOIN vranked v ON f.type = v.type AND f.id = v.id
 )
-SELECT type, id, title, excerpt, project, score, updated_at
+SELECT type, id, title, excerpt, project, score, similarity, updated_at
 FROM fused
 ORDER BY score DESC, updated_at DESC
 LIMIT ` + limitRef
@@ -194,7 +195,7 @@ func collectSearchHits(rows pgx.Rows) ([]*models.SearchHit, error) {
 	out := []*models.SearchHit{}
 	for rows.Next() {
 		h := &models.SearchHit{}
-		if err := rows.Scan(&h.Type, &h.ID, &h.Title, &h.Excerpt, &h.Project, &h.Score, &h.UpdatedAt); err != nil {
+		if err := rows.Scan(&h.Type, &h.ID, &h.Title, &h.Excerpt, &h.Project, &h.Score, &h.Similarity, &h.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan search hit: %w", err)
 		}
 		out = append(out, h)
