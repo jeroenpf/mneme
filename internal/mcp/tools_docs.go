@@ -12,11 +12,23 @@ import (
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
 
+// requireProjectForPlan rejects a plan with no project. A projectless
+// plan is invisible to get_context_bundle and project-scoped
+// list_documents (both filter by project), so it silently never becomes
+// any project's active plan — the orphaned-plan trap. Other doc types
+// may legitimately be global.
+func requireProjectForPlan(doc *models.Document) error {
+	if doc.Type == models.TypePlan && (doc.Project == nil || *doc.Project == "") {
+		return errors.New("meta.project is required for a plan so it surfaces in get_context_bundle and project-scoped lists; register it first with create_project if it does not exist")
+	}
+	return nil
+}
+
 // --- push_document ----------------------------------------------------
 
 type pushInput struct {
-	Meta map[string]any `json:"meta" jsonschema:"document meta object; must include id, title, type"`
-	Body map[string]any `json:"body" jsonschema:"document body — typically an object with a sections array"`
+	Meta map[string]any `json:"meta" jsonschema:"document meta. Keys: id (required, stable slug), title (required), type (required; one of plan, report, spec, adr, brainstorm, journal), project (project slug; REQUIRED for type=plan so the plan surfaces in get_context_bundle — the project must already exist via create_project), status (one of todo, in-progress, complete, blocked, archived; default todo — this is the DOCUMENT lifecycle status, distinct from phase/task state which uses wip/done), category, ticket, repo, tags (array of strings), phase_current + phase_total (integers, plan progress). Unknown keys are stored verbatim."`
+	Body map[string]any `json:"body" jsonschema:"document body as a block tree: {sections:[...]}. Every block needs a unique id and a type; unknown or misnamed fields are REJECTED (not silently dropped), so use these exact field names. Block shapes: section {title, content?, children?[]} — content is markdown prose under the heading, children are nested blocks; text {content}; task-list {title?, tasks:[{id, title, content?, done}]}; subphase {num, title, session?, description?, tasks[], children?[]}; callout {variant, title?, content} where variant is one of info|warn|success|danger|note; code {lang, filename?, content} where content is the code and lang is e.g. go|ts|sql|bash; diagram {title?, content} where content is mermaid source; table {title?, cols[], rows[][]}; key-value {title?, data{}}. Inline markdown (emphasis, code spans, links, :icon: shortcodes) works in any content/title/description string."`
 }
 
 func (t *tools) pushDocument(ctx context.Context, _ *sdk.CallToolRequest, in pushInput) (*sdk.CallToolResult, *models.Document, error) {
@@ -43,6 +55,9 @@ func (t *tools) pushDocument(ctx context.Context, _ *sdk.CallToolRequest, in pus
 	}
 	if doc.Type == "" {
 		return nil, nil, errors.New("meta.type is required")
+	}
+	if err := requireProjectForPlan(doc); err != nil {
+		return nil, nil, err
 	}
 	doc.ID = id
 
@@ -165,7 +180,7 @@ func (t *tools) archiveDocument(ctx context.Context, _ *sdk.CallToolRequest, in 
 
 type updateMetaInput struct {
 	ID   string         `json:"id" jsonschema:"document id"`
-	Meta map[string]any `json:"meta" jsonschema:"new meta object — replaces the existing meta in full; known keys are re-promoted to typed columns"`
+	Meta map[string]any `json:"meta" jsonschema:"new meta object — REPLACES the existing meta in full, so send every key you want to keep (a dropped project would orphan a plan). Same keys and valid values as push_document: id, title, type (plan|report|spec|adr|brainstorm|journal), project (required for plans), status (todo|in-progress|complete|blocked|archived), category, ticket, repo, tags, phase_current, phase_total."`
 }
 
 func (t *tools) updateDocumentMeta(ctx context.Context, _ *sdk.CallToolRequest, in updateMetaInput) (*sdk.CallToolResult, *models.Document, error) {
@@ -185,6 +200,9 @@ func (t *tools) updateDocumentMeta(ctx context.Context, _ *sdk.CallToolRequest, 
 	}
 	if merged.Type == "" {
 		return nil, nil, fmt.Errorf("meta.type is required")
+	}
+	if err := requireProjectForPlan(merged); err != nil {
+		return nil, nil, err
 	}
 	docmeta.ApplyTo(doc, merged)
 	if err := t.saveDoc(ctx, doc); err != nil {

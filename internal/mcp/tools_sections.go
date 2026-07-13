@@ -21,7 +21,7 @@ type sectionOutput struct {
 type updateSectionInput struct {
 	DocID     string         `json:"doc_id" jsonschema:"document id"`
 	SectionID string         `json:"section_id" jsonschema:"id of the section block to patch (anywhere in the body tree)"`
-	Patch     map[string]any `json:"patch" jsonschema:"fields to set on the section; id and children are protected"`
+	Patch     map[string]any `json:"patch" jsonschema:"fields to set on the section (id and children are protected). Set title (the heading) and/or content (a markdown prose string rendered directly under the heading — this is how a section carries its description)."`
 }
 
 var sectionProtectedFields = map[string]bool{
@@ -72,7 +72,7 @@ func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in up
 
 type addSectionInput struct {
 	DocID          string         `json:"doc_id" jsonschema:"document id"`
-	Section        map[string]any `json:"section" jsonschema:"section block — must include id and type"`
+	Section        map[string]any `json:"section" jsonschema:"section block — must include id and type (type:section). Carries title (heading), an optional content string (markdown prose rendered under the heading), and/or a children array of nested blocks. children may be any block type — text, code, diagram (mermaid), table, callout, key-value, task-list, subphase; this is how you add a code block or mermaid chart to an existing plan. See push_document for exact block shapes; unknown/misnamed fields are rejected."`
 	AfterSectionID string         `json:"after_section_id,omitempty" jsonschema:"insert immediately after this top-level section (otherwise appends)"`
 }
 

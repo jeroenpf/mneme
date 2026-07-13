@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -146,6 +147,25 @@ const (
 	StatusBlocked    = "blocked"
 	StatusArchived   = "archived"
 )
+
+// ValidStatuses returns the closed set of document lifecycle statuses,
+// in enum order. Matches the CHECK constraint in
+// migrations/002_documents.up.sql — keep the two in sync.
+func ValidStatuses() []string {
+	return []string{StatusTodo, StatusInProgress, StatusComplete, StatusBlocked, StatusArchived}
+}
+
+// ValidDocTypes returns the closed set of document types, in enum order.
+// Matches the same CHECK constraint.
+func ValidDocTypes() []string {
+	return []string{TypePlan, TypeReport, TypeSpec, TypeADR, TypeBrainstorm, TypeJournal}
+}
+
+// IsValidStatus reports whether s is an accepted document status.
+func IsValidStatus(s string) bool { return slices.Contains(ValidStatuses(), s) }
+
+// IsValidType reports whether s is an accepted document type.
+func IsValidType(s string) bool { return slices.Contains(ValidDocTypes(), s) }
 
 // DecisionStatus is the lifecycle state of a decision-log entry. A
 // decision starts proposed, becomes accepted once ratified, and is

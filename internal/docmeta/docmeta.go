@@ -6,6 +6,7 @@ package docmeta
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
@@ -34,6 +35,9 @@ func FromMeta(meta, body map[string]any) (*models.Document, error) {
 			if !ok {
 				return nil, fmt.Errorf("meta.type must be a string")
 			}
+			if !models.IsValidType(s) {
+				return nil, fmt.Errorf("meta.type %q is invalid; must be one of: %s", s, strings.Join(models.ValidDocTypes(), ", "))
+			}
 			d.Type = s
 		case "project":
 			s, ok := v.(string)
@@ -51,6 +55,9 @@ func FromMeta(meta, body map[string]any) (*models.Document, error) {
 			s, ok := v.(string)
 			if !ok {
 				return nil, fmt.Errorf("meta.status must be a string")
+			}
+			if !models.IsValidStatus(s) {
+				return nil, fmt.Errorf("meta.status %q is invalid; must be one of: %s", s, strings.Join(models.ValidStatuses(), ", "))
 			}
 			d.Status = s
 		case "ticket":
