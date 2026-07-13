@@ -1,10 +1,16 @@
 # Using Mneme in a project
 
-Mneme is the **source of truth for a project's evolving work knowledge** — plans, specs,
-decisions, code snippets, the dev journal, solved errors, and the non-secret env registry.
-The repo holds the code and the docs that have hardened; Mneme holds the work in flight. A
-coding agent (Claude Code) reads from and writes to Mneme over MCP, so it starts each
-session already oriented instead of re-deriving context.
+Mneme is the source of truth for a project's **evolving, local work knowledge** — plans and
+notes while they're in flight, decisions, code snippets, the dev journal, solved errors, and
+the non-secret env registry. A coding agent (Claude Code) reads from and writes to Mneme over
+MCP, so it starts each session already oriented instead of re-deriving context.
+
+> **Mneme is not a substitute for the repo.** It is a *local* service — a single machine, not
+> version-controlled, backed up, or shared. Anything durable, shareable, or that belongs under
+> version control stays in the repo: code, the README, accepted specs and ADRs. Mneme holds
+> only the local, in-flight work knowledge that does **not** belong in git. When a doc hardens,
+> it graduates to the repo as markdown and Mneme keeps a pointer to it — never a copy. Nothing
+> here replaces committing to git.
 
 This guide is the few concrete steps a **new** project adds to start using Mneme.
 
@@ -50,11 +56,12 @@ duplicate — the `instructions` string Mneme's MCP server already pushes on con
 lean:
 
 ```markdown
-## Mneme — project knowledge (source of truth)
+## Mneme — source of truth for local work knowledge
 
-This project uses **Mneme** (local MCP server) for durable, evolving work knowledge —
-plans, specs, decisions, code snippets, the dev journal, solved errors, and the env
-registry. The repo holds code + hardened docs; Mneme holds the work.
+This project uses **Mneme** (local MCP server) for local, evolving work knowledge that does
+not belong in the repo — plans and notes in flight, decisions, code snippets, the dev
+journal, solved errors, and the env registry. It is **not** a substitute for git: code and
+hardened docs (README, accepted specs/ADRs) live in the repo; Mneme holds the work in flight.
 
 - **At session start:** call `get_context_bundle(project: "<slug>")` — one call returns
   merged memory, the active plan's status, recent decisions, relevant snippets, recent

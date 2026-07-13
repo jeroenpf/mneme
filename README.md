@@ -8,7 +8,10 @@ plus a read-mostly web UI to browse it all.
 
 The split is deliberate: **the repo owns the code, Mneme owns the work.** Git holds
 durable, present-tense docs about the artifact (README, accepted specs/ADRs); Mneme holds
-the evolving work docs (plans, journals, notes). Full rationale:
+the evolving work docs (plans, journals, notes). Mneme is **local-only and is not a
+substitute for version control** — anything durable or shareable belongs in git. Work is
+born in Mneme and graduates to the repo as markdown when it hardens; only pointers cross the
+line, never copies. Full rationale:
 [`.architecture/specs/2026-07-11-repo-vs-mneme-delineation.md`](.architecture/specs/2026-07-11-repo-vs-mneme-delineation.md).
 
 To wire Mneme into another project so its coding agent uses it, see
