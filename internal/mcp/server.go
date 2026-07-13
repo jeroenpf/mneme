@@ -129,6 +129,21 @@ func (t *tools) register(s *sdk.Server) {
 	}, t.deleteMemory)
 
 	sdk.AddTool(s, &sdk.Tool{
+		Name:        "get_env",
+		Description: "Load a project's non-secret env registry as a flat {key: value} object — ports, service names, local URLs, Docker service names. Call this instead of asking \"what port does X run on?\". Never holds secrets.",
+	}, t.getEnv)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "set_env",
+		Description: "Upsert a non-secret env entry for a project (key + value, optional description) — ports, service names, local URLs. NEVER secrets/tokens/passwords. Returns the stored entry.",
+	}, t.setEnv)
+
+	sdk.AddTool(s, &sdk.Tool{
+		Name:        "list_env",
+		Description: "List a project's env entries as full records including descriptions. Use get_env for a flat key/value map.",
+	}, t.listEnv)
+
+	sdk.AddTool(s, &sdk.Tool{
 		Name:        "log_decision",
 		Description: "Record an architecture decision (ADR) — the mutable decision log Claude Code writes as a session side-effect. Omit id to create (title + decision required; project optional, omit for a global decision; status defaults to accepted). Pass id to update an existing decision, e.g. flip status proposed→accepted→deprecated. Returns the stored decision.",
 	}, t.logDecision)
