@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/pgvector/pgvector-go"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
@@ -28,7 +29,8 @@ const rrfK = 60
 type SearchFilter struct {
 	Types   []string
 	Project *string
-	Limit   int // 0 => defaultSearchLimit
+	Limit   int       // 0 => defaultSearchLimit
+	Vector  []float32 // nil => FTS-only (2.8a behaviour); set => hybrid RRF fusion
 }
 
 // searchBranch is the per-type UNION-ALL fragment. `excerpt` is the text
@@ -74,15 +76,15 @@ func (s *PostgresStore) Search(ctx context.Context, q string, f SearchFilter) ([
 		limit = defaultSearchLimit
 	}
 
-	// $1 = query text; $2 = project (when filtering); $3 = limit.
+	// $1 = query text; $2 = project (when filtering). The limit and, for
+	// the hybrid path, the query vector + types array are appended after
+	// the branches so their placeholder numbers depend on the path taken.
 	args := []any{q}
 	projClause := ""
 	if f.Project != nil {
 		args = append(args, *f.Project)
 		projClause = " AND project = $2"
 	}
-	args = append(args, limit)
-	limitRef := fmt.Sprintf("$%d", len(args))
 
 	branches := make([]string, 0, len(types))
 	for _, t := range types {
@@ -99,19 +101,78 @@ func (s *PostgresStore) Search(ctx context.Context, q string, f SearchFilter) ([
 			b.typ, b.title, b.excerpt, b.table, projClause))
 	}
 
-	sql := `WITH hits AS (
+	// franked is the 2.8a FTS term: per-type reciprocal rank on ts_rank.
+	ftsCTE := `hits AS (
 ` + strings.Join(branches, "\nUNION ALL\n") + `
-), ranked AS (
+), franked AS (
   SELECT type, id, title, excerpt, project, updated_at,
          1.0 / (` + fmt.Sprintf("%d", rrfK) + ` + row_number() OVER (
-           PARTITION BY type ORDER BY rank DESC, updated_at DESC)) AS score
+           PARTITION BY type ORDER BY rank DESC, updated_at DESC)) AS fts_score
   FROM hits
-)
-SELECT type, id, title, excerpt, project, score, updated_at
-FROM ranked
+)`
+
+	if f.Vector == nil {
+		// 2.8a path: order franked directly (byte-for-byte the FTS query).
+		args = append(args, limit)
+		limitRef := fmt.Sprintf("$%d", len(args))
+		sql := "WITH " + ftsCTE + `
+SELECT type, id, title, excerpt, project, fts_score AS score, updated_at
+FROM franked
 ORDER BY score DESC, updated_at DESC
 LIMIT ` + limitRef
+		return s.runSearch(ctx, sql, args)
+	}
 
+	// Hybrid path: add the vector term and reciprocal-rank-fuse it with the
+	// FTS term. $qvec and $types are new args appended after $1/$2.
+	args = append(args, pgvector.NewVector(f.Vector))
+	qvecRef := fmt.Sprintf("$%d", len(args))
+	args = append(args, types)
+	typesRef := fmt.Sprintf("$%d", len(args))
+	vProjClause := ""
+	if f.Project != nil {
+		// project is already bound at $2 by the FTS arg setup above.
+		vProjClause = " AND project = $2"
+	}
+	args = append(args, limit)
+	limitRef := fmt.Sprintf("$%d", len(args))
+
+	sql := "WITH " + ftsCTE + `,
+vhits AS (
+  SELECT DISTINCT ON (source_type, source_id)
+         source_type AS type, source_id AS id, source_title AS title,
+         left(chunk_text, 240) AS excerpt, project, created_at AS updated_at,
+         1 - (embedding <=> ` + qvecRef + `) AS sim
+  FROM embeddings
+  WHERE source_type = ANY(` + typesRef + `)` + vProjClause + `
+  ORDER BY source_type, source_id, embedding <=> ` + qvecRef + `
+),
+vranked AS (
+  SELECT type, id, title, excerpt, project, updated_at,
+         1.0 / (` + fmt.Sprintf("%d", rrfK) + ` + row_number() OVER (ORDER BY sim DESC)) AS vec_score
+  FROM vhits
+),
+fused AS (
+  SELECT
+    coalesce(f.type, v.type)             AS type,
+    coalesce(f.id, v.id)                 AS id,
+    coalesce(f.title, v.title)           AS title,
+    coalesce(f.excerpt, v.excerpt)       AS excerpt,
+    coalesce(f.project, v.project)       AS project,
+    coalesce(f.updated_at, v.updated_at) AS updated_at,
+    coalesce(f.fts_score, 0) + coalesce(v.vec_score, 0) AS score
+  FROM franked f FULL OUTER JOIN vranked v ON f.type = v.type AND f.id = v.id
+)
+SELECT type, id, title, excerpt, project, score, updated_at
+FROM fused
+ORDER BY score DESC, updated_at DESC
+LIMIT ` + limitRef
+	return s.runSearch(ctx, sql, args)
+}
+
+// runSearch runs a prepared search SQL + args and collects the hits. Shared
+// by the FTS-only and hybrid paths of Search.
+func (s *PostgresStore) runSearch(ctx context.Context, sql string, args []any) ([]*models.SearchHit, error) {
 	rows, err := s.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)

@@ -154,3 +154,67 @@ func TestSearchLimit(t *testing.T) {
 		t.Fatalf("limit=2 should cap at 2, got %d", len(hits))
 	}
 }
+
+func TestSearchHybridFusesVectorAndFTS(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	// A doc that does NOT contain the FTS term, reachable only by vector.
+	if err := s.CreateDocument(ctx, &models.Document{
+		ID: "sem-only", Title: "Wireless mesh notes", Project: ptr("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{}, Body: map[string]any{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Give it an embedding near the query vector.
+	qv := fakeVec(0.9)
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{{
+		SourceType: "documents", SourceID: "sem-only", ChunkID: "full",
+		ChunkText: "wireless mesh coordinator", Embedding: qv,
+		Project: ptr("apollo"), SourceTitle: "Wireless mesh notes", Model: "fake",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// FTS-only (nil vector): 'zigbee' does not match "Wireless mesh notes".
+	fts, err := s.Search(ctx, "zigbee", store.SearchFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range fts {
+		if h.ID == "sem-only" {
+			t.Fatal("FTS-only should not surface the semantic-only doc")
+		}
+	}
+
+	// Hybrid: with the query vector, the semantic-only doc appears.
+	hyb, err := s.Search(ctx, "zigbee", store.SearchFilter{Vector: qv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, h := range hyb {
+		if h.ID == "sem-only" {
+			found = true
+			if h.Title == "" || h.Excerpt == "" || h.Score <= 0 {
+				t.Errorf("vector-only hit missing projected fields: %+v", h)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("hybrid search should surface the semantic-only doc, got %+v", hyb)
+	}
+}
+
+func TestSearchNilVectorMatchesFTSPath(t *testing.T) {
+	s := newStore(t)
+	seedProjects(t, s, "apollo")
+	seedSearchCorpus(t, s) // from 2.8a
+	a, err := s.Search(context.Background(), "zigbee", store.SearchFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a) == 0 {
+		t.Fatal("expected FTS hits for zigbee")
+	}
+}
