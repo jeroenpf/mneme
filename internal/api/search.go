@@ -2,17 +2,23 @@ package api
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
 
 // SearchHandler serves the read-only unified search. The same store.Search
-// backs the MCP `search` tool.
-type SearchHandler struct{ Store store.Store }
+// backs the MCP `search` tool. Client (may be nil) embeds the query for
+// hybrid ranking; nil ⇒ FTS-only.
+type SearchHandler struct {
+	Store  store.Store
+	Client embed.Client
+}
 
 type searchListResponse struct {
 	Items []*models.SearchHit `json:"items"`
@@ -38,6 +44,16 @@ func (h *SearchHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	if n, err := strconv.Atoi(strings.TrimSpace(q.Get("limit"))); err == nil && n > 0 {
 		f.Limit = n
+	}
+	// Embed the query for hybrid ranking when a client is configured. Any
+	// Voyage error degrades to FTS-only (Vector stays nil) — search never
+	// hard-fails because embeddings are down.
+	if h.Client != nil {
+		if vecs, err := h.Client.Embed(r.Context(), []string{query}, "query"); err == nil && len(vecs) == 1 {
+			f.Vector = vecs[0]
+		} else if err != nil {
+			slog.Warn("search query embed failed; falling back to FTS-only", "err", err)
+		}
 	}
 	hits, err := h.Store.Search(r.Context(), query, f)
 	if err != nil {

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -37,6 +38,16 @@ func (t *tools) search(ctx context.Context, _ *sdk.CallToolRequest, in unifiedSe
 	f.Limit = 10
 	if in.Limit != nil {
 		f.Limit = *in.Limit
+	}
+	// Embed the query for hybrid ranking when a client is configured. Any
+	// Voyage error degrades to FTS-only (Vector stays nil) — search never
+	// hard-fails because embeddings are down.
+	if t.client != nil {
+		if vecs, err := t.client.Embed(ctx, []string{q}, "query"); err == nil && len(vecs) == 1 {
+			f.Vector = vecs[0]
+		} else if err != nil {
+			slog.Warn("search query embed failed; falling back to FTS-only", "err", err)
+		}
 	}
 	hits, err := t.store.Search(ctx, q, f)
 	if err != nil {

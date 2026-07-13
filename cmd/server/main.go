@@ -70,10 +70,10 @@ func run() error {
 		slog.Info("embeddings disabled (no MNEME_VOYAGE_API_KEY) — FTS-only search")
 	}
 
-	mcpSrv := mcp.New(st, enq)
+	mcpSrv := mcp.New(st, enq, client)
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler()),
+		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -65,13 +65,15 @@ type Server struct {
 // embedding job queue write tools notify after a successful write; pass nil
 // (or a nil embed.Client-backed setup) to disable embedding — it defaults to
 // a NopEnqueuer so the tools stay agnostic to whether Voyage is configured.
-func New(st store.Store, enq embed.Enqueuer) *Server {
+// client (may be nil) embeds the `search` query for hybrid ranking; nil ⇒
+// FTS-only.
+func New(st store.Store, enq embed.Enqueuer, client embed.Client) *Server {
 	if enq == nil {
 		enq = embed.NopEnqueuer{}
 	}
 	s := &Server{
 		sdk:   sdk.NewServer(implementation, &sdk.ServerOptions{Instructions: instructions}),
-		tools: &tools{store: st, enq: enq},
+		tools: &tools{store: st, enq: enq, client: client},
 	}
 	s.tools.register(s.sdk)
 	return s
@@ -89,10 +91,12 @@ func (s *Server) Handler() http.Handler {
 // tools bundles the store dependency so the per-tool handler files
 // (tools_*.go) can stay focused on input/output shapes. enq receives an
 // embedding job after each successful write (a NopEnqueuer when embedding
-// is disabled).
+// is disabled). client (may be nil) embeds the `search` query for hybrid
+// ranking.
 type tools struct {
-	store store.Store
-	enq   embed.Enqueuer
+	store  store.Store
+	enq    embed.Enqueuer
+	client embed.Client
 }
 
 // register installs every Phase 1.4 tool on the SDK server. Adding a

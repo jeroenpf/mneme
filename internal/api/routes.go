@@ -9,14 +9,17 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/jeroenpfeil/mneme/internal/config"
+	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
 
 // Router builds the top-level HTTP handler. Composes middleware,
 // /health, /api/v1, /mcp, and falls back to the embedded SPA for
 // any remaining path. mcpHandler and webHandler may be nil — useful
-// in test setups that don't need them.
-func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler) http.Handler {
+// in test setups that don't need them. client (may be nil) embeds the
+// /search query for hybrid ranking and flips /search/status enabled; nil ⇒
+// FTS-only, enabled=false.
+func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler, client embed.Client) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
@@ -41,7 +44,8 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 	journal := &JournalHandler{Store: st}
 	solutions := &SolutionsHandler{Store: st}
 	bundleH := &BundleHandler{Store: st}
-	searchH := &SearchHandler{Store: st}
+	searchH := &SearchHandler{Store: st, Client: client}
+	statusH := &SearchStatusHandler{Store: st, Enabled: client != nil}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/documents", docs.List)
@@ -60,6 +64,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		r.Get("/solutions", solutions.List)
 		r.Get("/bundle", bundleH.Get)
 		r.Get("/search", searchH.Get)
+		r.Get("/search/status", statusH.Get)
 	})
 
 	if mcpHandler != nil {
