@@ -39,6 +39,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 	docs := &DocumentsHandler{Store: st}
 	projects := &ProjectsHandler{Store: st}
 	memory := &MemoryHandler{Store: st}
+	env := &EnvHandler{Store: st}
 	decisions := &DecisionsHandler{Store: st}
 	snippets := &SnippetsHandler{Store: st}
 	journal := &JournalHandler{Store: st}
@@ -58,6 +59,9 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		r.Get("/memory", memory.List)
 		r.Put("/memory/{scope}/{key}", memory.Upsert)
 		r.Delete("/memory/{scope}/{key}", memory.Delete)
+		r.Get("/env", env.List)
+		r.Put("/env/{key}", env.Upsert)
+		r.Delete("/env/{key}", env.Delete)
 		r.Get("/decisions", decisions.List)
 		r.Get("/snippets", snippets.List)
 		r.Get("/journal", journal.List)
