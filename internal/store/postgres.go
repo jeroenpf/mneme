@@ -377,6 +377,56 @@ func (s *PostgresStore) DeleteMemory(ctx context.Context, scope models.MemorySco
 	return nil
 }
 
+func (s *PostgresStore) SetEnv(ctx context.Context, e *models.EnvEntry) error {
+	const q = `
+		INSERT INTO env_entries (project, key, value, description)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (project, key)
+		DO UPDATE SET value = EXCLUDED.value, description = EXCLUDED.description, updated_at = now()
+		RETURNING id, updated_at`
+	row := s.pool.QueryRow(ctx, q, e.Project, e.Key, e.Value, e.Description)
+	if err := row.Scan(&e.ID, &e.UpdatedAt); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) &&
+			pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "env_entries_project_fkey" {
+			return ErrInvalidProject
+		}
+		return fmt.Errorf("set env: %w", err)
+	}
+	return nil
+}
+
+func (s *PostgresStore) ListEnv(ctx context.Context, project string) ([]*models.EnvEntry, error) {
+	const q = `SELECT id, project, key, value, description, updated_at
+		FROM env_entries WHERE project = $1 ORDER BY key`
+	rows, err := s.pool.Query(ctx, q, project)
+	if err != nil {
+		return nil, fmt.Errorf("list env: %w", err)
+	}
+	defer rows.Close()
+	out := []*models.EnvEntry{}
+	for rows.Next() {
+		e := &models.EnvEntry{}
+		if err := rows.Scan(&e.ID, &e.Project, &e.Key, &e.Value, &e.Description, &e.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan env: %w", err)
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+func (s *PostgresStore) DeleteEnv(ctx context.Context, project, key string) error {
+	const q = `DELETE FROM env_entries WHERE project = $1 AND key = $2`
+	tag, err := s.pool.Exec(ctx, q, project, key)
+	if err != nil {
+		return fmt.Errorf("delete env: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *PostgresStore) ListProjects(ctx context.Context) ([]*models.ProjectStats, error) {
 	const q = `
 		SELECT p.id, p.name, p.slug, p.description, p.created_at,

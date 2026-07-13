@@ -135,6 +135,18 @@ type Store interface {
 	// ErrNotFound when no row matched.
 	DeleteMemory(ctx context.Context, scope models.MemoryScope, project, area *string, key string) error
 
+	// SetEnv upserts an env entry by (project, key), filling e.ID and
+	// e.UpdatedAt from the DB. Returns ErrInvalidProject when project is
+	// an unknown slug. The upsert replaces value AND description.
+	SetEnv(ctx context.Context, e *models.EnvEntry) error
+
+	// ListEnv returns a project's env entries ordered by key.
+	ListEnv(ctx context.Context, project string) ([]*models.EnvEntry, error)
+
+	// DeleteEnv removes one entry by (project, key). Returns ErrNotFound
+	// when no row matched.
+	DeleteEnv(ctx context.Context, project, key string) error
+
 	// CreateDecision inserts a decision and fills d.ID/d.CreatedAt/
 	// d.UpdatedAt from the DB. Returns ErrInvalidProject when a
 	// project-scoped decision references an unknown slug.

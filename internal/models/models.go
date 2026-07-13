@@ -91,6 +91,19 @@ type Memory struct {
 	UpdatedAt time.Time   `json:"updated_at"`
 }
 
+// EnvEntry mirrors an env_entries row — non-secret project-scoped config
+// (ports, service names, local URLs). Description is a pointer so "absent"
+// round-trips as SQL NULL / omitted JSON. Every entry has a project (unlike
+// memory, which has un-scoped global keys).
+type EnvEntry struct {
+	ID          string    `json:"id"`
+	Project     string    `json:"project"`
+	Key         string    `json:"key"`
+	Value       string    `json:"value"`
+	Description *string   `json:"description,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // ValidateMemoryScoping enforces the memories_scope_shape invariants at
 // the API/MCP boundary so callers get a friendly message instead of a
 // raw CHECK violation. project/area are trimmed inputs; "" means absent.

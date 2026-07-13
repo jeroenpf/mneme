@@ -614,6 +614,78 @@ func TestDeleteMemory(t *testing.T) {
 	}
 }
 
+func TestSetEnvUpsertAndList(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+
+	e := &models.EnvEntry{Project: "apollo", Key: "API_PORT", Value: "8443", Description: ptr("https port")}
+	if err := s.SetEnv(ctx, e); err != nil {
+		t.Fatalf("SetEnv: %v", err)
+	}
+	if e.ID == "" || e.UpdatedAt.IsZero() {
+		t.Errorf("id/updated_at not populated: %+v", e)
+	}
+
+	// Re-set same (project,key) — must UPDATE value + description, not duplicate.
+	e2 := &models.EnvEntry{Project: "apollo", Key: "API_PORT", Value: "9000", Description: ptr("moved")}
+	if err := s.SetEnv(ctx, e2); err != nil {
+		t.Fatalf("SetEnv upsert: %v", err)
+	}
+	got, err := s.ListEnv(ctx, "apollo")
+	if err != nil {
+		t.Fatalf("ListEnv: %v", err)
+	}
+	if len(got) != 1 || got[0].Value != "9000" || got[0].Description == nil || *got[0].Description != "moved" {
+		t.Fatalf("expected single upserted row 9000/moved, got %+v", got)
+	}
+}
+
+func TestSetEnvNullDescriptionAndOrder(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	if err := s.SetEnv(ctx, &models.EnvEntry{Project: "apollo", Key: "ZED", Value: "z"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetEnv(ctx, &models.EnvEntry{Project: "apollo", Key: "ABLE", Value: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ListEnv(ctx, "apollo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Key != "ABLE" || got[1].Key != "ZED" {
+		t.Fatalf("expected key-ordered [ABLE ZED], got %+v", got)
+	}
+	if got[0].Description != nil {
+		t.Errorf("expected NULL description to round-trip as nil, got %v", *got[0].Description)
+	}
+}
+
+func TestSetEnvUnknownProject(t *testing.T) {
+	s := newStore(t)
+	err := s.SetEnv(context.Background(), &models.EnvEntry{Project: "ghost", Key: "k", Value: "v"})
+	if !errors.Is(err, store.ErrInvalidProject) {
+		t.Fatalf("expected ErrInvalidProject, got %v", err)
+	}
+}
+
+func TestDeleteEnv(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	if err := s.SetEnv(ctx, &models.EnvEntry{Project: "apollo", Key: "k", Value: "v"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteEnv(ctx, "apollo", "k"); err != nil {
+		t.Fatalf("DeleteEnv: %v", err)
+	}
+	if err := s.DeleteEnv(ctx, "apollo", "k"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("second delete: expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestCreateDecisionAndList(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
