@@ -23,7 +23,7 @@ func TestHTTPMount(t *testing.T) {
 	seedProject(t, "apollo")
 
 	st := store.NewWithPool(testPool)
-	mcpSrv := mcpsrv.New(st)
+	mcpSrv := mcpsrv.New(st, nil)
 	cfg := &config.Config{CORSOrigins: []string{"http://localhost:5173"}}
 	srv := httptest.NewServer(api.Router(cfg, st, mcpSrv.Handler(), nil))
 	t.Cleanup(srv.Close)

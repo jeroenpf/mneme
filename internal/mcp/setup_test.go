@@ -71,7 +71,7 @@ func newClient(t *testing.T) *sdk.ClientSession {
 	resetDB(t)
 
 	st := store.NewWithPool(testPool)
-	srv := mcpsrv.New(st)
+	srv := mcpsrv.New(st, nil) // nil enqueuer ⇒ NopEnqueuer (no embedding in tests)
 
 	t1, t2 := sdk.NewInMemoryTransports()
 	ctx := context.Background()

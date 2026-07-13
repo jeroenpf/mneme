@@ -66,6 +66,7 @@ func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logD
 		if err := t.store.UpdateDecision(ctx, d); err != nil {
 			return nil, nil, translateStoreErr(err)
 		}
+		t.enqueue("decisions", d.ID)
 		return nil, d, nil
 	}
 
@@ -97,6 +98,7 @@ func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logD
 	if err := t.store.CreateDecision(ctx, d); err != nil {
 		return nil, nil, translateStoreErr(err)
 	}
+	t.enqueue("decisions", d.ID)
 	return nil, d, nil
 }
 

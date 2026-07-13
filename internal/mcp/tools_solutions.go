@@ -55,6 +55,7 @@ func (t *tools) logSolution(ctx context.Context, _ *sdk.CallToolRequest, in logS
 		if err := t.store.UpdateSolution(ctx, sol); err != nil {
 			return nil, nil, translateStoreErr(err)
 		}
+		t.enqueue("solutions", sol.ID)
 		return nil, sol, nil
 	}
 
@@ -77,6 +78,7 @@ func (t *tools) logSolution(ctx context.Context, _ *sdk.CallToolRequest, in logS
 	if err := t.store.CreateSolution(ctx, sol); err != nil {
 		return nil, nil, translateStoreErr(err)
 	}
+	t.enqueue("solutions", sol.ID)
 	return nil, sol, nil
 }
 

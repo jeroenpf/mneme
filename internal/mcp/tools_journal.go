@@ -56,6 +56,7 @@ func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in ap
 		if err := t.store.UpdateJournalEntry(ctx, e); err != nil {
 			return nil, nil, translateStoreErr(err)
 		}
+		t.enqueue("journal", e.ID)
 		return nil, e, nil
 	}
 
@@ -74,6 +75,7 @@ func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in ap
 	if err := t.store.CreateJournalEntry(ctx, e); err != nil {
 		return nil, nil, translateStoreErr(err)
 	}
+	t.enqueue("journal", e.ID)
 	return nil, e, nil
 }
 

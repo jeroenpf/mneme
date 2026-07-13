@@ -61,6 +61,7 @@ func (t *tools) pushDocument(ctx context.Context, _ *sdk.CallToolRequest, in pus
 	default:
 		return nil, nil, translateStoreErr(err)
 	}
+	t.enqueue("documents", doc.ID)
 	return nil, doc, nil
 }
 

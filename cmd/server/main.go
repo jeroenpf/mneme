@@ -12,6 +12,7 @@ import (
 
 	"github.com/jeroenpfeil/mneme/internal/api"
 	"github.com/jeroenpfeil/mneme/internal/config"
+	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/mcp"
 	"github.com/jeroenpfeil/mneme/internal/migrations"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -48,7 +49,28 @@ func run() error {
 	}
 	slog.Info("migrations applied")
 
-	mcpSrv := mcp.New(st)
+	// Embedding is gated on a Voyage key: absent ⇒ nil client ⇒ no worker,
+	// no reconcile, and search stays FTS-only. Present ⇒ start the async
+	// worker (bound to the signal ctx so it drains on shutdown) and kick a
+	// startup reconciliation on a background ctx so a fast shutdown can't
+	// cancel the backfill mid-flight.
+	client := embed.NewClient(*cfg)
+	var enq embed.Enqueuer = embed.NopEnqueuer{}
+	if client != nil {
+		worker := embed.NewWorker(st, client, 256, cfg.VoyageRPM)
+		go worker.Run(ctx)
+		go func() {
+			if err := worker.ReconcileAll(context.Background()); err != nil {
+				slog.Error("startup embed reconcile failed", "err", err)
+			}
+		}()
+		enq = worker
+		slog.Info("embeddings enabled", "model", client.Model())
+	} else {
+		slog.Info("embeddings disabled (no MNEME_VOYAGE_API_KEY) — FTS-only search")
+	}
+
+	mcpSrv := mcp.New(st, enq)
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler()),

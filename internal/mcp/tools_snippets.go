@@ -60,6 +60,7 @@ func (t *tools) saveSnippet(ctx context.Context, _ *sdk.CallToolRequest, in save
 		if err := t.store.UpdateSnippet(ctx, sn); err != nil {
 			return nil, nil, translateStoreErr(err)
 		}
+		t.enqueue("snippets", sn.ID)
 		return nil, sn, nil
 	}
 
@@ -83,6 +84,7 @@ func (t *tools) saveSnippet(ctx context.Context, _ *sdk.CallToolRequest, in save
 	if err := t.store.CreateSnippet(ctx, sn); err != nil {
 		return nil, nil, translateStoreErr(err)
 	}
+	t.enqueue("snippets", sn.ID)
 	return nil, sn, nil
 }
 

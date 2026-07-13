@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
@@ -73,12 +74,24 @@ func (t *tools) loadDoc(ctx context.Context, id string) (*models.Document, error
 	return doc, nil
 }
 
-// saveDoc persists an updated document, translating store errors.
+// saveDoc persists an updated document, translating store errors. On
+// success it enqueues the document for re-embedding — every section/task/
+// phase/meta edit tool routes through here, so this is the single point
+// that keeps embeddings in step with document mutations.
 func (t *tools) saveDoc(ctx context.Context, doc *models.Document) error {
 	if err := t.store.UpdateDocument(ctx, doc); err != nil {
 		return translateStoreErr(err)
 	}
+	t.enqueue("documents", doc.ID)
 	return nil
+}
+
+// enqueue notifies the embedding worker that a source changed. It's a
+// no-op when embedding is disabled (NopEnqueuer) and skips empty ids.
+func (t *tools) enqueue(sourceType, id string) {
+	if id != "" {
+		t.enq.Enqueue(embed.SourceRef{Type: sourceType, ID: id})
+	}
 }
 
 // sectionsArray returns body.sections as []any, creating it if missing.

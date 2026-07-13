@@ -12,6 +12,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
 
@@ -60,11 +61,17 @@ type Server struct {
 	tools *tools
 }
 
-// New constructs a Server with every Phase 1.4 tool registered.
-func New(st store.Store) *Server {
+// New constructs a Server with every Phase 1.4 tool registered. enq is the
+// embedding job queue write tools notify after a successful write; pass nil
+// (or a nil embed.Client-backed setup) to disable embedding — it defaults to
+// a NopEnqueuer so the tools stay agnostic to whether Voyage is configured.
+func New(st store.Store, enq embed.Enqueuer) *Server {
+	if enq == nil {
+		enq = embed.NopEnqueuer{}
+	}
 	s := &Server{
 		sdk:   sdk.NewServer(implementation, &sdk.ServerOptions{Instructions: instructions}),
-		tools: &tools{store: st},
+		tools: &tools{store: st, enq: enq},
 	}
 	s.tools.register(s.sdk)
 	return s
@@ -80,9 +87,12 @@ func (s *Server) Handler() http.Handler {
 }
 
 // tools bundles the store dependency so the per-tool handler files
-// (tools_*.go) can stay focused on input/output shapes.
+// (tools_*.go) can stay focused on input/output shapes. enq receives an
+// embedding job after each successful write (a NopEnqueuer when embedding
+// is disabled).
 type tools struct {
 	store store.Store
+	enq   embed.Enqueuer
 }
 
 // register installs every Phase 1.4 tool on the SDK server. Adding a
