@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -13,6 +14,9 @@ type Config struct {
 	CORSOrigins []string
 	TLSCert     string
 	TLSKey      string
+	VoyageKey   string
+	VoyageModel string
+	VoyageRPM   int // optional proactive throttle; 0 = off (rely on 429 backoff)
 }
 
 func Load() (*Config, error) {
@@ -23,6 +27,9 @@ func Load() (*Config, error) {
 		CORSOrigins: splitCSV(getenv("MNEME_CORS_ORIGINS", "http://localhost:5273,https://mneme.dev:8443")),
 		TLSCert:     getenv("MNEME_TLS_CERT", ""),
 		TLSKey:      getenv("MNEME_TLS_KEY", ""),
+		VoyageKey:   getenv("MNEME_VOYAGE_API_KEY", ""),
+		VoyageModel: getenv("MNEME_VOYAGE_MODEL", "voyage-4-large"),
+		VoyageRPM:   getenvInt("MNEME_VOYAGE_RPM", 0),
 	}
 	if c.DSN == "" {
 		return nil, fmt.Errorf("MNEME_DSN must not be empty")
@@ -49,6 +56,15 @@ func (c *Config) TLSEnabled() bool {
 func getenv(key, def string) string {
 	if v, ok := os.LookupEnv(key); ok {
 		return v
+	}
+	return def
+}
+
+func getenvInt(key string, def int) int {
+	if v, ok := os.LookupEnv(key); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return def
 }
