@@ -39,6 +39,11 @@ services:
       MNEME_CORS_ORIGINS: http://localhost:5273,https://mneme.dev:8443
       MNEME_TLS_CERT: /app/.certs/mneme.dev.pem
       MNEME_TLS_KEY: /app/.certs/mneme.dev-key.pem
+      # Voyage embedding key — interpolated from the git-ignored .env (absent
+      # ⇒ empty ⇒ embeddings disabled, search stays FTS-only). Never hard-coded
+      # here; this line carries no secret.
+      MNEME_VOYAGE_API_KEY: ${MNEME_VOYAGE_API_KEY:-}
+      MNEME_VOYAGE_RPM: ${MNEME_VOYAGE_RPM:-0}
     ports:
       # https://mneme.dev:8443 → 127.0.0.1:8443 (mneme.dev resolves to
       # 127.0.0.1 via /etc/hosts; see `make setup-host`). Port 8443 keeps
