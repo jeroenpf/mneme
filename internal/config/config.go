@@ -17,6 +17,14 @@ type Config struct {
 	VoyageKey   string
 	VoyageModel string
 	VoyageRPM   int // optional proactive throttle; 0 = off (rely on 429 backoff)
+	// SearchMaxDist is the semantic relevance floor: hybrid search drops
+	// vector candidates whose cosine distance to the query exceeds it, so a
+	// vague/irrelevant query returns nothing rather than a ranked corpus.
+	// <= 0 disables the floor (always-ranked). Keyword (FTS) matches always
+	// pass regardless. Default 0.65 is calibrated for voyage-4-large query-
+	// to-document distances (relevant hits measured at 0.45–0.60, unrelated
+	// at 0.75+); tune via MNEME_SEARCH_MAX_DIST as the corpus grows.
+	SearchMaxDist float64
 }
 
 func Load() (*Config, error) {
@@ -27,9 +35,10 @@ func Load() (*Config, error) {
 		CORSOrigins: splitCSV(getenv("MNEME_CORS_ORIGINS", "http://localhost:5273,https://mneme.dev:8443")),
 		TLSCert:     getenv("MNEME_TLS_CERT", ""),
 		TLSKey:      getenv("MNEME_TLS_KEY", ""),
-		VoyageKey:   getenv("MNEME_VOYAGE_API_KEY", ""),
-		VoyageModel: getenv("MNEME_VOYAGE_MODEL", "voyage-4-large"),
-		VoyageRPM:   getenvInt("MNEME_VOYAGE_RPM", 0),
+		VoyageKey:     getenv("MNEME_VOYAGE_API_KEY", ""),
+		VoyageModel:   getenv("MNEME_VOYAGE_MODEL", "voyage-4-large"),
+		VoyageRPM:     getenvInt("MNEME_VOYAGE_RPM", 0),
+		SearchMaxDist: getenvFloat("MNEME_SEARCH_MAX_DIST", 0.65),
 	}
 	if c.DSN == "" {
 		return nil, fmt.Errorf("MNEME_DSN must not be empty")
@@ -64,6 +73,15 @@ func getenvInt(key string, def int) int {
 	if v, ok := os.LookupEnv(key); ok {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func getenvFloat(key string, def float64) float64 {
+	if v, ok := os.LookupEnv(key); ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
 		}
 	}
 	return def

@@ -52,6 +52,24 @@ func TestSearchToolTypeFilter(t *testing.T) {
 	}
 }
 
+func TestSearchToolEmptyHint(t *testing.T) {
+	// With embedding active (fake client) and an empty corpus, a query that
+	// matches nothing returns no results plus a rephrase hint so the LLM
+	// caller knows to refine — not just an ambiguous empty list.
+	cs := newClientWith(t, fakeEmbedClient{})
+	var out struct {
+		Results []any  `json:"results"`
+		Note    string `json:"note"`
+	}
+	call(t, cs, "search", map[string]any{"q": "nothingmatchesthisquery"}, &out)
+	if len(out.Results) != 0 {
+		t.Fatalf("expected no results, got %+v", out.Results)
+	}
+	if out.Note == "" {
+		t.Fatal("expected a hint note when a hybrid search returns nothing")
+	}
+}
+
 func TestSearchToolMissingQuery(t *testing.T) {
 	cs := newClient(t)
 	if msg := callExpectError(t, cs, "search", map[string]any{}); msg == "" {

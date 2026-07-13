@@ -14,6 +14,7 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/jeroenpfeil/mneme/internal/embed"
 	mcpsrv "github.com/jeroenpfeil/mneme/internal/mcp"
 	"github.com/jeroenpfeil/mneme/internal/migrations"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -67,11 +68,29 @@ func TestMain(m *testing.M) {
 // MCP client. Each test gets its own session, so they don't share
 // state. Cleanup runs on t.Cleanup.
 func newClient(t *testing.T) *sdk.ClientSession {
+	return newClientWith(t, nil) // nil client ⇒ FTS-only (no embedding in tests)
+}
+
+// fakeEmbedClient is a deterministic embed.Client for MCP tests that need a
+// non-nil client (e.g. to exercise the empty-result hint on the search tool).
+type fakeEmbedClient struct{}
+
+func (fakeEmbedClient) Model() string { return "fake" }
+func (fakeEmbedClient) Embed(_ context.Context, texts []string, _ string) ([][]float32, error) {
+	out := make([][]float32, len(texts))
+	for i := range texts {
+		out[i] = make([]float32, 1024)
+	}
+	return out, nil
+}
+
+// newClientWith is newClient with an injectable embed client.
+func newClientWith(t *testing.T, client embed.Client) *sdk.ClientSession {
 	t.Helper()
 	resetDB(t)
 
 	st := store.NewWithPool(testPool)
-	srv := mcpsrv.New(st, nil, nil) // nil enqueuer+client ⇒ NopEnqueuer, FTS-only (no embedding in tests)
+	srv := mcpsrv.New(st, nil, client)
 
 	t1, t2 := sdk.NewInMemoryTransports()
 	ctx := context.Background()
@@ -82,8 +101,8 @@ func newClient(t *testing.T) *sdk.ClientSession {
 		t.Fatalf("server connect: %v", err)
 	}
 
-	client := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "0"}, nil)
-	clientSess, err := client.Connect(ctx, t2, nil)
+	sdkClient := sdk.NewClient(&sdk.Implementation{Name: "test", Version: "0"}, nil)
+	clientSess, err := sdkClient.Connect(ctx, t2, nil)
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}

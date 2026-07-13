@@ -218,3 +218,62 @@ func TestSearchNilVectorMatchesFTSPath(t *testing.T) {
 		t.Fatal("expected FTS hits for zigbee")
 	}
 }
+
+// orthoVec is a unit vector along one axis. Unlike fakeVec (constant value),
+// two orthoVecs on different axes are cosine-orthogonal (distance 1.0), so
+// they exercise the relevance floor; fakeVec vectors are all cosine-identical
+// (distance 0) regardless of seed.
+func orthoVec(dim int) []float32 {
+	v := make([]float32, 1024)
+	v[dim] = 1
+	return v
+}
+
+func TestSearchVectorFloorDropsWeakMatches(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	// Two semantic-only sources — the query string matches neither via FTS,
+	// so only the vector path can surface them.
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{
+		{SourceType: "documents", SourceID: "near", ChunkID: "full", ChunkText: "near",
+			Embedding: orthoVec(0), Project: ptr("apollo"), SourceTitle: "Near", Model: "fake"},
+		{SourceType: "documents", SourceID: "far", ChunkID: "full", ChunkText: "far",
+			Embedding: orthoVec(5), Project: ptr("apollo"), SourceTitle: "Far", Model: "fake"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	qv := orthoVec(0) // cosine distance 0 to "near", 1.0 to "far"
+
+	has := func(hits []*models.SearchHit, id string) bool {
+		for _, h := range hits {
+			if h.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Floor disabled (default): both semantic-only sources surface.
+	off, err := s.Search(ctx, "zzznomatchword", store.SearchFilter{Vector: qv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has(off, "near") || !has(off, "far") {
+		t.Fatalf("floor off should surface both, got %+v", off)
+	}
+
+	// Floor at 0.45: the far (orthogonal, distance 1.0) source is dropped,
+	// the near (distance 0) source stays.
+	s.SetSearchMaxDist(0.45)
+	on, err := s.Search(ctx, "zzznomatchword", store.SearchFilter{Vector: qv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has(on, "near") {
+		t.Fatalf("floor should keep the near match, got %+v", on)
+	}
+	if has(on, "far") {
+		t.Fatalf("floor should drop the far (orthogonal) match, got %+v", on)
+	}
+}

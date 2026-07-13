@@ -24,6 +24,10 @@ type unifiedSearchInput struct {
 
 type unifiedSearchOutput struct {
 	Results []*models.SearchHit `json:"results"`
+	// Note is a hint surfaced to the LLM caller when embedding is active but
+	// nothing cleared the relevance floor — a signal to refine the query
+	// rather than assume the knowledge doesn't exist. Empty otherwise.
+	Note string `json:"note,omitempty"`
 }
 
 func (t *tools) search(ctx context.Context, _ *sdk.CallToolRequest, in unifiedSearchInput) (*sdk.CallToolResult, *unifiedSearchOutput, error) {
@@ -56,5 +60,12 @@ func (t *tools) search(ctx context.Context, _ *sdk.CallToolRequest, in unifiedSe
 		}
 		return nil, nil, translateStoreErr(err)
 	}
-	return nil, &unifiedSearchOutput{Results: hits}, nil
+	out := &unifiedSearchOutput{Results: hits}
+	// When embedding is active and nothing came back, the query likely fell
+	// below the relevance floor — nudge the caller to rephrase rather than
+	// conclude the knowledge is absent.
+	if t.client != nil && len(hits) == 0 {
+		out.Note = "No results — try rephrasing with different or more specific terms."
+	}
+	return nil, out, nil
 }

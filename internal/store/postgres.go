@@ -42,7 +42,17 @@ func translateWriteErr(op string, err error) error {
 // shutdown.
 type PostgresStore struct {
 	pool *pgxpool.Pool
+	// vectorMaxDist is the hybrid-search relevance floor (cosine distance):
+	// vector candidates beyond it are dropped so a vague query returns
+	// nothing rather than the whole corpus. <= 0 disables it. Set once at
+	// startup via SetSearchMaxDist; keyword (FTS) matches ignore it.
+	vectorMaxDist float64
 }
+
+// SetSearchMaxDist sets the hybrid-search relevance floor (cosine distance).
+// Call once at startup from config, before the store is shared across
+// requests. <= 0 disables the floor (always-ranked semantic results).
+func (s *PostgresStore) SetSearchMaxDist(d float64) { s.vectorMaxDist = d }
 
 // New builds a PostgresStore from a DSN. It opens the pool, applies
 // the Pi-friendly limits used by Mneme, and pings before returning.

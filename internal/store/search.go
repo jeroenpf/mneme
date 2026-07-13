@@ -134,6 +134,15 @@ LIMIT ` + limitRef
 		// project is already bound at $2 by the FTS arg setup above.
 		vProjClause = " AND project = $2"
 	}
+	// Relevance floor: drop vector candidates whose cosine distance exceeds
+	// the threshold, so a vague/irrelevant query returns nothing rather than
+	// the whole corpus. Only the vector side is gated — FTS (franked) matches
+	// always pass. Disabled when vectorMaxDist <= 0.
+	vFloorClause := ""
+	if s.vectorMaxDist > 0 {
+		args = append(args, s.vectorMaxDist)
+		vFloorClause = " AND (embedding <=> " + qvecRef + ") < " + fmt.Sprintf("$%d", len(args))
+	}
 	args = append(args, limit)
 	limitRef := fmt.Sprintf("$%d", len(args))
 
@@ -144,7 +153,7 @@ vhits AS (
          left(chunk_text, 240) AS excerpt, project, created_at AS updated_at,
          1 - (embedding <=> ` + qvecRef + `) AS sim
   FROM embeddings
-  WHERE source_type = ANY(` + typesRef + `)` + vProjClause + `
+  WHERE source_type = ANY(` + typesRef + `)` + vProjClause + vFloorClause + `
   ORDER BY source_type, source_id, embedding <=> ` + qvecRef + `
 ),
 vranked AS (

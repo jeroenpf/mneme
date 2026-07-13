@@ -113,3 +113,28 @@ func TestLoadRejectsEmptyDSN(t *testing.T) {
 		t.Fatal("expected error for empty DSN, got nil")
 	}
 }
+
+func TestSearchMaxDist(t *testing.T) {
+	t.Setenv("MNEME_DSN", "postgres://x@y/z")
+
+	// Default is the semantic relevance floor (cosine distance).
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.SearchMaxDist != 0.65 {
+		t.Errorf("default SearchMaxDist: got %v, want 0.65", c.SearchMaxDist)
+	}
+
+	// Override parses a float; a bad value falls back to the default.
+	t.Setenv("MNEME_SEARCH_MAX_DIST", "0.6")
+	c, _ = Load()
+	if c.SearchMaxDist != 0.6 {
+		t.Errorf("env SearchMaxDist: got %v, want 0.6", c.SearchMaxDist)
+	}
+	t.Setenv("MNEME_SEARCH_MAX_DIST", "not-a-number")
+	c, _ = Load()
+	if c.SearchMaxDist != 0.65 {
+		t.Errorf("bad SearchMaxDist should fall back to 0.65, got %v", c.SearchMaxDist)
+	}
+}

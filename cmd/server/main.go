@@ -43,6 +43,10 @@ func run() error {
 		return err
 	}
 	defer st.Close()
+	// Semantic relevance floor for hybrid search — vector candidates beyond
+	// this cosine distance are dropped so a vague query returns nothing
+	// rather than the whole corpus (keyword matches always pass).
+	st.SetSearchMaxDist(cfg.SearchMaxDist)
 
 	if err := migrations.Up(cfg.DSN); err != nil {
 		return err
