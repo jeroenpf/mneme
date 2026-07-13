@@ -39,6 +39,15 @@ describe('Topbar', () => {
     expect(link.attributes('data-test')).toBe('to-memory')
   })
 
+  it('links to the env page', () => {
+    const w = mount(Topbar, { props: { modelValue: '' }, global: makeGlobal() })
+    const env = w
+      .findAllComponents(RouterLinkStub)
+      .find((l) => l.attributes('data-test') === 'to-env')
+    expect(env).toBeTruthy()
+    expect(env!.props('to')).toBe('/env')
+  })
+
   it('links to the decisions page', () => {
     const w = mount(Topbar, { props: { modelValue: '' }, global: makeGlobal() })
     const decisions = w

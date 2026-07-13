@@ -18,6 +18,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/MemoryView.vue'),
   },
   {
+    path: '/env',
+    name: 'env',
+    component: () => import('@/pages/EnvView.vue'),
+  },
+  {
     path: '/decisions',
     name: 'decisions',
     component: () => import('@/pages/DecisionsView.vue'),
