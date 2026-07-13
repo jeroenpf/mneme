@@ -1,8 +1,17 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 const model = defineModel<string>({ default: '' })
 const input = ref<HTMLInputElement | null>(null)
+const router = useRouter()
+
+// The input keeps its instant registry-filter behaviour (v-model); Enter
+// navigates to the global /search page for the current query.
+function onEnter() {
+  const q = model.value.trim()
+  if (q) router.push({ path: '/search', query: { q } })
+}
 
 // Terminal affordance: `/` focuses search from anywhere on the page.
 function onKeydown(e: KeyboardEvent) {
@@ -33,6 +42,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       type="search"
       placeholder="search…  /"
       aria-label="Search documents"
+      @keyup.enter="onEnter"
     />
   </header>
 </template>

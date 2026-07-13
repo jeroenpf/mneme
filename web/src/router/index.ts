@@ -42,6 +42,11 @@ const routes: RouteRecordRaw[] = [
     name: 'bundle',
     component: () => import('@/pages/BundleView.vue'),
   },
+  {
+    path: '/search',
+    name: 'search',
+    component: () => import('@/pages/SearchView.vue'),
+  },
 ]
 
 export const router = createRouter({
