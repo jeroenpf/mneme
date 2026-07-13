@@ -13,6 +13,9 @@ func TestGetContextBundle(t *testing.T) {
 	call(t, cs, "log_decision", map[string]any{
 		"project": "apollo", "title": "use pgx", "decision": "pgx/v5",
 	}, nil)
+	call(t, cs, "set_env", map[string]any{
+		"project": "apollo", "key": "API_PORT", "value": "8443",
+	}, nil)
 
 	var b struct {
 		Project   string            `json:"project"`
@@ -20,6 +23,10 @@ func TestGetContextBundle(t *testing.T) {
 		Decisions []struct {
 			Title string `json:"title"`
 		} `json:"decisions"`
+		Env []struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		} `json:"env"`
 		Markdown string `json:"markdown"`
 	}
 	call(t, cs, "get_context_bundle", map[string]any{"project": "apollo"}, &b)
@@ -31,6 +38,9 @@ func TestGetContextBundle(t *testing.T) {
 	}
 	if len(b.Decisions) != 1 || b.Decisions[0].Title != "use pgx" {
 		t.Errorf("decisions: %+v", b.Decisions)
+	}
+	if len(b.Env) != 1 || b.Env[0].Key != "API_PORT" || b.Env[0].Value != "8443" {
+		t.Errorf("env not assembled: %+v", b.Env)
 	}
 	if b.Markdown == "" {
 		t.Error("expected a markdown digest")

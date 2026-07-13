@@ -35,6 +35,7 @@ type Bundle struct {
 	Project    string                 `json:"project"`
 	Area       *string                `json:"area,omitempty"`
 	Memory     map[string]string      `json:"memory"`
+	Env        []*models.EnvEntry     `json:"env"`
 	ActivePlan *PlanSummary           `json:"active_plan"`
 	Decisions  []*models.Decision     `json:"decisions"`
 	Snippets   []*models.Snippet      `json:"snippets"`
@@ -90,6 +91,10 @@ func (a *Assembler) Assemble(ctx context.Context, project string, area *string) 
 	if err != nil {
 		return nil, err
 	}
+	env, err := a.store.ListEnv(ctx, project)
+	if err != nil {
+		return nil, fmt.Errorf("bundle: env: %w", err)
+	}
 	plan, err := a.activePlan(ctx, project)
 	if err != nil {
 		return nil, err
@@ -111,6 +116,7 @@ func (a *Assembler) Assemble(ctx context.Context, project string, area *string) 
 		Project:    project,
 		Area:       area,
 		Memory:     memory,
+		Env:        env,
 		ActivePlan: plan,
 		Decisions:  decisions,
 		Snippets:   snippets,

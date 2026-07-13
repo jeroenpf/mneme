@@ -30,6 +30,19 @@ func renderMarkdown(b *Bundle) string {
 		}
 	}
 
+	sb.WriteString("\n## Env\n")
+	if len(b.Env) == 0 {
+		sb.WriteString("_none_\n")
+	} else {
+		for _, e := range b.Env {
+			if e.Description != nil && *e.Description != "" {
+				fmt.Fprintf(&sb, "- %s = %s — %s\n", e.Key, e.Value, *e.Description)
+			} else {
+				fmt.Fprintf(&sb, "- %s = %s\n", e.Key, e.Value)
+			}
+		}
+	}
+
 	sb.WriteString("\n## Active plan\n")
 	if b.ActivePlan == nil {
 		sb.WriteString("_none_\n")

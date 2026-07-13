@@ -20,6 +20,7 @@ type fakeStore struct {
 	decisions []*models.Decision
 	snippets  []*models.Snippet
 	journal   []*models.JournalEntry
+	env       []*models.EnvEntry
 }
 
 func (f *fakeStore) GetProject(_ context.Context, slug string) (*models.Project, error) {
@@ -75,6 +76,15 @@ func (f *fakeStore) ListSnippets(_ context.Context, _ store.SnippetFilter) ([]*m
 func (f *fakeStore) ListJournalEntries(_ context.Context, _ store.JournalFilter) ([]*models.JournalEntry, error) {
 	return f.journal, nil
 }
+func (f *fakeStore) ListEnv(_ context.Context, project string) ([]*models.EnvEntry, error) {
+	out := []*models.EnvEntry{}
+	for _, e := range f.env {
+		if e.Project == project {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
 
 func strptr(s string) *string { return &s }
 
@@ -128,6 +138,29 @@ func TestAssembleMergesMemoryAndFilters(t *testing.T) {
 	}
 }
 
+func TestAssembleIncludesEnv(t *testing.T) {
+	f := &fakeStore{
+		projects: map[string]*models.Project{"mneme": {Slug: "mneme"}},
+		env: []*models.EnvEntry{
+			{Project: "mneme", Key: "API_PORT", Value: "8443", Description: strptr("https port")},
+			{Project: "mneme", Key: "DB_SERVICE", Value: "postgres"},
+			{Project: "other", Key: "X", Value: "y"}, // filtered out by project
+		},
+	}
+	b, err := New(f).Assemble(context.Background(), "mneme", nil)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if len(b.Env) != 2 {
+		t.Fatalf("want 2 env entries for mneme, got %d", len(b.Env))
+	}
+	if !strings.Contains(b.Markdown, "## Env") ||
+		!strings.Contains(b.Markdown, "API_PORT = 8443 — https port") ||
+		!strings.Contains(b.Markdown, "DB_SERVICE = postgres") {
+		t.Errorf("digest env section: %q", b.Markdown)
+	}
+}
+
 func TestAssembleUnknownProject(t *testing.T) {
 	f := &fakeStore{projects: map[string]*models.Project{}}
 	_, err := New(f).Assemble(context.Background(), "ghost", nil)
@@ -169,6 +202,7 @@ func TestRenderMarkdownNoneSections(t *testing.T) {
 	for _, want := range []string{
 		"# Context bundle — mneme",
 		"## Memory\n_none_",
+		"## Env\n_none_",
 		"## Active plan\n_none_",
 		"## Recent journal\n_none_",
 	} {
