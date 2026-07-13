@@ -28,3 +28,14 @@ export function search(
   })
   return apiGet<SearchResponse>(`/api/v1/search${query}`).then((r) => r.items)
 }
+
+// SearchStatus mirrors GET /api/v1/search/status — embedding coverage per
+// type + whether embedding is enabled (a Voyage key is configured).
+export interface SearchStatus {
+  enabled: boolean
+  items: { type: string; embedded: number; total: number }[]
+}
+
+export function searchStatus(): Promise<SearchStatus> {
+  return apiGet<SearchStatus>('/api/v1/search/status')
+}

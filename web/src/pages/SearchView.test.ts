@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { search, type SearchHit } from '@/api/search'
+import { search, searchStatus, type SearchHit } from '@/api/search'
 import SearchView from './SearchView.vue'
 
-vi.mock('@/api/search', () => ({ search: vi.fn() }))
+vi.mock('@/api/search', () => ({ search: vi.fn(), searchStatus: vi.fn() }))
 
 const hits: SearchHit[] = [
   { type: 'decisions', id: 'd1', title: 'use zigbee2mqtt', excerpt: 'adopt <<zigbee>>2mqtt', project: 'apollo', score: 0.9, updated_at: '2026-07-01T00:00:00Z' },
@@ -34,6 +34,10 @@ async function mountAt(query: string) {
 
 beforeEach(() => {
   vi.mocked(search).mockReset().mockResolvedValue(hits)
+  vi.mocked(searchStatus).mockReset().mockResolvedValue({
+    enabled: true,
+    items: [{ type: 'documents', embedded: 3, total: 5 }],
+  })
 })
 
 describe('SearchView', () => {
@@ -51,5 +55,11 @@ describe('SearchView', () => {
     const w = await mountAt('/search')
     expect(search).not.toHaveBeenCalled()
     expect(w.find('[data-test="empty"]').exists()).toBe(true)
+  })
+
+  it('shows the embedding coverage line when enabled', async () => {
+    const w = await mountAt('/search?q=zigbee')
+    expect(searchStatus).toHaveBeenCalled()
+    expect(w.text()).toMatch(/semantic|embedded/i)
   })
 })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { search, type SearchHit } from '@/api/search'
+import { search, searchStatus, type SearchHit, type SearchStatus } from '@/api/search'
 
 const route = useRoute()
 const hits = ref<SearchHit[]>([])
@@ -9,6 +9,25 @@ const loading = ref(false)
 const error = ref<Error | null>(null)
 
 const q = computed(() => String(route.query.q ?? '').trim())
+
+// Embedding coverage line — non-blocking. Search works regardless of whether
+// this resolves; a failure just hides the line.
+const status = ref<SearchStatus | null>(null)
+onMounted(async () => {
+  try {
+    status.value = await searchStatus()
+  } catch {
+    /* non-blocking */
+  }
+})
+const coverage = computed(() => {
+  const s = status.value
+  if (!s) return ''
+  if (!s.enabled) return 'FTS-only — no embedding key'
+  const e = s.items.reduce((n, i) => n + i.embedded, 0)
+  const t = s.items.reduce((n, i) => n + i.total, 0)
+  return `semantic: ${e}/${t} embedded`
+})
 
 const grouped = computed(() => {
   const g: Record<string, SearchHit[]> = {}
@@ -63,6 +82,7 @@ function renderExcerpt(raw: string): string {
       <p class="mn-body-sm intro">
         Unified full-text search across documents, decisions, snippets, solutions, and journal.
       </p>
+      <p v-if="coverage" class="mn-mono-sm coverage" data-test="coverage">{{ coverage }}</p>
 
       <p v-if="loading" class="mn-mono-sm py-8 text-center">searching…</p>
       <div v-else-if="error" class="error-box mn-body-sm" data-test="error">
@@ -106,6 +126,7 @@ function renderExcerpt(raw: string): string {
   display: flex; flex-direction: column; gap: var(--space-6); min-width: 0;
 }
 .intro { color: var(--text-muted); margin-top: calc(-1 * var(--space-2)); }
+.coverage { color: var(--text-faint); margin-top: calc(-1 * var(--space-4)); }
 .group { display: flex; flex-direction: column; gap: var(--space-3); }
 .group-head { text-transform: uppercase; }
 .count { color: var(--text-muted); }
