@@ -220,6 +220,18 @@ type Store interface {
 	// reciprocal rank. Returns ErrInvalidSearchType for an unknown type.
 	Search(ctx context.Context, q string, f SearchFilter) ([]*models.SearchHit, error)
 
+	// UpsertEmbeddings inserts/updates embedding rows keyed by
+	// (source_type, source_id, chunk_id).
+	UpsertEmbeddings(ctx context.Context, rows []models.Embedding) error
+	// DeleteEmbeddingsExcept prunes a source's chunks not in keep.
+	DeleteEmbeddingsExcept(ctx context.Context, sourceType, sourceID string, keep []string) error
+	// EmbeddingsFor returns chunk_id→chunk_text for a source.
+	EmbeddingsFor(ctx context.Context, sourceType, sourceID string) (map[string]string, error)
+	// SourceRefs enumerates every embeddable source.
+	SourceRefs(ctx context.Context) ([]SourceRef, error)
+	// EmbeddingCoverage reports embedded/total sources per type.
+	EmbeddingCoverage(ctx context.Context) ([]TypeCoverage, error)
+
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.
 	Ping(ctx context.Context) error
