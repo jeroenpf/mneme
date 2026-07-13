@@ -19,6 +19,30 @@ describe('MSection', () => {
     expect(w.text()).toContain('hello')
   })
 
+  it('renders a section content string as prose, even with no children', () => {
+    // The shape the migrated plans use: prose lives on section.content,
+    // children is absent. Regression guard for the silent-drop bug.
+    const w = mount(MSection, {
+      props: { id: 'summary', title: 'Summary', content: 'Stand up **staging**.' },
+    })
+    const p = w.find('p')
+    expect(p.exists()).toBe(true)
+    expect(p.html()).toContain('<strong>staging</strong>')
+  })
+
+  it('renders both content prose and children blocks', () => {
+    const w = mount(MSection, {
+      props: {
+        id: 's',
+        title: 'S',
+        content: 'intro prose',
+        children: [{ type: 'text', id: 'p1', content: 'child text' }],
+      },
+    })
+    expect(w.text()).toContain('intro prose')
+    expect(w.text()).toContain('child text')
+  })
+
   it('demotes nested section headings to mn-h3', () => {
     const w = mount(MSection, {
       props: {
