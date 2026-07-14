@@ -113,12 +113,11 @@ describe('DocumentView', () => {
     expect(w.find('h1').text()).toContain('Mneme implementation')
   })
 
-  it('back link navigates to the registry when there is no history entry', async () => {
-    const router = makeRouter()
-    const w = await mountView(router)
-    await w.find('[data-test="back"]').trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/')
+  it('renders no doc topbar or back button — nav lives in the rail, status in the meta header', async () => {
+    const w = await mountView(makeRouter())
+    expect(w.find('header.topbar').exists()).toBe(false)
+    expect(w.find('[data-test="back"]').exists()).toBe(false)
+    expect(w.find('.meta-header [data-test="doc-status"]').exists()).toBe(true)
   })
 
   it('hides sidebar groups that have no data', async () => {

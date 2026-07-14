@@ -42,6 +42,10 @@ const cells = computed(() => {
       <span v-if="doc.ticket" class="mn-mono-sm">{{ doc.ticket }}</span>
       <span v-if="doc.repo" class="mn-mono-sm text-text-faint">⎇ {{ doc.repo }}</span>
       <span v-for="tag in doc.tags" :key="tag" class="mn-mono-sm">#{{ tag }}</span>
+      <span class="status mn-mono-sm" data-test="doc-status">
+        <span class="status-dot" :class="`status-${doc.status}`" />
+        {{ doc.status }}
+      </span>
     </div>
 
     <h1 class="mn-display mn-md" v-html="titleHtml" />
@@ -67,6 +71,25 @@ const cells = computed(() => {
   padding-bottom: var(--space-6);
   border-bottom: 1px solid var(--border);
 }
+/* Document status — re-homed from the old doc topbar; sits at the right of
+   the eyebrow row. */
+.status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-xs);
+}
+.status-todo        { background: var(--status-todo); }
+.status-in-progress { background: var(--status-wip); }
+.status-complete    { background: var(--status-done); }
+.status-blocked     { background: var(--status-blocked); }
+.status-archived    { background: var(--status-archived); }
 .grid-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));

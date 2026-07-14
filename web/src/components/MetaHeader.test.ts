@@ -37,6 +37,14 @@ describe('MetaHeader', () => {
     expect(w.text()).toContain('Phase plan for the core service.')
   })
 
+  it('renders the document status as a pill (re-homed from the doc topbar)', () => {
+    const w = mount(MetaHeader, { props: { doc: makeDoc({ status: 'in-progress' }) } })
+    const pill = w.find('[data-test="doc-status"]')
+    expect(pill.exists()).toBe(true)
+    expect(pill.text()).toContain('in-progress')
+    expect(pill.find('.status-dot').classes()).toContain('status-in-progress')
+  })
+
   it('renders the meta grid cells only for present fields', () => {
     const w = mount(MetaHeader, { props: { doc: makeDoc() } })
     const cells = w.findAll('[data-test="meta-cell"]')
