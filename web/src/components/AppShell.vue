@@ -73,6 +73,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       </nav>
 
       <div class="rail-foot">
+        <p class="nav-title mn-label">Theme</p>
         <ThemePicker />
       </div>
     </aside>
@@ -199,6 +200,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 }
 .rail-foot {
   margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.rail-foot .nav-title {
+  padding: 0 0 var(--space-2);
 }
 .content {
   min-width: 0;
