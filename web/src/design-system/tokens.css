@@ -22,6 +22,7 @@
   --space-12: 48px; --space-16: 64px;
 
   /* ── Layout ── */
+  --rail-width:    224px;
   --sidebar-width: 272px;
   --topbar-height: 54px;
   --content-max:   840px;
