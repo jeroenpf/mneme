@@ -66,6 +66,12 @@
 
   --radius-pill: 999px;
 
+  /* ── Theme swatch previews — each theme's bg, constant across themes
+        (ThemePicker dots preview all three regardless of the active one) ── */
+  --swatch-paper: #faf8f3;
+  --swatch-slate: #f6f8fb;
+  --swatch-ink:   #1a1918;
+
   /* ── Status roles — resolve against the active theme's semantic palette ── */
   --status-done:    var(--green);
   --status-wip:     var(--accent);
