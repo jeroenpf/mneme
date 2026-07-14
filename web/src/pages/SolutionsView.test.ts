@@ -59,6 +59,11 @@ beforeEach(() => {
 })
 
 describe('SolutionsView', () => {
+  it('renders no in-page topbar — the rail owns navigation', async () => {
+    const w = await mountView()
+    expect(w.find('header.topbar').exists()).toBe(false)
+  })
+
   it('renders solution error descriptions', async () => {
     const w = await mountView()
     expect(w.text()).toContain('Apollo docker timeout')

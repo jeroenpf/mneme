@@ -45,13 +45,6 @@ const hasDetail = (d: Decision) =>
 
 <template>
   <div>
-    <header class="topbar">
-      <RouterLink to="/" class="brand"><span class="glyph">⬡</span> mneme</RouterLink>
-      <span class="mn-label">/ decisions</span>
-      <RouterLink to="/" class="nav-link mn-mono-sm" data-test="to-registry">registry →</RouterLink>
-      <RouterLink to="/memory" class="nav-link-tight mn-mono-sm" data-test="to-memory">memory →</RouterLink>
-    </header>
-
     <main class="content">
       <p class="mn-body-sm intro">
         The decision log — why things are the way they are. Claude Code writes it with
@@ -137,42 +130,6 @@ const hasDetail = (d: Decision) =>
 </template>
 
 <style scoped>
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: var(--topbar-height);
-  padding: 0 var(--space-6);
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-}
-.brand {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--text-primary);
-  text-decoration: none;
-}
-.glyph {
-  color: var(--accent);
-}
-.nav-link {
-  margin-left: auto;
-  color: var(--text-muted);
-  text-decoration: none;
-}
-.nav-link-tight {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-.nav-link:hover,
-.nav-link-tight:hover {
-  color: var(--accent);
-}
-
 .content {
   max-width: var(--content-max);
   width: 100%;

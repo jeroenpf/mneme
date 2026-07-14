@@ -70,6 +70,19 @@ beforeEach(() => {
 })
 
 describe('RegistryView', () => {
+  it('renders no in-page topbar — the rail owns navigation', async () => {
+    const w = await mountView(makeRouter())
+    expect(w.find('header.topbar').exists()).toBe(false)
+    expect(w.find('[data-test="to-memory"]').exists()).toBe(false)
+  })
+
+  it('filters via an in-content searchbar (not a topbar)', async () => {
+    const w = await mountView(makeRouter())
+    const bar = w.find('.searchbar')
+    expect(bar.exists()).toBe(true)
+    expect(bar.find('input[type="search"]').exists()).toBe(true)
+  })
+
   it('renders a card per active doc and keeps archived collapsed', async () => {
     const w = await mountView(makeRouter())
     expect(w.find('[data-test="grid"]').findAll('.doc-card')).toHaveLength(2)
