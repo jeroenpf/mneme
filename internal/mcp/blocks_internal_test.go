@@ -12,6 +12,30 @@ func sectionBody(children ...any) map[string]any {
 	}}
 }
 
+func TestDetectBlockMarkdown(t *testing.T) {
+	flagged := map[string]string{
+		"one\n\ntwo":  "multiple paragraphs",
+		"- a\n- b":    "a list",
+		"1. a\n2. b":  "a list",
+		"# Heading":   "a heading",
+		"```\nx\n```": "a fenced code block",
+	}
+	for in, want := range flagged {
+		if got := detectBlockMarkdown(in); got != want {
+			t.Errorf("detectBlockMarkdown(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for _, safe := range []string{
+		"Inline **bold**, `code`, and a mid-line - dash.",
+		"Version 1.2 and item 3 stay inline.",
+		"A single\nnewline is fine.",
+	} {
+		if got := detectBlockMarkdown(safe); got != "" {
+			t.Errorf("detectBlockMarkdown(%q) = %q, want none", safe, got)
+		}
+	}
+}
+
 func TestValidateBodyAcceptsCanonicalBlocks(t *testing.T) {
 	body := sectionBody(
 		map[string]any{"type": "text", "id": "p", "content": "prose"},

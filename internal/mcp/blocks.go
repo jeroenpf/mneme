@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -117,4 +118,30 @@ func validateBlockFields(b map[string]any, t, path string) error {
 			path, t, k, hint, strings.Join(allowed, ", "))
 	}
 	return nil
+}
+
+// --- inline-only content validation ----------------------------------
+
+var (
+	reList    = regexp.MustCompile(`(?m)^[ \t]*[-*+] `)
+	reOrdered = regexp.MustCompile(`(?m)^[ \t]*\d+[.)] `)
+	reHeading = regexp.MustCompile(`(?m)^#{1,6} `)
+	reFence   = regexp.MustCompile("(?m)^```")
+)
+
+// detectBlockMarkdown returns a human label for the first block-level
+// markdown construct in s, or "" when s is safe for inline rendering.
+// These are exactly the constructs renderInline (inline-only) flattens.
+func detectBlockMarkdown(s string) string {
+	switch {
+	case reList.MatchString(s) || reOrdered.MatchString(s):
+		return "a list"
+	case reHeading.MatchString(s):
+		return "a heading"
+	case reFence.MatchString(s):
+		return "a fenced code block"
+	case strings.Contains(s, "\n\n"):
+		return "multiple paragraphs"
+	}
+	return ""
 }
