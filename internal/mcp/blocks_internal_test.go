@@ -12,6 +12,30 @@ func sectionBody(children ...any) map[string]any {
 	}}
 }
 
+func TestDetectBlockMarkdown(t *testing.T) {
+	flagged := map[string]string{
+		"one\n\ntwo":  "multiple paragraphs",
+		"- a\n- b":    "a list",
+		"1. a\n2. b":  "a list",
+		"# Heading":   "a heading",
+		"```\nx\n```": "a fenced code block",
+	}
+	for in, want := range flagged {
+		if got := detectBlockMarkdown(in); got != want {
+			t.Errorf("detectBlockMarkdown(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for _, safe := range []string{
+		"Inline **bold**, `code`, and a mid-line - dash.",
+		"Version 1.2 and item 3 stay inline.",
+		"A single\nnewline is fine.",
+	} {
+		if got := detectBlockMarkdown(safe); got != "" {
+			t.Errorf("detectBlockMarkdown(%q) = %q, want none", safe, got)
+		}
+	}
+}
+
 func TestValidateBodyAcceptsCanonicalBlocks(t *testing.T) {
 	body := sectionBody(
 		map[string]any{"type": "text", "id": "p", "content": "prose"},
@@ -72,5 +96,55 @@ func TestValidateBodyRejectsUnknownFieldWithAllowedList(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q missing allowed field %q", err.Error(), want)
 		}
+	}
+}
+
+func TestValidateBodyRejectsBlockMarkdownInProse(t *testing.T) {
+	err := validateBody(sectionBody(
+		map[string]any{"type": "text", "id": "p", "content": "**What:** a\n\n**Why:** b"},
+	))
+	if err == nil {
+		t.Fatal("expected rejection of paragraph break in text.content")
+	}
+	if !strings.Contains(err.Error(), "inline-only") ||
+		!strings.Contains(err.Error(), "child blocks") {
+		t.Errorf("error must teach the fix, got %q", err.Error())
+	}
+}
+
+func TestValidateBodyAllowsNewlinesInCodeAndDiagram(t *testing.T) {
+	if err := validateBody(sectionBody(
+		map[string]any{"type": "code", "id": "c", "lang": "go", "content": "a\n\nb"},
+		map[string]any{"type": "diagram", "id": "d", "content": "flowchart LR\n\n A-->B"},
+	)); err != nil {
+		t.Fatalf("code/diagram newlines must be allowed: %v", err)
+	}
+}
+
+func TestValidateBodyRejectsBlockMarkdownInCollections(t *testing.T) {
+	// task-list: a task whose content field is a bullet list.
+	err := validateBody(sectionBody(
+		map[string]any{"type": "task-list", "id": "tl", "tasks": []any{
+			map[string]any{"id": "x", "title": "ok", "content": "- one\n- two"},
+		}},
+	))
+	if err == nil {
+		t.Fatal("expected rejection of a list in a task-list task's content")
+	}
+	if !strings.Contains(err.Error(), "inline-only") {
+		t.Errorf("task-list error must teach inline-only, got %q", err.Error())
+	}
+
+	// key-value: a value that is a bullet list.
+	err = validateBody(sectionBody(
+		map[string]any{"type": "key-value", "id": "kv", "data": map[string]any{
+			"k": "- one\n- two",
+		}},
+	))
+	if err == nil {
+		t.Fatal("expected rejection of a list in a key-value value")
+	}
+	if !strings.Contains(err.Error(), "inline-only") {
+		t.Errorf("key-value error must teach inline-only, got %q", err.Error())
 	}
 }

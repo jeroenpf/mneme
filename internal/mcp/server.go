@@ -105,7 +105,7 @@ type tools struct {
 func (t *tools) register(s *sdk.Server) {
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "push_document",
-		Description: "Create or upsert a document by meta.id. Validates block types. Returns the stored document.",
+		Description: "Create or upsert a document by meta.id. Validates block types and inline-only content shape. Returns the stored document.",
 	}, t.pushDocument)
 
 	sdk.AddTool(s, &sdk.Tool{

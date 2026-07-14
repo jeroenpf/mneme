@@ -1,6 +1,7 @@
 package mcp_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
@@ -333,6 +334,25 @@ func TestAddAndRemoveTask(t *testing.T) {
 	tasks, _ = sp["tasks"].([]any)
 	if len(tasks) != 2 {
 		t.Errorf("after remove: %d tasks, want 2", len(tasks))
+	}
+}
+
+func TestUpdateSectionRejectsBlockMarkdown(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "p")
+	call(t, cs, "push_document", map[string]any{
+		"meta": map[string]any{"id": "d", "title": "D", "type": "brainstorm", "project": "p"},
+		"body": map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "s", "title": "S", "content": "ok"},
+		}},
+	}, nil)
+
+	msg := callExpectError(t, cs, "update_section", map[string]any{
+		"doc_id": "d", "section_id": "s",
+		"patch": map[string]any{"content": "- one\n- two"},
+	})
+	if !strings.Contains(msg, "inline-only") {
+		t.Errorf("want inline-only guidance, got %q", msg)
 	}
 }
 
