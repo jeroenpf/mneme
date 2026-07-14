@@ -60,6 +60,11 @@ func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in up
 	for k, v := range in.Patch {
 		block[k] = v
 	}
+	// Re-validate the patched block: unknown fields AND inline-only content,
+	// in one pass. walkBlocks recurses children too, which is harmless.
+	if err := walkBlocks([]any{block}, in.SectionID); err != nil {
+		return nil, nil, err
+	}
 
 	setSections(doc.Body, sections)
 	if err := t.saveDoc(ctx, doc); err != nil {
