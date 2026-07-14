@@ -89,6 +89,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   min-height: 100vh;
 }
 .rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
