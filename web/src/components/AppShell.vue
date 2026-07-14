@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import ThemePicker from './ThemePicker.vue'
 
 // The persistent primary navigation — identical on every route. Order matches
@@ -14,6 +15,28 @@ const NAV = [
   { to: '/env', label: 'Env', test: 'to-env' },
   { to: '/bundle', label: 'Bundle', test: 'to-bundle' },
 ] as const
+
+// Global search (lifted from Topbar). A local ref — deliberately NOT wired to
+// registry filtering; Enter routes to the global /search page for the query.
+const search = ref('')
+const input = ref<HTMLInputElement | null>(null)
+const router = useRouter()
+
+function onEnter() {
+  const q = search.value.trim()
+  if (q) router.push({ path: '/search', query: { q } })
+}
+
+// Terminal affordance: `/` focuses search from anywhere on the page.
+function onKeydown(e: KeyboardEvent) {
+  if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+  const t = e.target as HTMLElement | null
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+  e.preventDefault()
+  input.value?.focus()
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
@@ -24,6 +47,16 @@ const NAV = [
       </RouterLink>
 
       <div class="project"><b>mneme</b></div>
+
+      <input
+        ref="input"
+        v-model="search"
+        class="search mn-mono-sm"
+        type="search"
+        placeholder="search…  /"
+        aria-label="Search documents"
+        @keyup.enter="onEnter"
+      />
 
       <nav class="nav" aria-label="Primary">
         <p class="nav-title mn-label">Knowledge</p>
@@ -93,6 +126,21 @@ const NAV = [
 .project b {
   color: var(--text-primary);
   font-weight: 600;
+}
+.search {
+  width: 100%;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px var(--space-3);
+}
+.search::placeholder {
+  color: var(--text-faint);
+}
+.search:focus {
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 .nav {
   display: flex;

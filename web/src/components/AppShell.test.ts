@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { defineComponent, h } from 'vue'
 import AppShell from './AppShell.vue'
@@ -106,5 +106,39 @@ describe('AppShell', () => {
   it('marks the registry link active on the root route', async () => {
     const w = await mountShell(makeRouter()) // mountShell pushes '/'
     expect(w.find('[data-test="to-registry"]').classes()).toContain('router-link-exact-active')
+  })
+
+  // Global search lives in the rail (lifted from Topbar): a local ref, Enter
+  // routes to /search, "/" focuses it. It is NOT wired to registry filtering.
+  it('navigates to /search on Enter with the trimmed query', async () => {
+    const w = await mountShell(makeRouter())
+    const input = w.find('input[type="search"]')
+    await input.setValue('zigbee')
+    await input.trigger('keyup.enter')
+    await flushPromises()
+    expect(w.vm.$router.currentRoute.value.fullPath).toBe('/search?q=zigbee')
+  })
+
+  it('does not navigate on Enter when the query is blank', async () => {
+    const w = await mountShell(makeRouter())
+    const input = w.find('input[type="search"]')
+    await input.setValue('   ')
+    await input.trigger('keyup.enter')
+    await flushPromises()
+    expect(w.vm.$router.currentRoute.value.fullPath).toBe('/')
+  })
+
+  it('focuses the rail search when "/" is pressed outside a field', async () => {
+    const router = makeRouter()
+    await router.push('/')
+    await router.isReady()
+    const w = mount(AppShell, {
+      global: { plugins: [router] },
+      slots: { default: '<div />' },
+      attachTo: document.body,
+    })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }))
+    expect(document.activeElement).toBe(w.find('input[type="search"]').element)
+    w.unmount()
   })
 })
