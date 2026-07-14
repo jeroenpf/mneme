@@ -80,4 +80,31 @@ describe('AppShell', () => {
     const w = await mountShell(makeRouter())
     expect(w.findAll('button[data-test^="theme-"]')).toHaveLength(3)
   })
+
+  // Active state comes from vue-router's router-link-active classes (real
+  // RouterLink required — RouterLinkStub never emits them).
+  it("marks the current route's rail link active", async () => {
+    const w = await mountShell(makeRouter())
+    await w.vm.$router.push('/memory')
+    await w.vm.$nextTick()
+
+    expect(w.find('[data-test="to-memory"]').classes()).toContain('router-link-active')
+  })
+
+  it('does not mark the root (registry) link active on a sibling route', async () => {
+    const w = await mountShell(makeRouter())
+    await w.vm.$router.push('/memory')
+    await w.vm.$nextTick()
+
+    // The active-bar styling keys on router-link-exact-active, so "/" must not
+    // carry it on /memory — otherwise the rail would show two active items.
+    const registry = w.find('[data-test="to-registry"]')
+    expect(registry.classes()).not.toContain('router-link-exact-active')
+    expect(registry.classes()).not.toContain('router-link-active')
+  })
+
+  it('marks the registry link active on the root route', async () => {
+    const w = await mountShell(makeRouter()) // mountShell pushes '/'
+    expect(w.find('[data-test="to-registry"]').classes()).toContain('router-link-exact-active')
+  })
 })
