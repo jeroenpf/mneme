@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import DocCard from '@/components/DocCard.vue'
 import FilterToolbar from '@/components/FilterToolbar.vue'
 import StatsRow from '@/components/StatsRow.vue'
-import Topbar from '@/components/Topbar.vue'
 import { useDebounced } from '@/composables/useDebounced'
 import { useDocuments } from '@/composables/useDocuments'
 import { aggregateCounts, useProjects } from '@/composables/useProjects'
@@ -49,10 +48,20 @@ function clearFilters() {
 
 <template>
   <div>
-    <Topbar v-model="search" />
-
     <main class="mx-auto flex max-w-[1200px] flex-col gap-4 px-6 py-6">
       <StatsRow :counts="counts" />
+
+      <div class="searchbar">
+        <span class="mag" aria-hidden="true">⌕</span>
+        <input
+          v-model="search"
+          type="search"
+          class="search-input mn-body-sm"
+          placeholder="Filter documents…"
+          aria-label="Filter documents"
+        />
+      </div>
+
       <FilterToolbar :state="state" :projects="projects" @change="update" />
 
       <p v-if="loading" class="mn-mono-sm py-8 text-center">loading registry…</p>
@@ -97,6 +106,41 @@ function clearFilters() {
 </template>
 
 <style scoped>
+/* In-content live filter of the registry list (the rail owns global search).
+   Wrapper carries the border + focus ring; the input itself is chromeless. */
+.searchbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 9px var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+.searchbar:focus-within {
+  border-color: transparent;
+  box-shadow: var(--shadow-focus);
+}
+.mag {
+  color: var(--text-faint);
+  font-size: 14px;
+  line-height: 1;
+}
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 0;
+}
+.search-input::placeholder {
+  color: var(--text-faint);
+}
+.search-input:focus {
+  outline: none;
+}
+
 .doc-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

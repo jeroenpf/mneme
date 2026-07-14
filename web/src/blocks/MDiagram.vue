@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, watchEffect } from 'vue'
-import { renderDiagram } from '@/lib/mermaid'
+import { applyTheme, renderDiagram } from '@/lib/mermaid'
+import { useTheme } from '@/composables/useTheme'
 
 const props = defineProps<{ id?: string; title?: string; content?: string }>()
+
+const { current } = useTheme()
 
 const svg = ref('')
 const failed = ref(false)
@@ -13,10 +16,16 @@ let seq = 0
 
 watchEffect(async () => {
   if (!props.content) return
+  // Read the active theme synchronously (before any await) so this effect is a
+  // theme dependency: switching theme re-runs it, re-applying mermaid's theme
+  // from the new tokens and re-rendering the SVG with fresh colors. The theme
+  // also namespaces the id; seq++ still keeps every render's id unique.
+  const theme = current.value
   failed.value = false
   try {
+    await applyTheme()
     svg.value = await renderDiagram(
-      `mmd-${(props.id ?? 'd').replace(/[^\w-]/g, '')}-${seq++}`,
+      `mmd-${(props.id ?? 'd').replace(/[^\w-]/g, '')}-${theme}-${seq++}`,
       props.content,
     )
   } catch {

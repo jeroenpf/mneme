@@ -1,81 +1,36 @@
 /* ─────────────────────────────────────────────────────────────────────
    Mneme — Colors & Type
    The single source of truth for visual tokens.
-   Dark-first. Mneme is a developer tool; it lives in a terminal-adjacent
-   aesthetic: deep neutrals, one electric-cyan accent, calm semantic colors.
+
+   Three reading-first themes, selected by [data-theme] on <html>:
+     • paper — warm editorial light (the default, defined on :root)
+     • slate — cool modern light
+     • ink   — warm dark (not pure black), a night option
+
+   Structure: :root holds the theme-INVARIANT tokens (spacing, type scale,
+   tracking, motion, layout, shadows) plus the Paper palette as the default.
+   :root[data-theme="slate"|"ink"] override only the palette, fonts, and radii.
+   Components read tokens exclusively (var(--…)) — never hardcode a color.
    ───────────────────────────────────────────────────────────────────── */
 
-@import url("https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;450;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 
 :root {
-  /* ── Surfaces — a 5-step elevation ramp from base canvas to hover ── */
-  --bg:            #0d0e11;
-  --bg-surface:    #141519;
-  --bg-elevated:   #1a1b21;
-  --bg-hover:      #1f2028;
-  --bg-overlay:    #232530;
-
-  /* ── Borders — two weights only ── */
-  --border:        #252830;
-  --border-soft:   #1d1e25;
-  --border-strong: #353a47;
-
-  /* ── Text — a 4-step ramp ── */
-  --text-primary:   #dde1eb;
-  --text-secondary: #9aa3b5;
-  --text-muted:     #6a7184;
-  --text-faint:     #4a5163;
-
-  /* ── Brand accent — Mneme cyan ── */
-  --accent:         #22d3ee;
-  --accent-hover:   #67e8f9;
-  --accent-press:   #06b6d4;
-  --accent-dim:     rgba(34, 211, 238, 0.10);
-  --accent-border:  rgba(34, 211, 238, 0.24);
-  --accent-glow:    rgba(34, 211, 238, 0.18);
-
-  /* ── Semantic — status & callout palette ── */
-  --green:    #50c07a; --green-dim:    rgba(80, 192, 122, 0.10);  --green-border:    rgba(80, 192, 122, 0.28);
-  --yellow:   #f0c050; --yellow-dim:   rgba(240, 192, 80, 0.10);  --yellow-border:   rgba(240, 192, 80, 0.28);
-  --red:      #f06070; --red-dim:      rgba(240, 96, 112, 0.10);  --red-border:      rgba(240, 96, 112, 0.28);
-  --blue:     #60a8f0; --blue-dim:     rgba(96, 168, 240, 0.10);  --blue-border:     rgba(96, 168, 240, 0.28);
-  --purple:   #a07cf0; --purple-dim:   rgba(160, 124, 240, 0.10); --purple-border:   rgba(160, 124, 240, 0.28);
-
-  --status-done:    var(--green);
-  --status-wip:     var(--accent);
-  --status-todo:    var(--text-faint);
-  --status-blocked: var(--red);
-  --status-archived:var(--text-muted);
-
-  /* ── Shadows — minimal. Mneme is flat, not floaty. ── */
-  --shadow-sm:  0 1px 0 0 rgba(0,0,0,0.4);
-  --shadow-md:  0 4px 12px -2px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
-  --shadow-lg:  0 16px 40px -8px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
-  --shadow-focus: 0 0 0 1px var(--accent-border), 0 0 0 3px var(--accent-glow);
-  --inset-top:  inset 0 1px 0 0 rgba(255,255,255,0.03);
-
-  /* ── Radii — small. We are square-ish. ── */
-  --radius-xs: 3px;
-  --radius-sm: 4px;
-  --radius:    6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-pill: 999px;
-
-  /* ── Spacing (4px base) ── */
+  /* ── Theme-invariant: spacing (4px base) ── */
   --space-1: 4px;  --space-2: 8px;  --space-3: 12px;  --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-8: 32px;  --space-10: 40px;
   --space-12: 48px; --space-16: 64px;
 
   /* ── Layout ── */
+  --rail-width:    224px;
   --sidebar-width: 272px;
   --topbar-height: 54px;
   --content-max:   840px;
 
-  /* ── Type families ── */
-  --font-display: 'Syne', 'Inter', system-ui, sans-serif;
-  --font-body:    'DM Sans', 'Inter', system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  /* ── Type families (Paper/Ink default; Slate overrides --font-display) ── */
+  --font-display: 'Archivo', 'Inter', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:    'IBM Plex Mono', 'SF Mono', Menlo, monospace;
 
   /* ── Type scale ── */
   --fs-display:   30px;   --lh-display:   1.2;
@@ -102,10 +57,159 @@
   --duration-fast: 120ms;
   --duration-base: 180ms;
   --duration-slow: 320ms;
+
+  /* ── Shadows — soft & mostly neutral; --shadow-focus rides the accent ── */
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md:  0 4px 12px -2px rgba(0, 0, 0, 0.10), 0 0 0 1px var(--border);
+  --shadow-lg:  0 16px 40px -8px rgba(0, 0, 0, 0.14), 0 0 0 1px var(--border);
+  --shadow-focus: 0 0 0 1px var(--accent-border), 0 0 0 3px var(--accent-glow);
+  --inset-top:  inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+
+  --radius-pill: 999px;
+
+  /* ── Theme swatch previews — each theme's bg, constant across themes
+        (ThemePicker dots preview all three regardless of the active one) ── */
+  --swatch-paper: #faf8f3;
+  --swatch-slate: #f6f8fb;
+  --swatch-ink:   #1a1918;
+
+  /* ── Status roles — resolve against the active theme's semantic palette ── */
+  --status-done:    var(--green);
+  --status-wip:     var(--accent);
+  --status-todo:    var(--text-faint);
+  --status-blocked: var(--red);
+  --status-archived: var(--text-muted);
+
+  /* ═══ Default palette: PAPER — warm editorial light ═══ */
+  --bg:            #faf8f3;
+  --bg-surface:    #f3f0e8;
+  --bg-elevated:   #fffdf9;
+  --bg-hover:      #efeadf;
+  --bg-overlay:    #eae4d7;
+
+  --border:        #e7e2d5;
+  --border-soft:   #efe9dc;
+  --border-strong: #d8d2c2;
+
+  --text-primary:   #1c1b17;
+  --text-secondary: #4a463d;
+  --text-muted:     #7c776b;
+  --text-faint:     #a9a495;
+
+  --accent:        #2f5d80;
+  --accent-hover:  #264c69;
+  --accent-press:  #1d3b52;
+  --accent-dim:    rgba(47, 93, 128, 0.09);
+  --accent-border: rgba(47, 93, 128, 0.24);
+  --accent-glow:   rgba(47, 93, 128, 0.16);
+
+  --green:  #2f6b4f; --green-dim:  rgba(47, 107, 79, 0.10);  --green-border:  rgba(47, 107, 79, 0.28);
+  --yellow: #8a5a12; --yellow-dim: rgba(138, 90, 18, 0.10);  --yellow-border: rgba(138, 90, 18, 0.28);
+  --red:    #9b2c2c; --red-dim:    rgba(155, 44, 44, 0.09);  --red-border:    rgba(155, 44, 44, 0.26);
+  --blue:   #31597e; --blue-dim:   rgba(49, 89, 126, 0.10);  --blue-border:   rgba(49, 89, 126, 0.26);
+  --purple: #6b4fa8; --purple-dim: rgba(107, 79, 168, 0.10); --purple-border: rgba(107, 79, 168, 0.26);
+  --red-text: #9b2c2c;
+
+  /* Radii — Paper is square-ish */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius:    4px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+
+  /* mermaid darkMode flag, read by lib/mermaid.ts */
+  --mermaid-dark: 0;
+
+  color-scheme: light;
+}
+
+/* ═══ SLATE — cool modern light: teal accent, rounder corners, Inter display ═══ */
+:root[data-theme="slate"] {
+  --bg:            #f6f8fb;
+  --bg-surface:    #eef1f6;
+  --bg-elevated:   #ffffff;
+  --bg-hover:      #e7ecf3;
+  --bg-overlay:    #e1e7f0;
+
+  --border:        #e5e9f0;
+  --border-soft:   #eef1f6;
+  --border-strong: #d4dae4;
+
+  --text-primary:   #1f2530;
+  --text-secondary: #434d5c;
+  --text-muted:     #697384;
+  --text-faint:     #9aa2b1;
+
+  --accent:        #0f7c78;
+  --accent-hover:  #0c6360;
+  --accent-press:  #0a524f;
+  --accent-dim:    rgba(15, 124, 120, 0.10);
+  --accent-border: rgba(15, 124, 120, 0.26);
+  --accent-glow:   rgba(15, 124, 120, 0.18);
+
+  --green:  #2f8a5c; --green-dim:  rgba(47, 138, 92, 0.10);  --green-border:  rgba(47, 138, 92, 0.28);
+  --yellow: #b1791b; --yellow-dim: rgba(177, 121, 27, 0.10); --yellow-border: rgba(177, 121, 27, 0.28);
+  --red:    #c0494a; --red-dim:    rgba(192, 73, 74, 0.09);  --red-border:    rgba(192, 73, 74, 0.26);
+  --blue:   #3b6fb0; --blue-dim:   rgba(59, 111, 176, 0.10); --blue-border:   rgba(59, 111, 176, 0.26);
+  --purple: #6a5bd0; --purple-dim: rgba(106, 91, 208, 0.10); --purple-border: rgba(106, 91, 208, 0.26);
+  --red-text: #a83a3b;
+
+  --font-display: 'Inter', system-ui, sans-serif;
+
+  --radius-xs: 5px;
+  --radius-sm: 7px;
+  --radius:    9px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --mermaid-dark: 0;
+  color-scheme: light;
+}
+
+/* ═══ INK — warm dark: charcoal (not pure black), amber-gold accent ═══ */
+:root[data-theme="ink"] {
+  --bg:            #1a1918;
+  --bg-surface:    #211f1d;
+  --bg-elevated:   #26241f;
+  --bg-hover:      #2d2a24;
+  --bg-overlay:    #33302a;
+
+  --border:        #332f28;
+  --border-soft:   #282520;
+  --border-strong: #443f36;
+
+  --text-primary:   #ece8e0;
+  --text-secondary: #b0aaa0;
+  --text-muted:     #847e73;
+  --text-faint:     #5f594f;
+
+  --accent:        #e6975a;
+  --accent-hover:  #f0ac74;
+  --accent-press:  #d3823f;
+  --accent-dim:    rgba(230, 151, 90, 0.13);
+  --accent-border: rgba(230, 151, 90, 0.30);
+  --accent-glow:   rgba(230, 151, 90, 0.20);
+
+  --green:  #63b98a; --green-dim:  rgba(99, 185, 138, 0.12);  --green-border:  rgba(99, 185, 138, 0.28);
+  --yellow: #d9b45c; --yellow-dim: rgba(217, 180, 92, 0.12);  --yellow-border: rgba(217, 180, 92, 0.28);
+  --red:    #e08a86; --red-dim:    rgba(224, 138, 134, 0.12); --red-border:    rgba(224, 138, 134, 0.28);
+  --blue:   #78a6de; --blue-dim:   rgba(120, 166, 222, 0.12); --blue-border:   rgba(120, 166, 222, 0.28);
+  --purple: #a996e8; --purple-dim: rgba(169, 150, 232, 0.12); --purple-border: rgba(169, 150, 232, 0.28);
+  --red-text: #e08a86;
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius:    5px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --mermaid-dark: 1;
+  color-scheme: dark;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
    Semantic element styles. Apply via classes — composable.
+   All token-driven, so they re-theme automatically.
    ───────────────────────────────────────────────────────────────────── */
 
 .mn-display {

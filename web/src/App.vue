@@ -1,5 +1,10 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+// The persistent nav rail (with the ThemePicker) wraps every routed view.
+import AppShell from './components/AppShell.vue'
+</script>
 
 <template>
-  <RouterView />
+  <AppShell>
+    <RouterView />
+  </AppShell>
 </template>

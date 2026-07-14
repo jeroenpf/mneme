@@ -48,6 +48,11 @@ beforeEach(() => {
 })
 
 describe('BundleView', () => {
+  it('renders no in-page topbar — the rail owns navigation', async () => {
+    const w = await mountView()
+    expect(w.find('header.topbar').exists()).toBe(false)
+  })
+
   it('lists projects and shows the empty state initially', async () => {
     const w = await mountView()
     expect(w.find('[data-test="empty"]').exists()).toBe(true)

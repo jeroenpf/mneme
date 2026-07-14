@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, toRef, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import BlockRenderer from '@/blocks/BlockRenderer.vue'
 import MetaHeader from '@/components/MetaHeader.vue'
 import PhaseTracker from '@/components/PhaseTracker.vue'
@@ -12,7 +12,6 @@ import { sectionNavItems } from '@/lib/toc'
 const props = defineProps<{ id: string }>()
 
 const route = useRoute()
-const router = useRouter()
 const { doc, loading, error, refresh } = useDocument(toRef(props, 'id'))
 
 const phases = computed(() => phasesFromMeta(doc.value?.meta))
@@ -43,28 +42,10 @@ watch(
     scrollToHash(true)
   },
 )
-
-// Back returns to the registry with its filter query intact when we got
-// here from it; a cold deep link falls back to the bare registry.
-function goBack() {
-  if (window.history.state?.back) router.back()
-  else void router.push('/')
-}
 </script>
 
 <template>
   <div>
-    <header class="topbar">
-      <button class="back mn-mono-sm" data-test="back" @click="goBack">←</button>
-      <RouterLink to="/" class="brand"><span class="glyph">⬡</span> mneme</RouterLink>
-      <span class="mn-label">/ doc /</span>
-      <span class="mn-mono-sm">{{ id }}</span>
-      <span v-if="doc" class="status mn-mono-sm" data-test="doc-status">
-        <span class="status-dot" :class="`status-${doc.status}`" />
-        {{ doc.status }}
-      </span>
-    </header>
-
     <p v-if="loading" class="mn-mono-sm py-8 text-center">loading document…</p>
 
     <div v-else-if="error" class="error mn-body-sm mx-auto my-8 max-w-lg" data-test="doc-error">
@@ -88,66 +69,15 @@ function goBack() {
 </template>
 
 <style scoped>
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: var(--topbar-height);
-  padding: 0 var(--space-6);
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-}
-.back {
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.back:hover {
-  color: var(--text-secondary);
-  background: var(--bg-hover);
-}
-.brand {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--text-primary);
-  text-decoration: none;
-}
-.glyph {
-  color: var(--accent);
-}
-.status {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--radius-xs);
-}
-.status-todo        { background: var(--status-todo); }
-.status-in-progress { background: var(--status-wip); }
-.status-complete    { background: var(--status-done); }
-.status-blocked     { background: var(--status-blocked); }
-.status-archived    { background: var(--status-archived); }
-
 .layout {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
 }
 .sidebar {
   position: sticky;
-  top: var(--topbar-height);
+  top: 0;
   align-self: start;
-  max-height: calc(100vh - var(--topbar-height));
+  max-height: 100vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

@@ -60,6 +60,11 @@ beforeEach(() => {
 })
 
 describe('EnvView', () => {
+  it('renders no in-page topbar — the rail owns navigation', async () => {
+    const w = await mountView()
+    expect(w.find('header.topbar').exists()).toBe(false)
+  })
+
   it('always shows the never-store-secrets warning', async () => {
     const w = await mountView()
     expect(w.get('[data-test="secrets-warning"]').text().toLowerCase()).toContain('never store secrets')

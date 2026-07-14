@@ -110,12 +110,6 @@ function add(section: Section) {
 
 <template>
   <div>
-    <header class="topbar">
-      <RouterLink to="/" class="brand"><span class="glyph">⬡</span> mneme</RouterLink>
-      <span class="mn-label">/ memory</span>
-      <RouterLink to="/" class="nav-link mn-mono-sm" data-test="to-registry">registry →</RouterLink>
-    </header>
-
     <main class="content">
       <p class="mn-body-sm intro">
         Persistent key/value context, layered global → project → area. Claude Code loads it at
@@ -214,37 +208,6 @@ function add(section: Section) {
 </template>
 
 <style scoped>
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: var(--topbar-height);
-  padding: 0 var(--space-6);
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-}
-.brand {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--text-primary);
-  text-decoration: none;
-}
-.glyph {
-  color: var(--accent);
-}
-.nav-link {
-  margin-left: auto;
-  color: var(--text-muted);
-  text-decoration: none;
-}
-.nav-link:hover {
-  color: var(--accent);
-}
-
 .content {
   max-width: var(--content-max);
   width: 100%;
