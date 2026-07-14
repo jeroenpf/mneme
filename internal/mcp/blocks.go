@@ -93,6 +93,9 @@ func walkBlocks(blocks []any, path string) error {
 		if err := validateBlockFields(b, t, fmt.Sprintf("%s[%d]", path, i)); err != nil {
 			return err
 		}
+		if err := validateInlineFields(b, t, fmt.Sprintf("%s[%d]", path, i)); err != nil {
+			return err
+		}
 		if children, ok := b["children"].([]any); ok {
 			if err := walkBlocks(children, fmt.Sprintf("%s[%d].children", path, i)); err != nil {
 				return err
@@ -144,4 +147,30 @@ func detectBlockMarkdown(s string) string {
 		return "multiple paragraphs"
 	}
 	return ""
+}
+
+// inlineProseFields lists the string fields per block type that render
+// through renderInline. Fields absent here are exempt on purpose:
+// code.content and diagram.content carry newline-significant source.
+var inlineProseFields = map[string][]string{
+	"section":  {"title", "content"},
+	"text":     {"content"},
+	"callout":  {"title", "content"},
+	"subphase": {"title", "description"},
+}
+
+// validateInlineFields rejects block-level markdown in a block's
+// inline-only prose fields, teaching the caller to split into children.
+func validateInlineFields(b map[string]any, typ, path string) error {
+	for _, f := range inlineProseFields[typ] {
+		s, _ := b[f].(string)
+		if sig := detectBlockMarkdown(s); sig != "" {
+			return fmt.Errorf("%s: %s.%s contains %s, but this field renders "+
+				"inline-only — newlines, lists, and headings collapse to one line. "+
+				"Split structure into child blocks: one {type:\"text\",content:...} "+
+				"per paragraph, a {type:\"callout\",...} for notes, or {type:\"code\",...}. "+
+				"See push_document for block shapes.", path, typ, f, sig)
+		}
+	}
+	return nil
 }

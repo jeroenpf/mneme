@@ -98,3 +98,25 @@ func TestValidateBodyRejectsUnknownFieldWithAllowedList(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateBodyRejectsBlockMarkdownInProse(t *testing.T) {
+	err := validateBody(sectionBody(
+		map[string]any{"type": "text", "id": "p", "content": "**What:** a\n\n**Why:** b"},
+	))
+	if err == nil {
+		t.Fatal("expected rejection of paragraph break in text.content")
+	}
+	if !strings.Contains(err.Error(), "inline-only") ||
+		!strings.Contains(err.Error(), "child blocks") {
+		t.Errorf("error must teach the fix, got %q", err.Error())
+	}
+}
+
+func TestValidateBodyAllowsNewlinesInCodeAndDiagram(t *testing.T) {
+	if err := validateBody(sectionBody(
+		map[string]any{"type": "code", "id": "c", "lang": "go", "content": "a\n\nb"},
+		map[string]any{"type": "diagram", "id": "d", "content": "flowchart LR\n\n A-->B"},
+	)); err != nil {
+		t.Fatalf("code/diagram newlines must be allowed: %v", err)
+	}
+}
