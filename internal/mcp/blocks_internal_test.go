@@ -120,3 +120,31 @@ func TestValidateBodyAllowsNewlinesInCodeAndDiagram(t *testing.T) {
 		t.Fatalf("code/diagram newlines must be allowed: %v", err)
 	}
 }
+
+func TestValidateBodyRejectsBlockMarkdownInCollections(t *testing.T) {
+	// task-list: a task whose content field is a bullet list.
+	err := validateBody(sectionBody(
+		map[string]any{"type": "task-list", "id": "tl", "tasks": []any{
+			map[string]any{"id": "x", "title": "ok", "content": "- one\n- two"},
+		}},
+	))
+	if err == nil {
+		t.Fatal("expected rejection of a list in a task-list task's content")
+	}
+	if !strings.Contains(err.Error(), "inline-only") {
+		t.Errorf("task-list error must teach inline-only, got %q", err.Error())
+	}
+
+	// key-value: a value that is a bullet list.
+	err = validateBody(sectionBody(
+		map[string]any{"type": "key-value", "id": "kv", "data": map[string]any{
+			"k": "- one\n- two",
+		}},
+	))
+	if err == nil {
+		t.Fatal("expected rejection of a list in a key-value value")
+	}
+	if !strings.Contains(err.Error(), "inline-only") {
+		t.Errorf("key-value error must teach inline-only, got %q", err.Error())
+	}
+}
