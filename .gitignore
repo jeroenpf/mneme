@@ -16,6 +16,7 @@ web/dist/
 web/node_modules/
 web/.vite/
 web/node_modules/.vite/
+/node_modules/
 internal/web/dist/*
 !internal/web/dist/.gitkeep
 

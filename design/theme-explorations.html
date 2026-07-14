@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mneme — Theme Explorations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;450;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   MNEME · THEME EXPLORATIONS
+   A design mockup. One realistic Mneme plan, rendered in three themes.
+   Nothing here is wired into the app — it's a page to look at and choose.
+   ═══════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+/* ── The studio stage (fixed, neutral — lets the previews speak) ──── */
+:root {
+  --stage:      #17171b;
+  --stage-2:    #1e1e23;
+  --stage-3:    #26262c;
+  --stage-line: #34343c;
+  --stage-ink:  #ecebe8;
+  --stage-mut:  #9c9aa2;
+  --stage-faint:#6a6872;
+}
+body {
+  margin: 0;
+  background: var(--stage);
+  color: var(--stage-ink);
+  font-family: "Inter", -apple-system, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1320px; margin: 0 auto; padding: 40px 32px 80px; }
+
+/* ── Stage header ─────────────────────────────────────────────────── */
+.stage-head { max-width: 780px; }
+.stage-eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--stage-faint); margin: 0 0 16px;
+}
+.stage-head h1 {
+  font-family: "Archivo", sans-serif; font-weight: 800;
+  font-size: 38px; line-height: 1.05; letter-spacing: -.02em;
+  margin: 0 0 14px; text-wrap: balance;
+}
+.stage-head p {
+  color: var(--stage-mut); font-size: 16px; margin: 0; max-width: 62ch;
+}
+.stage-head p b { color: var(--stage-ink); font-weight: 600; }
+
+/* ── Controls (theme + view switchers) ────────────────────────────── */
+.controls {
+  display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-end;
+  margin: 34px 0 22px;
+}
+.ctl-group { display: flex; flex-direction: column; gap: 9px; }
+.ctl-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--stage-faint);
+}
+.seg {
+  display: inline-flex; padding: 4px; gap: 3px;
+  background: var(--stage-2); border: 1px solid var(--stage-line);
+  border-radius: 10px;
+}
+.seg button {
+  appearance: none; border: 0; cursor: pointer;
+  font-family: "Inter", sans-serif; font-size: 13.5px; font-weight: 500;
+  color: var(--stage-mut); background: transparent;
+  padding: 7px 15px; border-radius: 7px;
+  transition: color .16s, background .16s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.seg button:hover { color: var(--stage-ink); }
+.seg button[aria-pressed="true"] { color: #16151a; background: var(--stage-ink); font-weight: 600; }
+.seg button:focus-visible { outline: 2px solid #7db4d8; outline-offset: 2px; }
+.swatch-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+
+/* ── Readout: rationale + palette for the active theme ────────────── */
+.readout {
+  display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 28px;
+  align-items: center;
+  background: var(--stage-2); border: 1px solid var(--stage-line);
+  border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;
+}
+.readout-name {
+  font-family: "Archivo", sans-serif; font-weight: 700; font-size: 15px;
+  letter-spacing: .01em; margin: 0 0 5px; display: flex; align-items: baseline; gap: 10px;
+}
+.readout-name span {
+  font-family: "IBM Plex Mono", monospace; font-weight: 500; font-size: 10.5px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--stage-faint);
+}
+.readout-desc { margin: 0; color: var(--stage-mut); font-size: 13.5px; line-height: 1.5; max-width: 68ch; }
+.readout-desc b { color: var(--stage-ink); font-weight: 500; }
+.palette { display: flex; gap: 14px; }
+.pal { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.pal i {
+  width: 34px; height: 34px; border-radius: 7px; display: block;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.pal span {
+  font-family: "IBM Plex Mono", monospace; font-size: 9px; letter-spacing: .04em;
+  color: var(--stage-faint); text-transform: uppercase;
+}
+.readout[data-for] { display: none; }
+.readout[data-for].is-active { display: grid; }
+
+/* ── Device: faux browser frame around the app preview ────────────── */
+.device {
+  border: 1px solid var(--stage-line); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,.6), 0 4px 14px rgba(0,0,0,.35);
+  background: var(--stage-3);
+}
+.device-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 11px 16px; background: var(--stage-3); border-bottom: 1px solid var(--stage-line);
+}
+.dots { display: flex; gap: 7px; }
+.dots i { width: 11px; height: 11px; border-radius: 50%; background: #4a4a52; display: block; }
+.url {
+  flex: 1; max-width: 340px; margin: 0 auto;
+  font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--stage-mut);
+  background: var(--stage-2); border: 1px solid var(--stage-line); border-radius: 7px;
+  padding: 5px 12px; text-align: center;
+}
+.url b { color: var(--stage-ink); font-weight: 500; }
+
+/* The themed application viewport */
+.viewport { transition: opacity .2s ease; }
+.viewport.is-switching { opacity: 0; }
+
+.stage-foot {
+  margin-top: 26px; color: var(--stage-faint); font-size: 13px; line-height: 1.6;
+  border-top: 1px solid var(--stage-line); padding-top: 20px; max-width: 900px;
+}
+.stage-foot b { color: var(--stage-mut); font-weight: 500; }
+.stage-foot code {
+  font-family: "IBM Plex Mono", monospace; font-size: 12px;
+  background: var(--stage-2); border: 1px solid var(--stage-line);
+  padding: 1px 6px; border-radius: 4px; color: var(--stage-mut);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   THEME TOKENS — the only thing that changes between Paper / Slate / Ink
+   ═══════════════════════════════════════════════════════════════════ */
+
+.viewport[data-theme="paper"] {
+  --bg:#faf8f3; --surface:#f3f0e8; --elevated:#fffdf9; --hover:#efeadf;
+  --ink:#1c1b17; --ink-2:#4a463d; --ink-3:#7c776b; --ink-4:#a9a495;
+  --line:#e7e2d5; --line-2:#d8d2c2;
+  --accent:#2f5d80; --accent-2:#244a68; --accent-soft:rgba(47,93,128,.08); --accent-line:rgba(47,93,128,.24);
+  --eyebrow:#a9640f;
+  --good:#2f6b4f; --good-bg:#e8f1ec; --good-line:rgba(47,107,79,.30);
+  --warn:#8a5a12; --warn-bg:#f6efdd; --warn-line:rgba(138,90,18,.28);
+  --bad:#9b2c2c;  --bad-bg:#f6e8e6;  --bad-line:rgba(155,44,44,.26);
+  --info:#31597e; --info-bg:#e9eef4; --info-line:rgba(49,89,126,.26);
+  --radius:3px; --radius-lg:4px;
+  --font-display:"Archivo"; --font-body:"Inter"; --font-mono:"IBM Plex Mono";
+  --code-bg:#f4f1e8; --code-k:#9b2c2c; --code-s:#2f6b4f; --code-c:#a9a495; --code-fn:#2f5d80; --code-n:#8a5a12;
+  --shadow:0 1px 2px rgba(40,35,25,.05);
+  --mono-labels:1;
+}
+.viewport[data-theme="slate"] {
+  --bg:#f6f8fb; --surface:#eef1f6; --elevated:#ffffff; --hover:#e7ecf3;
+  --ink:#1f2530; --ink-2:#434d5c; --ink-3:#697384; --ink-4:#9aa2b1;
+  --line:#e5e9f0; --line-2:#d4dae4;
+  --accent:#0f7c78; --accent-2:#0b615e; --accent-soft:rgba(15,124,120,.10); --accent-line:rgba(15,124,120,.26);
+  --eyebrow:#0f7c78;
+  --good:#2f8a5c; --good-bg:#e6f3ec; --good-line:rgba(47,138,92,.28);
+  --warn:#b1791b; --warn-bg:#fbf2df; --warn-line:rgba(177,121,27,.26);
+  --bad:#c0494a;  --bad-bg:#fbeceb;  --bad-line:rgba(192,73,74,.26);
+  --info:#3b6fb0; --info-bg:#eaf1fb; --info-line:rgba(59,111,176,.26);
+  --radius:9px; --radius-lg:14px;
+  --font-display:"Inter"; --font-body:"Inter"; --font-mono:"IBM Plex Mono";
+  --code-bg:#eef1f6; --code-k:#c0494a; --code-s:#2f8a5c; --code-c:#9aa2b1; --code-fn:#0f7c78; --code-n:#b1791b;
+  --shadow:0 2px 8px rgba(31,37,48,.06), 0 1px 2px rgba(31,37,48,.04);
+  --mono-labels:0;
+}
+.viewport[data-theme="ink"] {
+  --bg:#1a1918; --surface:#211f1d; --elevated:#26241f; --hover:#2d2a24;
+  --ink:#ece8e0; --ink-2:#b0aaa0; --ink-3:#847e73; --ink-4:#5f594f;
+  --line:#332f28; --line-2:#443f36;
+  --accent:#e6975a; --accent-2:#f0ac74; --accent-soft:rgba(230,151,90,.13); --accent-line:rgba(230,151,90,.30);
+  --eyebrow:#e6975a;
+  --good:#63b98a; --good-bg:rgba(99,185,138,.12); --good-line:rgba(99,185,138,.28);
+  --warn:#d9b45c; --warn-bg:rgba(217,180,92,.12); --warn-line:rgba(217,180,92,.28);
+  --bad:#e08a86;  --bad-bg:rgba(224,138,134,.12); --bad-line:rgba(224,138,134,.28);
+  --info:#78a6de; --info-bg:rgba(120,166,222,.12); --info-line:rgba(120,166,222,.28);
+  --radius:4px; --radius-lg:6px;
+  --font-display:"Archivo"; --font-body:"Inter"; --font-mono:"IBM Plex Mono";
+  --code-bg:#141311; --code-k:#e08a86; --code-s:#63b98a; --code-c:#5f594f; --code-fn:#78a6de; --code-n:#d9b45c;
+  --shadow:0 2px 10px rgba(0,0,0,.35);
+  --mono-labels:1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   THE APPLICATION — styled entirely through theme tokens
+   ═══════════════════════════════════════════════════════════════════ */
+.viewport { background: var(--bg); color: var(--ink); font-family: var(--font-body), sans-serif; }
+.app { display: grid; min-height: 660px; }
+.app--doc      { grid-template-columns: 210px 198px minmax(0,1fr); }
+.app--registry { grid-template-columns: 210px minmax(0,1fr); }
+.app[hidden] { display: none; }
+
+/* ── Persistent global rail (identical on every page) ─────────────── */
+.grail {
+  background: var(--surface); border-right: 1px solid var(--line);
+  padding: 20px 16px; display: flex; flex-direction: column; gap: 22px;
+}
+.brand { display: flex; align-items: center; gap: 9px; padding: 2px 8px; }
+.brand .glyph { color: var(--accent); font-size: 17px; line-height: 1; }
+.brand .word {
+  font-family: var(--font-display), sans-serif; font-weight: 800; font-size: 17px;
+  letter-spacing: -.01em; color: var(--ink);
+}
+.project {
+  margin: 0 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg); display: flex; align-items: center; justify-content: space-between;
+  font-size: 12.5px; color: var(--ink-2); cursor: default;
+}
+.project b { color: var(--ink); font-weight: 600; }
+.project .caret { color: var(--ink-4); font-size: 11px; }
+.nav { display: flex; flex-direction: column; gap: 1px; }
+.nav-title {
+  font-family: var(--font-mono), monospace; font-size: 9.5px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--ink-4); padding: 0 10px 8px;
+}
+.nav a {
+  display: flex; align-items: center; gap: 10px; text-decoration: none;
+  padding: 7px 10px; border-radius: var(--radius); color: var(--ink-2);
+  font-size: 13.5px; position: relative; transition: background .14s, color .14s;
+}
+.nav a .mk { width: 6px; height: 6px; border-radius: 2px; background: var(--ink-4); flex: none; transition: background .14s; }
+.nav a:hover { background: var(--hover); color: var(--ink); }
+.nav a:hover .mk { background: var(--ink-3); }
+.nav a[aria-current="page"] { background: var(--accent-soft); color: var(--ink); font-weight: 500; }
+.nav a[aria-current="page"] .mk { background: var(--accent); }
+.nav a[aria-current="page"]::before {
+  content:""; position: absolute; left: -16px; top: 6px; bottom: 6px; width: 3px;
+  background: var(--accent); border-radius: 0 2px 2px 0;
+}
+.grail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 1px; }
+
+/* ── Contextual doc rail: phase spine (signature) + section toc ───── */
+.drail {
+  border-right: 1px solid var(--line); padding: 24px 18px;
+  display: flex; flex-direction: column; gap: 28px; background: var(--bg);
+}
+.rail-title {
+  font-family: var(--font-mono), monospace; font-size: 9.5px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--ink-4); margin: 0 0 14px;
+}
+/* phase spine */
+.spine { position: relative; display: flex; flex-direction: column; }
+.phase { position: relative; display: grid; grid-template-columns: 22px 1fr; gap: 11px; padding-bottom: 16px; }
+.phase:last-child { padding-bottom: 0; }
+.phase::before {
+  content:""; position: absolute; left: 10px; top: 20px; bottom: -2px; width: 2px;
+  background: var(--line-2);
+}
+.phase:last-child::before { display: none; }
+.phase.done::before { background: var(--good); opacity: .55; }
+.node {
+  width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 11px; z-index: 1; background: var(--bg);
+}
+.phase.done .node { background: var(--good); color: #fff; box-shadow: 0 0 0 3px var(--bg); }
+.viewport[data-theme="ink"] .phase.done .node { color: #10231a; }
+.phase.current .node {
+  background: var(--accent); box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent-line);
+}
+.phase.current .node::after { content:""; width: 7px; height: 7px; border-radius: 50%; background: var(--bg); }
+.phase.todo .node { background: var(--bg); box-shadow: inset 0 0 0 2px var(--line-2); }
+.p-name { font-size: 12.5px; color: var(--ink-2); line-height: 1.35; padding-top: 2px; }
+.phase.current .p-name { color: var(--ink); font-weight: 600; }
+.phase.done .p-name { color: var(--ink-3); }
+.p-tag {
+  display: block; margin-top: 3px;
+  font-family: var(--font-mono), monospace; font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-4);
+}
+.phase.current .p-tag { color: var(--accent); }
+/* section toc */
+.toc { display: flex; flex-direction: column; }
+.toc a {
+  display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 7px 0;
+  text-decoration: none; color: var(--ink-2); font-size: 12.5px; line-height: 1.3;
+  border-top: 1px solid var(--line); transition: color .14s;
+}
+.toc a:first-of-type { border-top: 0; }
+.toc a .n {
+  font-family: var(--font-mono), monospace; font-size: 10px; color: var(--ink-4); padding-top: 1px;
+}
+.toc a:hover { color: var(--accent-2); }
+.toc a.active { color: var(--ink); font-weight: 500; }
+.toc a.active .n { color: var(--eyebrow); }
+
+/* ── Document content ─────────────────────────────────────────────── */
+.doc { padding: 40px 52px 72px; max-width: 720px; }
+.masthead { border-bottom: 2px solid var(--ink); padding-bottom: 26px; margin-bottom: 8px; }
+.eyebrow {
+  font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--eyebrow); margin: 0 0 14px;
+}
+.doc h1 {
+  font-family: var(--font-display), sans-serif; font-weight: 800; font-size: 34px;
+  line-height: 1.08; letter-spacing: -.02em; margin: 0 0 15px; color: var(--ink); text-wrap: balance;
+}
+.viewport[data-theme="slate"] .doc h1 { font-weight: 700; font-size: 31px; letter-spacing: -.015em; }
+.dek { font-size: 16.5px; color: var(--ink-2); margin: 0 0 22px; max-width: 60ch; line-height: 1.55; }
+.metarow { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+.meta { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-3); }
+.meta .k {
+  font-family: var(--font-mono), monospace; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-4);
+}
+.meta .v { color: var(--ink-2); font-weight: 500; }
+.status-pill {
+  display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 8px;
+  border: 1px solid var(--accent-line); background: var(--accent-soft); border-radius: 100px;
+  font-size: 11.5px; color: var(--ink); font-weight: 500;
+}
+.status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+section.blk { margin-top: 44px; scroll-margin-top: 20px; }
+.sec-head { display: flex; align-items: baseline; gap: 13px; border-bottom: 1px solid var(--line-2); padding-bottom: 11px; margin-bottom: 20px; }
+.sec-num { font-family: var(--font-mono), monospace; font-size: 12.5px; color: var(--eyebrow); font-weight: 500; }
+.doc h2 { font-family: var(--font-display), sans-serif; font-weight: 700; font-size: 22px; line-height: 1.15; letter-spacing: -.01em; margin: 0; color: var(--ink); }
+.viewport[data-theme="slate"] .doc h2 { font-size: 21px; }
+.doc h3 { font-family: var(--font-display), sans-serif; font-weight: 600; font-size: 16px; margin: 26px 0 9px; color: var(--ink); letter-spacing: -.005em; }
+.doc p { margin: 0 0 15px; font-size: 15.5px; line-height: 1.65; color: var(--ink); }
+.viewport[data-theme="slate"] .doc p { font-size: 16px; line-height: 1.68; }
+.doc p b, .doc strong { font-weight: 600; color: var(--ink); }
+.doc a.link { color: var(--accent-2); text-decoration: none; border-bottom: 1px solid var(--accent-line); }
+.doc a.link:hover { border-bottom-color: var(--accent); }
+code.inl {
+  font-family: var(--font-mono), monospace; font-size: .86em;
+  background: var(--elevated); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 1px 5px; color: var(--accent-2);
+}
+.viewport[data-theme="ink"] code.inl { color: var(--accent); }
+
+/* bulleted list */
+ul.clean { margin: 0 0 16px; padding-left: 0; list-style: none; }
+ul.clean li { position: relative; padding-left: 19px; margin-bottom: 8px; font-size: 15.5px; line-height: 1.6; color: var(--ink); }
+ul.clean li::before { content:""; position: absolute; left: 2px; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+
+/* callouts */
+.call { border-radius: var(--radius); padding: 15px 18px; margin: 20px 0; font-size: 14.5px; line-height: 1.55; border-left: 3px solid; }
+.call .tag {
+  font-family: var(--font-mono), monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  font-weight: 600; display: block; margin-bottom: 7px;
+}
+.call p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+.call p + p { margin-top: 8px; }
+.call.note     { background: var(--info-bg); border-color: var(--info); }
+.call.note .tag{ color: var(--info); }
+.call.good     { background: var(--good-bg); border-color: var(--good); }
+.call.good .tag{ color: var(--good); }
+.call.warn     { background: var(--warn-bg); border-color: var(--warn); }
+.call.warn .tag{ color: var(--warn); }
+.call.decision { background: var(--accent-soft); border-color: var(--accent); }
+.call.decision .tag{ color: var(--accent-2); }
+.viewport[data-theme="ink"] .call.decision .tag { color: var(--accent); }
+
+/* task list */
+.tasks { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 8px; }
+.task { display: grid; grid-template-columns: 20px 1fr; gap: 11px; align-items: start; padding: 7px 8px; border-radius: var(--radius); }
+.task:hover { background: var(--hover); }
+.chk { width: 17px; height: 17px; border-radius: 5px; margin-top: 1px; display: grid; place-items: center; font-size: 10px; flex: none; }
+.viewport[data-theme="paper"] .chk, .viewport[data-theme="ink"] .chk { border-radius: 4px; }
+.task.done .chk { background: var(--good); color: #fff; }
+.viewport[data-theme="ink"] .task.done .chk { color: #10231a; }
+.task.wip  .chk { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent-2); }
+.viewport[data-theme="ink"] .task.wip .chk { color: var(--accent); }
+.task.todo .chk { background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-2); }
+.t-txt { font-size: 14.5px; line-height: 1.45; color: var(--ink); }
+.task.done .t-txt { color: var(--ink-3); }
+.t-txt .t-meta {
+  display: block; margin-top: 2px; font-family: var(--font-mono), monospace;
+  font-size: 10px; letter-spacing: .04em; color: var(--ink-4); text-transform: uppercase;
+}
+.task.wip .t-meta { color: var(--accent-2); }
+.viewport[data-theme="ink"] .task.wip .t-meta { color: var(--accent); }
+
+/* key-value */
+.kv { border: 1px solid var(--line-2); border-radius: var(--radius); overflow: hidden; margin: 20px 0; }
+.kv-row { display: grid; grid-template-columns: 168px 1fr; border-top: 1px solid var(--line); }
+.kv-row:first-child { border-top: 0; }
+.kv-k {
+  padding: 11px 15px; background: var(--surface);
+  font-family: var(--font-mono), monospace; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-3); border-right: 1px solid var(--line);
+}
+.kv-v { padding: 11px 15px; font-size: 13.5px; color: var(--ink); }
+.kv-v code { font-family: var(--font-mono), monospace; font-size: 12.5px; color: var(--accent-2); }
+.viewport[data-theme="ink"] .kv-v code { color: var(--accent); }
+
+/* table */
+.tbl-wrap { overflow-x: auto; margin: 20px 0; border: 1px solid var(--line-2); border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th {
+  background: var(--surface); font-family: var(--font-mono), monospace; font-size: 10px;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 600;
+}
+td { color: var(--ink-2); }
+td b { color: var(--ink); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.pill { font-family: var(--font-mono), monospace; font-size: 9.5px; font-weight: 600; letter-spacing: .04em; padding: 3px 8px; border-radius: 100px; text-transform: uppercase; white-space: nowrap; }
+.pill.target { background: var(--good-bg); color: var(--good); border: 1px solid var(--good-line); }
+.pill.ship   { background: var(--accent-soft); color: var(--accent-2); border: 1px solid var(--accent-line); }
+.viewport[data-theme="ink"] .pill.ship { color: var(--accent); }
+.pill.weak   { background: var(--bad-bg); color: var(--bad); border: 1px solid var(--bad-line); }
+
+/* code */
+.code { margin: 20px 0; border: 1px solid var(--line-2); border-radius: var(--radius); overflow: hidden; background: var(--code-bg); }
+.code-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.code-bar .lang { font-family: var(--font-mono), monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.code-bar .file { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--ink-4); margin-left: auto; }
+.code pre { margin: 0; padding: 15px 16px; overflow-x: auto; }
+.code code { font-family: var(--font-mono), monospace; font-size: 12.5px; line-height: 1.7; color: var(--ink); white-space: pre; }
+.code .c  { color: var(--code-c); font-style: italic; }
+.code .k  { color: var(--code-k); }
+.code .s  { color: var(--code-s); }
+.code .fn { color: var(--code-fn); }
+.code .nm { color: var(--code-n); }
+
+/* ── Registry view ────────────────────────────────────────────────── */
+.registry { padding: 32px 40px 60px; max-width: 860px; }
+.reg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 6px; }
+.reg-head h1 { font-family: var(--font-display), sans-serif; font-weight: 800; font-size: 25px; letter-spacing: -.015em; margin: 0; color: var(--ink); }
+.viewport[data-theme="slate"] .reg-head h1 { font-weight: 700; }
+.reg-count { font-family: var(--font-mono), monospace; font-size: 12px; color: var(--ink-4); }
+.searchbar {
+  margin: 18px 0 20px; display: flex; align-items: center; gap: 9px;
+  background: var(--elevated); border: 1px solid var(--line-2); border-radius: var(--radius);
+  padding: 9px 13px;
+}
+.searchbar .mag { color: var(--ink-4); font-size: 13px; }
+.searchbar span.ph { color: var(--ink-4); font-size: 13.5px; }
+.searchbar .slash { margin-left: auto; font-family: var(--font-mono), monospace; font-size: 11px; color: var(--ink-4); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.chip {
+  font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: .04em;
+  padding: 5px 12px; border-radius: 100px; border: 1px solid var(--line-2);
+  color: var(--ink-3); background: var(--bg); cursor: default;
+}
+.chip.on { background: var(--accent-soft); color: var(--ink); border-color: var(--accent-line); font-weight: 500; }
+.cards { display: flex; flex-direction: column; gap: 10px; }
+.card {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px 16px;
+  background: var(--elevated); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 16px 18px; box-shadow: var(--shadow); transition: border-color .15s, transform .15s;
+}
+.card:hover { border-color: var(--line-2); }
+.card-t { font-family: var(--font-display), sans-serif; font-weight: 700; font-size: 16px; color: var(--ink); letter-spacing: -.01em; }
+.viewport[data-theme="slate"] .card-t { font-weight: 600; }
+.card-badges { display: flex; align-items: center; gap: 8px; }
+.type-chip { font-family: var(--font-mono), monospace; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: var(--radius); border: 1px solid var(--line-2); color: var(--ink-3); }
+.type-chip.plan { color: var(--info); border-color: var(--info-line); background: var(--info-bg); }
+.type-chip.spec { color: var(--good); border-color: var(--good-line); background: var(--good-bg); }
+.type-chip.journal { color: var(--eyebrow); }
+.card-sub { grid-column: 1; color: var(--ink-2); font-size: 13.5px; line-height: 1.5; }
+.card-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 4px; font-size: 11.5px; color: var(--ink-3); }
+.card-meta .sd { display: inline-flex; align-items: center; gap: 6px; }
+.sdot { width: 7px; height: 7px; border-radius: 50%; }
+.sdot.wip { background: var(--accent); } .sdot.done { background: var(--good); } .sdot.acc { background: var(--good); } .sdot.log { background: var(--ink-4); }
+.card-meta code { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--ink-3); }
+
+/* annotation under preview */
+.note-pins { display: flex; flex-wrap: wrap; gap: 10px 30px; margin-top: 22px; }
+.pin { display: flex; gap: 11px; align-items: flex-start; max-width: 380px; }
+.pin .num { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--stage-faint); border: 1px solid var(--stage-line); border-radius: 5px; padding: 2px 7px; flex: none; margin-top: 1px; }
+.pin p { margin: 0; font-size: 13px; color: var(--stage-mut); line-height: 1.5; }
+.pin p b { color: var(--stage-ink); font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; scroll-behavior: auto !important; }
+}
+@media (max-width: 1080px) {
+  .app--doc { grid-template-columns: 190px minmax(0,1fr); }
+  .app--doc .drail { display: none; }
+  .doc { padding: 32px 36px 60px; }
+}
+@media (max-width: 720px) {
+  .wrap { padding: 28px 18px 60px; }
+  .app--doc, .app--registry { grid-template-columns: 1fr; }
+  .app .grail { flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); gap: 12px; }
+  .app .grail .nav { flex-direction: row; flex-wrap: wrap; }
+  .app .grail .nav-title, .app .project, .app .grail-foot { display: none; }
+  .app .nav a[aria-current="page"]::before { display: none; }
+  .doc { padding: 26px 22px 48px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="stage-head">
+    <p class="stage-eyebrow">Mneme · Design Exploration · Jul 14 2026</p>
+    <h1>Three ways to read Mneme</h1>
+    <p>The same plan, rendered three ways — so you can pick the one you'd actually want to sit in all day. <b>Paper</b> is a warm editorial memo, <b>Slate</b> a cool modern reading surface, <b>Ink</b> a dark theme done right. Switch themes and switch between a document and the registry — the left rail never moves, which is the fix for the menu that used to shift under you. Nothing here touches the app yet.</p>
+  </header>
+
+  <div class="controls">
+    <div class="ctl-group">
+      <span class="ctl-label">Theme</span>
+      <div class="seg" id="theme-seg" role="group" aria-label="Theme">
+        <button data-theme="paper" aria-pressed="true"><i class="swatch-dot" style="background:#faf8f3"></i>Paper</button>
+        <button data-theme="slate" aria-pressed="false"><i class="swatch-dot" style="background:#f6f8fb"></i>Slate</button>
+        <button data-theme="ink" aria-pressed="false"><i class="swatch-dot" style="background:#1a1918"></i>Ink</button>
+      </div>
+    </div>
+    <div class="ctl-group">
+      <span class="ctl-label">View</span>
+      <div class="seg" id="view-seg" role="group" aria-label="View">
+        <button data-view="doc" aria-pressed="true">Document</button>
+        <button data-view="registry" aria-pressed="false">Registry</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Readouts (one per theme, swapped on switch) -->
+  <div class="readout is-active" data-for="paper">
+    <div>
+      <p class="readout-name">Paper <span>warm editorial · light</span></p>
+      <p class="readout-desc">Warm off-white paper and near-black ink, a grotesk display against monospace labels, muted print accents — steel-blue with amber section markers. <b>The closest to the memo style you liked, made Mneme's own.</b> Hairline rules, square corners, prose that reads like a considered document.</p>
+    </div>
+    <div class="palette">
+      <div class="pal"><i style="background:#faf8f3"></i><span>paper</span></div>
+      <div class="pal"><i style="background:#1c1b17"></i><span>ink</span></div>
+      <div class="pal"><i style="background:#2f5d80"></i><span>steel</span></div>
+      <div class="pal"><i style="background:#a9640f"></i><span>amber</span></div>
+      <div class="pal"><i style="background:#2f6b4f"></i><span>green</span></div>
+    </div>
+  </div>
+  <div class="readout" data-for="slate">
+    <div>
+      <p class="readout-name">Slate <span>cool modern · light</span></p>
+      <p class="readout-desc">A cooler, softer light surface with roomier spacing and rounded corners — less terminal, more calm reading app. One deep-teal accent nods to Mneme's cyan heritage without the neon. <b>For long sessions where you want the least visual friction.</b></p>
+    </div>
+    <div class="palette">
+      <div class="pal"><i style="background:#f6f8fb"></i><span>slate</span></div>
+      <div class="pal"><i style="background:#1f2530"></i><span>ink</span></div>
+      <div class="pal"><i style="background:#0f7c78"></i><span>teal</span></div>
+      <div class="pal"><i style="background:#3b6fb0"></i><span>blue</span></div>
+      <div class="pal"><i style="background:#2f8a5c"></i><span>green</span></div>
+    </div>
+  </div>
+  <div class="readout" data-for="ink">
+    <div>
+      <p class="readout-name">Ink <span>warm dark · night</span></p>
+      <p class="readout-desc">A dark theme that fixes the current one: warm charcoal instead of pure black, comfortable high-contrast text, and a calm amber-gold accent replacing the electric cyan. <b>Same editorial structure as Paper — it's Paper at night.</b> Kept because sometimes dark is right.</p>
+    </div>
+    <div class="palette">
+      <div class="pal"><i style="background:#1a1918"></i><span>char</span></div>
+      <div class="pal"><i style="background:#ece8e0"></i><span>ink</span></div>
+      <div class="pal"><i style="background:#e6975a"></i><span>gold</span></div>
+      <div class="pal"><i style="background:#63b98a"></i><span>green</span></div>
+      <div class="pal"><i style="background:#78a6de"></i><span>blue</span></div>
+    </div>
+  </div>
+
+  <!-- Device -->
+  <div class="device">
+    <div class="device-bar">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <div class="url" id="url">mneme.dev:8443<b id="url-path">/doc/search-retrieval</b></div>
+    </div>
+
+    <div class="viewport" data-theme="paper" id="viewport">
+
+      <!-- DOCUMENT VIEW -->
+      <div class="app app--doc" id="app-doc">
+        <!-- persistent global rail -->
+        <aside class="grail">
+          <div class="brand"><span class="glyph">⬡</span><span class="word">mneme</span></div>
+          <div class="project"><span><b>mneme</b> · retrieval</span><span class="caret">▾</span></div>
+          <nav class="nav" aria-label="Primary">
+            <p class="nav-title">Knowledge</p>
+            <a href="#" aria-current="page"><span class="mk"></span>Registry</a>
+            <a href="#"><span class="mk"></span>Memory</a>
+            <a href="#"><span class="mk"></span>Decisions</a>
+            <a href="#"><span class="mk"></span>Snippets</a>
+            <a href="#"><span class="mk"></span>Journal</a>
+            <a href="#"><span class="mk"></span>Solutions</a>
+            <a href="#"><span class="mk"></span>Env</a>
+            <a href="#"><span class="mk"></span>Bundle</a>
+          </nav>
+          <div class="grail-foot">
+            <p class="nav-title">Session</p>
+            <a href="#"><span class="mk"></span>Context bundle</a>
+          </div>
+        </aside>
+
+        <!-- contextual doc rail: phase spine + section toc -->
+        <aside class="drail">
+          <div>
+            <p class="rail-title">Phases</p>
+            <div class="spine">
+              <div class="phase done"><div class="node">✓</div><div class="p-name">Schema &amp; stores<span class="p-tag">done</span></div></div>
+              <div class="phase done"><div class="node">✓</div><div class="p-name">MCP write path<span class="p-tag">done</span></div></div>
+              <div class="phase current"><div class="node"></div><div class="p-name">Search &amp; retrieval<span class="p-tag">in progress</span></div></div>
+              <div class="phase todo"><div class="node"></div><div class="p-name">Ranking &amp; recall<span class="p-tag">todo</span></div></div>
+              <div class="phase todo"><div class="node"></div><div class="p-name">UI surfacing<span class="p-tag">todo</span></div></div>
+            </div>
+          </div>
+          <div>
+            <p class="rail-title">On this page</p>
+            <nav class="toc" aria-label="Sections">
+              <a href="#" class="active"><span class="n">01</span>Why unify search</a>
+              <a href="#"><span class="n">02</span>The query contract</a>
+              <a href="#"><span class="n">03</span>Build order</a>
+              <a href="#"><span class="n">04</span>Index &amp; config</a>
+              <a href="#"><span class="n">05</span>Ranking approaches</a>
+              <a href="#"><span class="n">06</span>Query shape</a>
+              <a href="#"><span class="n">07</span>Risks</a>
+              <a href="#"><span class="n">08</span>Decision</a>
+            </nav>
+          </div>
+        </aside>
+
+        <!-- document body -->
+        <main class="doc">
+          <div class="masthead">
+            <p class="eyebrow">Mneme · Plan · Phase 3</p>
+            <h1>Search &amp; retrieval: one ranked query over every store</h1>
+            <p class="dek">Give Claude Code a single ranked query across documents, decisions, snippets, and the journal — so retrieval stops depending on knowing which store to ask first.</p>
+            <div class="metarow">
+              <span class="status-pill"><span class="dot"></span>In progress</span>
+              <span class="meta"><span class="k">Updated</span><span class="v">Jul 14</span></span>
+              <span class="meta"><span class="k">Project</span><span class="v">mneme</span></span>
+              <span class="meta"><span class="k">Area</span><span class="v">retrieval</span></span>
+            </div>
+          </div>
+
+          <section class="blk">
+            <div class="sec-head"><span class="sec-num">01</span><h2>Why unify search</h2></div>
+            <p>Right now retrieval is per-type: <code class="inl">search_documents</code>, <code class="inl">query_decisions</code>, and <code class="inl">get_snippets</code> each answer a different question, and the caller has to know which store holds the answer before asking. That's fine for a machine with the schema memorized, but it makes the human viewer's search box lie — it only ever searches documents.</p>
+            <p>The goal is one entry point, <code class="inl">search(q, types?)</code>, that ranks results across <strong>every</strong> content type and lets the caller narrow by type only when they want to. It leans on the same <a href="#" class="link">local-deployment</a> Postgres we already run — no new infrastructure.</p>
+            <div class="call decision">
+              <span class="tag">Decision · one endpoint, many stores</span>
+              <p>A single <code class="inl">search()</code> tool fans out to each store and fuses the rankings server-side. The per-type tools stay for callers that already know where to look; the unified one becomes the default the digest and the UI search box both use.</p>
+            </div>
+          </section>
+
+          <section class="blk">
+            <div class="sec-head"><span class="sec-num">03</span><h2>Build order</h2></div>
+            <p>Ship the lexical path end-to-end first — it's useful on day one and de-risks the ranking work. Semantic recall layers on top without changing the contract.</p>
+            <div class="tasks">
+              <div class="task done"><div class="chk">✓</div><div class="t-txt">Define the <code class="inl">search(q, types?)</code> MCP tool signature<span class="t-meta">merged · f7f27ad</span></div></div>
+              <div class="task done"><div class="chk">✓</div><div class="t-txt"><code class="inl">tsvector</code> columns + GIN index on documents<span class="t-meta">merged · 0aa228c</span></div></div>
+              <div class="task wip"><div class="chk">~</div><div class="t-txt">Rank fusion across the four content types<span class="t-meta">in progress</span></div></div>
+              <div class="task todo"><div class="chk"></div><div class="t-txt">pgvector embeddings for semantic recall</div></div>
+              <div class="task todo"><div class="chk"></div><div class="t-txt">Highlight matched snippets in the result rows</div></div>
+            </div>
+          </section>
+
+          <section class="blk">
+            <div class="sec-head"><span class="sec-num">04</span><h2>Index &amp; config</h2></div>
+            <p>Two indexes, one per retrieval mode, sized for a personal dataset — nothing here needs more than the tuned local Postgres.</p>
+            <div class="kv">
+              <div class="kv-row"><div class="kv-k">Endpoint</div><div class="kv-v"><code>POST /api/search</code> · MCP <code>search</code></div></div>
+              <div class="kv-row"><div class="kv-k">Lexical</div><div class="kv-v"><code>tsvector</code> + <code>websearch_to_tsquery</code></div></div>
+              <div class="kv-row"><div class="kv-k">Semantic</div><div class="kv-v"><code>pgvector</code> · halfvec(1024)</div></div>
+              <div class="kv-row"><div class="kv-k">Indexes</div><div class="kv-v">GIN (lexical) · HNSW (semantic)</div></div>
+              <div class="kv-row"><div class="kv-k">Fusion</div><div class="kv-v">Reciprocal-rank fusion, k = 60</div></div>
+            </div>
+          </section>
+
+          <section class="blk">
+            <div class="sec-head"><span class="sec-num">05</span><h2>Ranking approaches</h2></div>
+            <p>Three ways to rank, weighed against recall, latency, and how much they cost to run on a laptop.</p>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>Approach</th><th>Recall</th><th>Latency</th><th>Cost</th><th>Verdict</th></tr></thead>
+                <tbody>
+                  <tr><td><b>Lexical only</b></td><td>Medium</td><td>Fast</td><td>Low</td><td><span class="pill ship">Ship first</span></td></tr>
+                  <tr><td><b>Vector only</b></td><td>High</td><td>Medium</td><td>Medium</td><td><span class="pill weak">Weak on exact terms</span></td></tr>
+                  <tr><td><b>Hybrid (RRF)</b></td><td>High</td><td>Medium</td><td>Higher</td><td><span class="pill target">Target</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="blk">
+            <div class="sec-head"><span class="sec-num">06</span><h2>Query shape</h2></div>
+            <p>Hybrid retrieval fuses two independent rankings by reciprocal rank, so neither mode has to produce a comparable score:</p>
+            <div class="code">
+              <div class="code-bar"><span class="lang">sql</span><span class="file">internal/store/search.sql</span></div>
+<pre><code><span class="c">-- Reciprocal-rank fusion over lexical + semantic</span>
+<span class="k">with</span> lexical <span class="k">as</span> (
+  <span class="k">select</span> id, <span class="fn">row_number</span>() <span class="k">over</span> (<span class="k">order by</span> rank <span class="k">desc</span>) <span class="k">as</span> r
+  <span class="k">from</span> doc_search
+  <span class="k">where</span> tsv @@ <span class="fn">websearch_to_tsquery</span>(<span class="s">'english'</span>, $1)
+), semantic <span class="k">as</span> (
+  <span class="k">select</span> id, <span class="fn">row_number</span>() <span class="k">over</span> (<span class="k">order by</span> embedding &lt;=&gt; $2) <span class="k">as</span> r
+  <span class="k">from</span> doc_search <span class="k">order by</span> embedding &lt;=&gt; $2 <span class="k">limit</span> <span class="nm">50</span>
+)
+<span class="k">select</span> id, <span class="fn">sum</span>(<span class="nm">1.0</span> / (<span class="nm">60</span> + r)) <span class="k">as</span> score
+<span class="k">from</span>   (<span class="k">select</span> * <span class="k">from</span> lexical <span class="k">union all select</span> * <span class="k">from</span> semantic) f
+<span class="k">group by</span> id <span class="k">order by</span> score <span class="k">desc</span> <span class="k">limit</span> <span class="nm">20</span>;</code></pre>
+            </div>
+          </section>
+
+          <section class="blk">
+            <div class="sec-head"><span class="sec-num">07</span><h2>Risks</h2></div>
+            <ul class="clean">
+              <li>Embedding drift — re-embedding on model change is a batch job we haven't scheduled.</li>
+              <li>Fusion weighting is a guess until there's real query traffic to tune against.</li>
+            </ul>
+            <div class="call warn">
+              <span class="tag">Watch · embedding drift</span>
+              <p>If the embedding model changes, stored vectors and query vectors stop sharing a space and semantic recall silently degrades. Pin the model id in <code class="inl">env</code> and re-embed on change — don't let it float.</p>
+            </div>
+          </section>
+
+          <section class="blk">
+            <div class="sec-head"><span class="sec-num">08</span><h2>Decision</h2></div>
+            <div class="call good">
+              <span class="tag">Adopted · hybrid, lexical-first</span>
+              <p>Ship lexical retrieval now behind the unified <code class="inl">search()</code> contract; add pgvector semantic recall and RRF fusion in Phase 4 without breaking callers. Recorded in the decision log so the "why lexical first" is searchable later.</p>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      <!-- REGISTRY VIEW -->
+      <div class="app app--registry" id="app-registry" hidden>
+        <aside class="grail">
+          <div class="brand"><span class="glyph">⬡</span><span class="word">mneme</span></div>
+          <div class="project"><span><b>mneme</b> · retrieval</span><span class="caret">▾</span></div>
+          <nav class="nav" aria-label="Primary">
+            <p class="nav-title">Knowledge</p>
+            <a href="#" aria-current="page"><span class="mk"></span>Registry</a>
+            <a href="#"><span class="mk"></span>Memory</a>
+            <a href="#"><span class="mk"></span>Decisions</a>
+            <a href="#"><span class="mk"></span>Snippets</a>
+            <a href="#"><span class="mk"></span>Journal</a>
+            <a href="#"><span class="mk"></span>Solutions</a>
+            <a href="#"><span class="mk"></span>Env</a>
+            <a href="#"><span class="mk"></span>Bundle</a>
+          </nav>
+          <div class="grail-foot">
+            <p class="nav-title">Session</p>
+            <a href="#"><span class="mk"></span>Context bundle</a>
+          </div>
+        </aside>
+
+        <main class="registry">
+          <div class="reg-head">
+            <h1>Registry</h1>
+            <span class="reg-count">14 documents</span>
+          </div>
+          <div class="searchbar">
+            <span class="mag">⌕</span><span class="ph">Search documents, decisions, snippets…</span><span class="slash">/</span>
+          </div>
+          <div class="chips">
+            <span class="chip on">All</span>
+            <span class="chip">Plans</span>
+            <span class="chip">Specs</span>
+            <span class="chip">Journal</span>
+            <span class="chip">Notes</span>
+            <span class="chip">Brainstorms</span>
+          </div>
+          <div class="cards">
+            <article class="card">
+              <div class="card-t">Search &amp; retrieval</div>
+              <div class="card-badges"><span class="type-chip plan">plan</span></div>
+              <p class="card-sub">One ranked query over documents, decisions, snippets, and journal — lexical first, hybrid next.</p>
+              <div class="card-meta"><span class="sd"><span class="sdot wip"></span>in progress</span><span>Phase 3 of 5</span><span>updated Jul 14</span><code>retrieval</code></div>
+            </article>
+            <article class="card">
+              <div class="card-t">Local deployment</div>
+              <div class="card-badges"><span class="type-chip spec">spec</span></div>
+              <p class="card-sub">Laptop-only, TLS on <code>mneme.dev:8443</code> via mkcert, Go terminates TLS with no reverse proxy.</p>
+              <div class="card-meta"><span class="sd"><span class="sdot acc"></span>accepted</span><span>graduated to repo</span><span>May 26</span><code>infra</code></div>
+            </article>
+            <article class="card">
+              <div class="card-t">Repo vs Mneme delineation</div>
+              <div class="card-badges"><span class="type-chip spec">spec</span></div>
+              <p class="card-sub">Git owns the code; Mneme owns the evolving work. Pointers across the line, never copies.</p>
+              <div class="card-meta"><span class="sd"><span class="sdot acc"></span>accepted</span><span>Jul 11</span><code>architecture</code></div>
+            </article>
+            <article class="card">
+              <div class="card-t">MCP write path</div>
+              <div class="card-badges"><span class="type-chip plan">plan</span></div>
+              <p class="card-sub">Validate and self-document the document write path so pushes fail loudly, not silently.</p>
+              <div class="card-meta"><span class="sd"><span class="sdot done"></span>done</span><span>Phase 2.7</span><span>Jul 13</span><code>mcp</code></div>
+            </article>
+            <article class="card">
+              <div class="card-t">Env registry</div>
+              <div class="card-badges"><span class="type-chip journal">journal</span></div>
+              <p class="card-sub">Notes from wiring the env registry — pinning model ids and endpoints per project.</p>
+              <div class="card-meta"><span class="sd"><span class="sdot log"></span>entry</span><span>Jul 12</span><code>env</code></div>
+            </article>
+          </div>
+        </main>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="note-pins">
+    <div class="pin"><span class="num">1</span><p><b>Persistent rail.</b> The left column is identical on the document and the registry — switch views and it doesn't move. That's the fix for the top menu that used to change per page.</p></div>
+    <div class="pin"><span class="num">2</span><p><b>Phase spine.</b> The signature element — a plan's phases as a status timeline that doubles as navigation. Done, current, and todo read at a glance.</p></div>
+    <div class="pin"><span class="num">3</span><p><b>Contextual, not primary.</b> Phases and section links live in a second, clearly-secondary column — present inside a document, gone on the registry, never competing with the primary nav.</p></div>
+  </div>
+
+  <p class="stage-foot">This is a mockup to choose from — it lives at <code>design/theme-explorations.html</code> and nothing here is wired into the app. Once you pick a direction (or a blend), the real change is swapping <code>web/src/design-system/tokens.css</code> and reworking the two <code>Topbar</code>/<code>DocumentView</code> headers into one persistent rail. <b>Tell me which theme feels right — and whether the nav model works — and I'll turn it into an implementation plan.</b></p>
+
+</div>
+
+<script>
+  (function () {
+    var viewport = document.getElementById('viewport');
+    var themeSeg = document.getElementById('theme-seg');
+    var viewSeg  = document.getElementById('view-seg');
+    var readouts = document.querySelectorAll('.readout');
+    var appDoc   = document.getElementById('app-doc');
+    var appReg   = document.getElementById('app-registry');
+    var urlPath  = document.getElementById('url-path');
+    var reduce   = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function setTheme(name) {
+      var apply = function () {
+        viewport.setAttribute('data-theme', name);
+        readouts.forEach(function (r) { r.classList.toggle('is-active', r.getAttribute('data-for') === name); });
+        viewport.classList.remove('is-switching');
+      };
+      Array.prototype.forEach.call(themeSeg.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-theme') === name));
+      });
+      if (reduce) { apply(); return; }
+      viewport.classList.add('is-switching');
+      setTimeout(apply, 150);
+    }
+
+    function setView(view) {
+      var isDoc = view === 'doc';
+      appDoc.hidden = !isDoc;
+      appReg.hidden = isDoc;
+      urlPath.textContent = isDoc ? '/doc/search-retrieval' : '/';
+      Array.prototype.forEach.call(viewSeg.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-view') === view));
+      });
+    }
+
+    themeSeg.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (b) setTheme(b.getAttribute('data-theme'));
+    });
+    viewSeg.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (b) setView(b.getAttribute('data-view'));
+    });
+  })();
+</script>
+</body>
+</html>
