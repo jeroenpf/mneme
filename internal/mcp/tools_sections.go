@@ -10,10 +10,13 @@ import (
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
 
-// sectionOutput is returned from section-editing tools.
-type sectionOutput struct {
+// sectionResult is returned from section-editing tools: just the edited
+// block. The full document is attached only when the caller passes
+// return_doc, so a routine section edit no longer re-serializes the
+// whole document into the session context.
+type sectionResult struct {
 	Section map[string]any   `json:"section"`
-	Doc     *models.Document `json:"doc"`
+	Doc     *models.Document `json:"doc,omitempty"`
 }
 
 // --- update_section ---------------------------------------------------
@@ -22,6 +25,7 @@ type updateSectionInput struct {
 	DocID     string         `json:"doc_id" jsonschema:"document id"`
 	SectionID string         `json:"section_id" jsonschema:"id of the section block to patch (anywhere in the body tree)"`
 	Patch     map[string]any `json:"patch" jsonschema:"fields to set on the section (id and children are protected). Set title (the heading) and/or content (a markdown prose string rendered directly under the heading — this is how a section carries its description). content/title are inline-only: blank lines, - / 1. lists, and # headings are REJECTED — split structure into child blocks."`
+	ReturnDoc bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
 
 var sectionProtectedFields = map[string]bool{
@@ -29,7 +33,7 @@ var sectionProtectedFields = map[string]bool{
 	"children": true,
 }
 
-func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in updateSectionInput) (*sdk.CallToolResult, *sectionOutput, error) {
+func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in updateSectionInput) (*sdk.CallToolResult, *sectionResult, error) {
 	if in.SectionID == "" {
 		return nil, nil, errors.New("section_id is required")
 	}
@@ -70,7 +74,11 @@ func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in up
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
-	return nil, &sectionOutput{Section: block, Doc: doc}, nil
+	out := &sectionResult{Section: block}
+	if in.ReturnDoc {
+		out.Doc = doc
+	}
+	return nil, out, nil
 }
 
 // --- add_section ------------------------------------------------------
@@ -79,9 +87,10 @@ type addSectionInput struct {
 	DocID          string         `json:"doc_id" jsonschema:"document id"`
 	Section        map[string]any `json:"section" jsonschema:"section block — must include id and type (type:section). Carries title (heading), an optional content string (markdown prose rendered under the heading), and/or a children array of nested blocks. children may be any block type — text, code, diagram (mermaid), table, callout, key-value, task-list, subphase; this is how you add a code block or mermaid chart to an existing plan. See push_document for exact block shapes; unknown/misnamed fields are rejected. Prose fields (title/content/description) are inline-only: blank lines, - / 1. lists, and # headings are REJECTED — use child blocks for structure."`
 	AfterSectionID string         `json:"after_section_id,omitempty" jsonschema:"insert immediately after this top-level section (otherwise appends)"`
+	ReturnDoc      bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
 
-func (t *tools) addSection(ctx context.Context, _ *sdk.CallToolRequest, in addSectionInput) (*sdk.CallToolResult, *sectionOutput, error) {
+func (t *tools) addSection(ctx context.Context, _ *sdk.CallToolRequest, in addSectionInput) (*sdk.CallToolResult, *sectionResult, error) {
 	if in.Section == nil {
 		return nil, nil, errors.New("section is required")
 	}
@@ -139,7 +148,11 @@ func (t *tools) addSection(ctx context.Context, _ *sdk.CallToolRequest, in addSe
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
-	return nil, &sectionOutput{Section: in.Section, Doc: doc}, nil
+	out := &sectionResult{Section: in.Section}
+	if in.ReturnDoc {
+		out.Doc = doc
+	}
+	return nil, out, nil
 }
 
 // --- remove_section ---------------------------------------------------

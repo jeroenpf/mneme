@@ -443,6 +443,38 @@ func sectionIDs(sections []any) []string {
 	return out
 }
 
+func TestSectionReturnDoc(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), nil)
+
+	var lean struct {
+		Section map[string]any   `json:"section"`
+		Doc     *models.Document `json:"doc"`
+	}
+	call(t, cs, "update_section", map[string]any{
+		"doc_id": "vehicle-api", "section_id": "overview",
+		"patch": map[string]any{"title": "Reframed"},
+	}, &lean)
+	if lean.Section["title"] != "Reframed" {
+		t.Errorf("section not returned: %+v", lean.Section)
+	}
+	if lean.Doc != nil {
+		t.Errorf("update_section must omit doc by default")
+	}
+
+	var full struct {
+		Doc *models.Document `json:"doc"`
+	}
+	call(t, cs, "update_section", map[string]any{
+		"doc_id": "vehicle-api", "section_id": "overview",
+		"patch": map[string]any{"title": "Again"}, "return_doc": true,
+	}, &full)
+	if full.Doc == nil {
+		t.Errorf("return_doc:true must attach doc")
+	}
+}
+
 func TestAdvancePhase(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
