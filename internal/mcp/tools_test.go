@@ -597,6 +597,49 @@ func TestAdvancePhase(t *testing.T) {
 	}
 }
 
+func TestAdvancePhaseCounterFallback(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	// A plan with phase_current/phase_total but NO phases[] array.
+	call(t, cs, "push_document", map[string]any{
+		"meta": map[string]any{
+			"id": "counter", "title": "Counter", "type": "plan", "project": "apollo",
+			"status": "in-progress", "phase_current": 2, "phase_total": 3,
+		},
+		"body": map[string]any{"sections": []any{}},
+	}, nil)
+
+	var out struct {
+		CompletedIndex int    `json:"completed_index"`
+		NextIndex      *int   `json:"next_index"`
+		PhaseCurrent   *int   `json:"phase_current"`
+		Status         string `json:"status"`
+	}
+	call(t, cs, "advance_phase", map[string]any{"doc_id": "counter"}, &out)
+	if out.CompletedIndex != 1 || out.PhaseCurrent == nil || *out.PhaseCurrent != 3 {
+		t.Errorf("first fallback advance: %+v", out)
+	}
+	if out.Status == models.StatusComplete {
+		t.Errorf("should not be complete yet: %+v", out)
+	}
+
+	var final struct {
+		NextIndex *int   `json:"next_index"`
+		Status    string `json:"status"`
+	}
+	call(t, cs, "advance_phase", map[string]any{"doc_id": "counter"}, &final)
+	if final.NextIndex != nil {
+		t.Errorf("next_index at completion: %v", final.NextIndex)
+	}
+	if final.Status != models.StatusComplete {
+		t.Errorf("status: %q, want complete", final.Status)
+	}
+
+	if msg := callExpectError(t, cs, "advance_phase", map[string]any{"doc_id": "counter"}); msg == "" {
+		t.Errorf("expected nothing-to-advance error")
+	}
+}
+
 func TestArchiveAndUpdateMeta(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")

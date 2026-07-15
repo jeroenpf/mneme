@@ -255,7 +255,7 @@ func (t *tools) register(s *sdk.Server) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "advance_phase",
-		Description: "Flip the current meta.phases entry wip->done and the next todo->wip. Returns {completed_index, next_index, phase_current, phase_total, status}; pass return_doc for the full document.",
+		Description: "Flip the current meta.phases entry wip->done and the next todo->wip. Returns {completed_index, next_index, phase_current, phase_total, status}; pass return_doc for the full document. Falls back to bumping phase_current when meta.phases[] is absent.",
 	}, t.advancePhase)
 
 	sdk.AddTool(s, &sdk.Tool{
