@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
 
@@ -115,6 +116,7 @@ func (t *tools) advancePhase(ctx context.Context, _ *sdk.CallToolRequest, in adv
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, Op: "advance_phase"})
 	out.PhaseCurrent = doc.PhaseCurrent
 	out.PhaseTotal = doc.PhaseTotal
 	out.Status = doc.Status
@@ -165,6 +167,7 @@ func (t *tools) advancePhaseByCounter(ctx context.Context, doc *models.Document,
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, Op: "advance_phase"})
 	out.PhaseCurrent = doc.PhaseCurrent
 	out.PhaseTotal = doc.PhaseTotal
 	out.Status = doc.Status

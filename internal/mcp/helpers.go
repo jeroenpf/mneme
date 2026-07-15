@@ -108,14 +108,18 @@ func (t *tools) saveDoc(ctx context.Context, doc *models.Document) error {
 // enqueue notifies the embedding worker that a source changed, and
 // broadcasts the same change to live SSE subscribers. It's a no-op when
 // embedding/live are disabled (NopEnqueuer/NopBroadcaster) and skips empty
-// ids. The broadcast is doc-level here; document edits that know their
-// changed block broadcast from their handler instead (see P3).
+// ids. Documents are deliberately excluded from the broadcast: their edit
+// handlers broadcast themselves, naming the changed block (see P3), so a
+// generic doc-level event here would duplicate that. Embedding is still
+// enqueued for documents.
 func (t *tools) enqueue(sourceType, id string) {
 	if id == "" {
 		return
 	}
 	t.enq.Enqueue(embed.SourceRef{Type: sourceType, ID: id})
-	t.bc.Broadcast(live.Event{Type: sourceType, ID: id})
+	if sourceType != "documents" {
+		t.bc.Broadcast(live.Event{Type: sourceType, ID: id})
+	}
 }
 
 // broadcast is the direct live hook for writes that don't route through

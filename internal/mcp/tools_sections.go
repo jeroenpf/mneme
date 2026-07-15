@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
 
@@ -74,6 +75,7 @@ func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in up
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.SectionID, Op: "update_section"})
 	out := &sectionResult{Section: block}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -148,6 +150,7 @@ func (t *tools) addSection(ctx context.Context, _ *sdk.CallToolRequest, in addSe
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: id, Op: "add_section"})
 	out := &sectionResult{Section: in.Section}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -180,6 +183,7 @@ func (t *tools) removeSection(ctx context.Context, _ *sdk.CallToolRequest, in re
 		if err := t.saveDoc(ctx, doc); err != nil {
 			return nil, nil, err
 		}
+		t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.SectionID, Op: "remove_section"})
 		return nil, &okResult{OK: true}, nil
 	}
 	// Top-level removal needs to mutate the slice itself (length changes).
@@ -194,6 +198,7 @@ func (t *tools) removeSection(ctx context.Context, _ *sdk.CallToolRequest, in re
 			if err := t.saveDoc(ctx, doc); err != nil {
 				return nil, nil, err
 			}
+			t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.SectionID, Op: "remove_section"})
 			return nil, &okResult{OK: true}, nil
 		}
 	}

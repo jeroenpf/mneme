@@ -79,6 +79,9 @@ func (t *tools) pushDocument(ctx context.Context, _ *sdk.CallToolRequest, in pus
 		return nil, nil, translateStoreErr(err)
 	}
 	t.enqueue("documents", doc.ID)
+	// enqueue skips the documents broadcast (P3); a whole-document push has
+	// no single edited block, so broadcast doc-level (empty BlockID).
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, Op: "push_document"})
 	return nil, writeResult(doc, in.ReturnDoc), nil
 }
 
@@ -212,6 +215,7 @@ func (t *tools) updateDocumentMeta(ctx context.Context, _ *sdk.CallToolRequest, 
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, Op: "update_document_meta"})
 	return nil, writeResult(doc, in.ReturnDoc), nil
 }
 

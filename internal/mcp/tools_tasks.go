@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
 
@@ -49,6 +50,7 @@ func (t *tools) tickTask(ctx context.Context, _ *sdk.CallToolRequest, in tickTas
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "tick_task"})
 	out := &tickResult{TaskID: in.TaskID, Done: !current}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -97,6 +99,7 @@ func (t *tools) updateTask(ctx context.Context, _ *sdk.CallToolRequest, in updat
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "update_task"})
 	out := &taskResult{Task: task}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -166,6 +169,8 @@ func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskI
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
+	newID, _ := in.Task["id"].(string)
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: newID, Op: "add_task"})
 	out := &taskResult{Task: in.Task}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -203,6 +208,7 @@ func (t *tools) removeTask(ctx context.Context, _ *sdk.CallToolRequest, in remov
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
+	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "remove_task"})
 	return nil, &okResult{OK: true}, nil
 }
 
