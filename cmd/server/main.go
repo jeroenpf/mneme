@@ -13,6 +13,7 @@ import (
 	"github.com/jeroenpfeil/mneme/internal/api"
 	"github.com/jeroenpfeil/mneme/internal/config"
 	"github.com/jeroenpfeil/mneme/internal/embed"
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/mcp"
 	"github.com/jeroenpfeil/mneme/internal/migrations"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -74,10 +75,14 @@ func run() error {
 		slog.Info("embeddings disabled (no MNEME_VOYAGE_API_KEY) — FTS-only search")
 	}
 
-	mcpSrv := mcp.New(st, enq, nil, client)
+	// One live hub shared by the MCP write path (Broadcast after a
+	// successful write) and the /api/events SSE handler (Subscribe per
+	// browser), so agent writes push straight to connected viewers.
+	hub := live.NewHub()
+	mcpSrv := mcp.New(st, enq, hub, client)
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client),
+		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client, hub),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

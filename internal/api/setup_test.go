@@ -78,7 +78,7 @@ func newServer(t *testing.T) (*httptest.Server, *store.PostgresStore) {
 	// Close runs — so we don't defer Close here; each test relies on
 	// the TestMain teardown for the pool.
 	cfg := &config.Config{CORSOrigins: []string{"http://localhost:5173"}}
-	srv := httptest.NewServer(api.Router(cfg, st, nil, nil, nil)) // nil client ⇒ FTS-only, enabled=false
+	srv := httptest.NewServer(api.Router(cfg, st, nil, nil, nil, nil)) // nil client ⇒ FTS-only, enabled=false; nil hub ⇒ no SSE
 	t.Cleanup(srv.Close)
 	return srv, st
 }

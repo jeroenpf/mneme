@@ -10,21 +10,21 @@ import (
 
 	"github.com/jeroenpfeil/mneme/internal/config"
 	"github.com/jeroenpfeil/mneme/internal/embed"
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
 
 // Router builds the top-level HTTP handler. Composes middleware,
-// /health, /api/v1, /mcp, and falls back to the embedded SPA for
-// any remaining path. mcpHandler and webHandler may be nil — useful
-// in test setups that don't need them. client (may be nil) embeds the
+// /api/events (SSE), /health, /api/v1, /mcp, and falls back to the embedded
+// SPA for any remaining path. mcpHandler, webHandler, and hub may be nil —
+// useful in test setups that don't need them. client (may be nil) embeds the
 // /search query for hybrid ranking and flips /search/status enabled; nil ⇒
 // FTS-only, enabled=false.
-func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler, client embed.Client) http.Handler {
+func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler, client embed.Client, hub *live.Hub) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.CORSOrigins,
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete, http.MethodOptions},
@@ -33,50 +33,63 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		MaxAge:           300,
 	}))
 
-	health := &Health{Store: st}
-	r.Get("/health", health.Handler)
+	// SSE lives OUTSIDE the request-timeout group: the stream is
+	// deliberately long-lived and a 30s Timeout would sever it.
+	if hub != nil {
+		events := &EventsHandler{Hub: hub}
+		r.Get("/api/events", events.Stream)
+	}
 
-	docs := &DocumentsHandler{Store: st}
-	projects := &ProjectsHandler{Store: st}
-	memory := &MemoryHandler{Store: st}
-	env := &EnvHandler{Store: st}
-	decisions := &DecisionsHandler{Store: st}
-	snippets := &SnippetsHandler{Store: st}
-	journal := &JournalHandler{Store: st}
-	solutions := &SolutionsHandler{Store: st}
-	bundleH := &BundleHandler{Store: st}
-	searchH := &SearchHandler{Store: st, Client: client}
-	statusH := &SearchStatusHandler{Store: st, Enabled: client != nil}
+	// Everything else keeps the 30s request timeout.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Timeout(30 * time.Second))
 
-	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/documents", docs.List)
-		r.Post("/documents", docs.Create)
-		r.Get("/documents/{id}", docs.Get)
-		r.Patch("/documents/{id}", docs.Update)
-		r.Post("/documents/{id}/archive", docs.Archive)
-		r.Get("/projects", projects.List)
-		r.Post("/projects", projects.Create)
-		r.Get("/memory", memory.List)
-		r.Put("/memory/{scope}/{key}", memory.Upsert)
-		r.Delete("/memory/{scope}/{key}", memory.Delete)
-		r.Get("/env", env.List)
-		r.Put("/env/{key}", env.Upsert)
-		r.Delete("/env/{key}", env.Delete)
-		r.Get("/decisions", decisions.List)
-		r.Get("/snippets", snippets.List)
-		r.Get("/journal", journal.List)
-		r.Get("/solutions", solutions.List)
-		r.Get("/bundle", bundleH.Get)
-		r.Get("/search", searchH.Get)
-		r.Get("/search/status", statusH.Get)
+		health := &Health{Store: st}
+		r.Get("/health", health.Handler)
+
+		docs := &DocumentsHandler{Store: st}
+		projects := &ProjectsHandler{Store: st}
+		memory := &MemoryHandler{Store: st}
+		env := &EnvHandler{Store: st}
+		decisions := &DecisionsHandler{Store: st}
+		snippets := &SnippetsHandler{Store: st}
+		journal := &JournalHandler{Store: st}
+		solutions := &SolutionsHandler{Store: st}
+		bundleH := &BundleHandler{Store: st}
+		searchH := &SearchHandler{Store: st, Client: client}
+		statusH := &SearchStatusHandler{Store: st, Enabled: client != nil}
+
+		r.Route("/api/v1", func(r chi.Router) {
+			r.Get("/documents", docs.List)
+			r.Post("/documents", docs.Create)
+			r.Get("/documents/{id}", docs.Get)
+			r.Patch("/documents/{id}", docs.Update)
+			r.Post("/documents/{id}/archive", docs.Archive)
+			r.Get("/projects", projects.List)
+			r.Post("/projects", projects.Create)
+			r.Get("/memory", memory.List)
+			r.Put("/memory/{scope}/{key}", memory.Upsert)
+			r.Delete("/memory/{scope}/{key}", memory.Delete)
+			r.Get("/env", env.List)
+			r.Put("/env/{key}", env.Upsert)
+			r.Delete("/env/{key}", env.Delete)
+			r.Get("/decisions", decisions.List)
+			r.Get("/snippets", snippets.List)
+			r.Get("/journal", journal.List)
+			r.Get("/solutions", solutions.List)
+			r.Get("/bundle", bundleH.Get)
+			r.Get("/search", searchH.Get)
+			r.Get("/search/status", statusH.Get)
+		})
+
+		if mcpHandler != nil {
+			// The streamable HTTP transport uses both GET (open stream) and
+			// POST (send JSON-RPC) under the same path, so Handle (not
+			// Mount, which strips the prefix) is the right primitive.
+			r.Handle("/mcp", mcpHandler)
+		}
 	})
 
-	if mcpHandler != nil {
-		// The streamable HTTP transport uses both GET (open stream) and
-		// POST (send JSON-RPC) under the same path, so Handle (not
-		// Mount, which strips the prefix) is the right primitive.
-		r.Handle("/mcp", mcpHandler)
-	}
 	if webHandler != nil {
 		// SPA fallback. chi's NotFound catches anything that didn't
 		// match a route — exactly the right hook for vue-router's

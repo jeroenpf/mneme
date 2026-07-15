@@ -25,7 +25,7 @@ func TestHTTPMount(t *testing.T) {
 	st := store.NewWithPool(testPool)
 	mcpSrv := mcpsrv.New(st, nil, nil, nil)
 	cfg := &config.Config{CORSOrigins: []string{"http://localhost:5173"}}
-	srv := httptest.NewServer(api.Router(cfg, st, mcpSrv.Handler(), nil, nil))
+	srv := httptest.NewServer(api.Router(cfg, st, mcpSrv.Handler(), nil, nil, nil))
 	t.Cleanup(srv.Close)
 
 	// /mcp must accept a Streamable HTTP MCP session.
