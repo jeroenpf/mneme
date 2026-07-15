@@ -36,4 +36,28 @@ describe('useDocument', () => {
     expect(error.value?.message).toBe('404')
     expect(result.value).toBeNull()
   })
+
+  it('silent refresh swaps the doc without ever toggling loading', async () => {
+    const spy = vi.spyOn(documentsApi, 'getDocument').mockResolvedValue(doc)
+    const { doc: result, loading, refresh } = useDocument(ref('a'))
+    await vi.waitFor(() => expect(loading.value).toBe(false))
+
+    spy.mockResolvedValue({ ...doc, title: 'A updated' })
+    const p = refresh({ silent: true })
+    expect(loading.value).toBe(false) // no loading flip → content stays mounted
+    await p
+    expect(result.value?.title).toBe('A updated')
+    expect(loading.value).toBe(false)
+  })
+
+  it('silent refresh keeps the current doc when the fetch fails', async () => {
+    const spy = vi.spyOn(documentsApi, 'getDocument').mockResolvedValue(doc)
+    const { doc: result, error, refresh } = useDocument(ref('a'))
+    await vi.waitFor(() => expect(result.value?.id).toBe('a'))
+
+    spy.mockRejectedValueOnce(new Error('boom'))
+    await refresh({ silent: true })
+    expect(result.value?.id).toBe('a') // stale doc retained, not blanked
+    expect(error.value).toBeNull() // best-effort refetch surfaces no error
+  })
 })

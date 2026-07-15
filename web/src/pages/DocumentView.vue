@@ -6,6 +6,7 @@ import MetaHeader from '@/components/MetaHeader.vue'
 import PhaseTracker from '@/components/PhaseTracker.vue'
 import SectionNav from '@/components/SectionNav.vue'
 import { useDocument } from '@/composables/useDocument'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import { phasesFromMeta } from '@/lib/phases'
 import { sectionNavItems } from '@/lib/toc'
 
@@ -13,6 +14,17 @@ const props = defineProps<{ id: string }>()
 
 const route = useRoute()
 const { doc, loading, error, refresh } = useDocument(toRef(props, 'id'))
+
+// Live updates: quietly refetch this document when the agent edits it over
+// MCP. A *silent* refresh swaps the doc in place without toggling `loading`,
+// so the content isn't torn down and rebuilt — the reader's scroll position
+// survives and (from P3) the changed block can flash. blockId is empty until
+// P3, so this is refresh-only for now.
+useLiveRefresh('documents', {
+  refresh: () => refresh({ silent: true }),
+  match: (ev) => ev.id === props.id,
+  flashTarget: (ev) => (ev.blockId ? `#${ev.blockId}` : null),
+})
 
 const phases = computed(() => phasesFromMeta(doc.value?.meta))
 const navItems = computed(() => sectionNavItems(doc.value?.body))
@@ -50,7 +62,7 @@ watch(
 
     <div v-else-if="error" class="error mn-body-sm mx-auto my-8 max-w-lg" data-test="doc-error">
       <p>could not load document: {{ error.message }}</p>
-      <button class="retry mn-mono-sm" @click="refresh">retry</button>
+      <button class="retry mn-mono-sm" @click="refresh()">retry</button>
       <RouterLink to="/" class="link mn-mono-sm">back to registry</RouterLink>
     </div>
 

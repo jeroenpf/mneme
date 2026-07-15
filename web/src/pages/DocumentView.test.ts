@@ -4,10 +4,14 @@ import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import type { Document } from '@/types'
 import { getDocument } from '@/api/documents'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import DocumentView from './DocumentView.vue'
 
 vi.mock('@/api/documents', () => ({ getDocument: vi.fn() }))
 vi.mock('@/lib/mermaid', () => ({ renderDiagram: vi.fn().mockResolvedValue('<svg></svg>') }))
+// Stub the live layer: it constructs a real EventSource (absent in jsdom).
+// Its own behaviour is covered by useLiveRefresh.test.ts.
+vi.mock('@/composables/useLiveRefresh', () => ({ useLiveRefresh: vi.fn() }))
 
 const doc: Document = {
   id: 'mneme-implementation',
@@ -101,6 +105,21 @@ describe('DocumentView', () => {
     await flushPromises()
     await w.vm.$nextTick()
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('does not re-scroll to the hash on a live refetch (same document)', async () => {
+    const w = await mountView(makeRouter(), '/doc/mneme-implementation#sp-1-7')
+    await flushPromises()
+    await w.vm.$nextTick()
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1)
+
+    // Simulate a live update: invoke the refresh handed to useLiveRefresh.
+    const opts = vi.mocked(useLiveRefresh).mock.calls[0]![1]
+    await opts.refresh()
+    await flushPromises()
+    await w.vm.$nextTick()
+    // Still one scroll — the refetch must not hijack the reader's position.
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1)
   })
 
   it('shows the error state with retry', async () => {

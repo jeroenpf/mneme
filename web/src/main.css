@@ -68,3 +68,23 @@ html, body, #app {
 .mn-anchor {
   scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
 }
+
+/* Live-update flash — briefly tints what the agent just changed, then
+   fades to transparent. Applied by web/src/lib/flash.ts. */
+@keyframes mn-flash-kf {
+  from {
+    background-color: var(--accent-dim);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.mn-flash {
+  animation: mn-flash-kf 1s ease-out;
+  border-radius: var(--radius-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mn-flash {
+    animation: none;
+  }
+}
