@@ -20,6 +20,13 @@ describe('MTaskList', () => {
     expect(rows[1].html()).toContain('<code>meta.phases[]</code>')
   })
 
+  it('gives each task row a DOM id matching the task id (block-flash target)', () => {
+    const w = mount(MTaskList, { props: { tasks } })
+    const rows = w.findAll('li')
+    expect(rows[0].attributes('id')).toBe('t1')
+    expect(rows[1].attributes('id')).toBe('t2')
+  })
+
   it('renders nothing without tasks', () => {
     expect(mount(MTaskList, { props: {} }).find('ul').exists()).toBe(false)
   })

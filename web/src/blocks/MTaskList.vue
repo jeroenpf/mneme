@@ -9,7 +9,7 @@ defineProps<{ id?: string; title?: string; tasks?: TaskItem[] }>()
   <div v-if="tasks?.length">
     <h4 v-if="title" class="mn-label mb-2">{{ title }}</h4>
     <ul class="tasks">
-      <li v-for="task in tasks" :key="task.id" class="task">
+      <li v-for="task in tasks" :id="task.id" :key="task.id" class="mn-anchor task">
         <span class="box" :class="{ done: task.done }" aria-hidden="true">{{
           task.done ? '✓' : ''
         }}</span>
