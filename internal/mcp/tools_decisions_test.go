@@ -1,6 +1,9 @@
 package mcp_test
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestLogDecisionCreateAndGet(t *testing.T) {
 	cs := newClient(t)
@@ -98,5 +101,22 @@ func TestQueryDecisions(t *testing.T) {
 	call(t, cs, "query_decisions", map[string]any{"query": "sanctum auth"}, &out)
 	if len(out.Decisions) == 0 || out.Decisions[0].Title != "Choose Sanctum for API auth" {
 		t.Fatalf("query_decisions ranking: %+v", out.Decisions)
+	}
+}
+
+func TestGetDecisionsDefaultCap(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	for i := range 25 {
+		call(t, cs, "log_decision", map[string]any{
+			"title": fmt.Sprintf("D%d", i), "decision": "x", "project": "apollo",
+		}, nil)
+	}
+	var out struct {
+		Decisions []map[string]any `json:"decisions"`
+	}
+	call(t, cs, "get_decisions", map[string]any{}, &out)
+	if len(out.Decisions) != 20 {
+		t.Errorf("default cap: got %d decisions, want 20", len(out.Decisions))
 	}
 }

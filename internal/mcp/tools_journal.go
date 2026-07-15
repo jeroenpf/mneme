@@ -86,11 +86,11 @@ type journalOutput struct {
 type getJournalInput struct {
 	Project string `json:"project,omitempty" jsonschema:"filter to a project slug; omit for all entries incl. global"`
 	Since   string `json:"since,omitempty" jsonschema:"only entries on/after this ISO date (YYYY-MM-DD) or RFC3339 timestamp"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"max rows (newest first); 0 = no limit"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"max rows (newest first); default 20, max 100"`
 }
 
 func (t *tools) getJournal(ctx context.Context, _ *sdk.CallToolRequest, in getJournalInput) (*sdk.CallToolResult, *journalOutput, error) {
-	f := store.JournalFilter{Limit: in.Limit}
+	f := store.JournalFilter{Limit: clampLimit(in.Limit, 20, 100)}
 	if p := strings.TrimSpace(in.Project); p != "" {
 		f.Project = &p
 	}

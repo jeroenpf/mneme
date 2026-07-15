@@ -109,11 +109,11 @@ type decisionsOutput struct {
 type getDecisionsInput struct {
 	Project string `json:"project,omitempty" jsonschema:"filter to a project slug; omit for all decisions incl. global"`
 	Status  string `json:"status,omitempty" jsonschema:"filter by status: proposed | accepted | deprecated"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"max rows (newest first); 0 = no limit"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"max rows (newest first); default 20, max 100"`
 }
 
 func (t *tools) getDecisions(ctx context.Context, _ *sdk.CallToolRequest, in getDecisionsInput) (*sdk.CallToolResult, *decisionsOutput, error) {
-	f := store.DecisionFilter{Limit: in.Limit}
+	f := store.DecisionFilter{Limit: clampLimit(in.Limit, 20, 100)}
 	if p := strings.TrimSpace(in.Project); p != "" {
 		f.Project = &p
 	}
@@ -134,7 +134,7 @@ func (t *tools) getDecisions(ctx context.Context, _ *sdk.CallToolRequest, in get
 type queryDecisionsInput struct {
 	Query   string `json:"query" jsonschema:"natural-language search over title, decision, rationale, alternatives, consequences"`
 	Project string `json:"project,omitempty" jsonschema:"optional project slug to scope the search"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"max ranked results; 0 = no limit"`
+	Limit   int    `json:"limit,omitempty" jsonschema:"max ranked results; default 10, max 50"`
 }
 
 func (t *tools) queryDecisions(ctx context.Context, _ *sdk.CallToolRequest, in queryDecisionsInput) (*sdk.CallToolResult, *decisionsOutput, error) {
@@ -142,7 +142,7 @@ func (t *tools) queryDecisions(ctx context.Context, _ *sdk.CallToolRequest, in q
 	if q == "" {
 		return nil, nil, errors.New("query is required")
 	}
-	f := store.DecisionFilter{Limit: in.Limit}
+	f := store.DecisionFilter{Limit: clampLimit(in.Limit, 10, 50)}
 	if p := strings.TrimSpace(in.Project); p != "" {
 		f.Project = &p
 	}

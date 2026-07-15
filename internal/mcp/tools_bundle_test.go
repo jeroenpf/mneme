@@ -1,6 +1,9 @@
 package mcp_test
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestGetContextBundle(t *testing.T) {
 	cs := newClient(t)
@@ -17,33 +20,20 @@ func TestGetContextBundle(t *testing.T) {
 		"project": "apollo", "key": "API_PORT", "value": "8443",
 	}, nil)
 
-	var b struct {
-		Project   string            `json:"project"`
-		Memory    map[string]string `json:"memory"`
-		Decisions []struct {
-			Title string `json:"title"`
-		} `json:"decisions"`
-		Env []struct {
-			Key   string `json:"key"`
-			Value string `json:"value"`
-		} `json:"env"`
-		Markdown string `json:"markdown"`
+	// The MCP handler returns only the pre-rendered markdown digest — no
+	// structured project/memory/decisions/env fields.
+	var m map[string]any
+	call(t, cs, "get_context_bundle", map[string]any{"project": "apollo"}, &m)
+	md, _ := m["markdown"].(string)
+	if md == "" {
+		t.Errorf("bundle markdown empty")
 	}
-	call(t, cs, "get_context_bundle", map[string]any{"project": "apollo"}, &b)
-	if b.Project != "apollo" {
-		t.Fatalf("project: %q", b.Project)
+	if len(m) != 1 {
+		t.Errorf("bundle should return only markdown, got keys %v", m)
 	}
-	if b.Memory["db"] != "postgres" {
-		t.Errorf("memory not assembled: %v", b.Memory)
-	}
-	if len(b.Decisions) != 1 || b.Decisions[0].Title != "use pgx" {
-		t.Errorf("decisions: %+v", b.Decisions)
-	}
-	if len(b.Env) != 1 || b.Env[0].Key != "API_PORT" || b.Env[0].Value != "8443" {
-		t.Errorf("env not assembled: %+v", b.Env)
-	}
-	if b.Markdown == "" {
-		t.Error("expected a markdown digest")
+	// The digest still carries everything that was assembled.
+	if !strings.Contains(md, "use pgx") {
+		t.Errorf("digest lost the assembled decision: %q", md)
 	}
 }
 

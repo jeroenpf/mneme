@@ -47,25 +47,42 @@ func TestPushDocumentCreatesThenUpserts(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
 
-	var first models.Document
-	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), &first)
-	if first.ID != "vehicle-api" {
-		t.Errorf("created id: got %q, want vehicle-api", first.ID)
+	var first struct {
+		ID    string           `json:"id"`
+		Title string           `json:"title"`
+		Doc   *models.Document `json:"doc"`
 	}
-	if first.Title != "Vehicle Listing API" {
-		t.Errorf("title: got %q", first.Title)
+	p1 := samplePlan("vehicle-api", "apollo")
+	p1["return_doc"] = true
+	call(t, cs, "push_document", p1, &first)
+	if first.ID != "vehicle-api" || first.Title != "Vehicle Listing API" {
+		t.Errorf("summary fields: got %+v", first)
 	}
 
 	// Re-push with a different title — should upsert (no duplicate id error).
-	payload := samplePlan("vehicle-api", "apollo")
-	payload["meta"].(map[string]any)["title"] = "Vehicle Listing API v2"
-	var second models.Document
-	call(t, cs, "push_document", payload, &second)
+	p2 := samplePlan("vehicle-api", "apollo")
+	p2["meta"].(map[string]any)["title"] = "Vehicle Listing API v2"
+	p2["return_doc"] = true
+	var second struct {
+		Title string           `json:"title"`
+		Doc   *models.Document `json:"doc"`
+	}
+	call(t, cs, "push_document", p2, &second)
 	if second.Title != "Vehicle Listing API v2" {
 		t.Errorf("upsert title: got %q", second.Title)
 	}
-	if !second.CreatedAt.Equal(first.CreatedAt) {
-		t.Errorf("upsert lost created_at: first=%v second=%v", first.CreatedAt, second.CreatedAt)
+	if !second.Doc.CreatedAt.Equal(first.Doc.CreatedAt) {
+		t.Errorf("upsert lost created_at")
+	}
+
+	// A default push (no return_doc) carries neither the body nor the doc.
+	var m map[string]any
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), &m)
+	if _, ok := m["body"]; ok {
+		t.Errorf("push_document leaked body by default")
+	}
+	if _, ok := m["doc"]; ok {
+		t.Errorf("push_document leaked doc without return_doc")
 	}
 }
 
@@ -252,20 +269,27 @@ func TestTickAndUpdateTask(t *testing.T) {
 	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), nil)
 
 	var first struct {
-		Task map[string]any `json:"task"`
+		TaskID string           `json:"task_id"`
+		Done   bool             `json:"done"`
+		Doc    *models.Document `json:"doc"`
 	}
 	call(t, cs, "tick_task", map[string]any{"doc_id": "vehicle-api", "task_id": "t-001"}, &first)
-	if done, _ := first.Task["done"].(bool); !done {
-		t.Errorf("tick_task: expected done=true, got %+v", first.Task)
+	if !first.Done {
+		t.Errorf("tick_task: expected done=true, got %+v", first)
+	}
+	if first.Doc != nil {
+		t.Errorf("tick_task must omit doc by default")
 	}
 
-	// Tick again — toggles off.
-	var second struct {
-		Task map[string]any `json:"task"`
+	// return_doc:true re-attaches the full document (and toggles t-001 back off).
+	var withDoc struct {
+		Doc *models.Document `json:"doc"`
 	}
-	call(t, cs, "tick_task", map[string]any{"doc_id": "vehicle-api", "task_id": "t-001"}, &second)
-	if done, _ := second.Task["done"].(bool); done {
-		t.Errorf("tick_task toggle: expected done=false, got %+v", second.Task)
+	call(t, cs, "tick_task", map[string]any{
+		"doc_id": "vehicle-api", "task_id": "t-001", "return_doc": true,
+	}, &withDoc)
+	if withDoc.Doc == nil || withDoc.Doc.ID != "vehicle-api" {
+		t.Errorf("return_doc:true must attach the full doc")
 	}
 
 	// update_task patches title and tags.
@@ -436,6 +460,38 @@ func sectionIDs(sections []any) []string {
 	return out
 }
 
+func TestSectionReturnDoc(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), nil)
+
+	var lean struct {
+		Section map[string]any   `json:"section"`
+		Doc     *models.Document `json:"doc"`
+	}
+	call(t, cs, "update_section", map[string]any{
+		"doc_id": "vehicle-api", "section_id": "overview",
+		"patch": map[string]any{"title": "Reframed"},
+	}, &lean)
+	if lean.Section["title"] != "Reframed" {
+		t.Errorf("section not returned: %+v", lean.Section)
+	}
+	if lean.Doc != nil {
+		t.Errorf("update_section must omit doc by default")
+	}
+
+	var full struct {
+		Doc *models.Document `json:"doc"`
+	}
+	call(t, cs, "update_section", map[string]any{
+		"doc_id": "vehicle-api", "section_id": "overview",
+		"patch": map[string]any{"title": "Again"}, "return_doc": true,
+	}, &full)
+	if full.Doc == nil {
+		t.Errorf("return_doc:true must attach doc")
+	}
+}
+
 func TestAdvancePhase(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
@@ -443,9 +499,10 @@ func TestAdvancePhase(t *testing.T) {
 
 	// Plan starts: [done, wip, todo] — advance flips API Layer to done, Frontend to wip.
 	var out struct {
-		CompletedIndex int              `json:"completed_index"`
-		NextIndex      *int             `json:"next_index"`
-		Doc            *models.Document `json:"doc"`
+		CompletedIndex int    `json:"completed_index"`
+		NextIndex      *int   `json:"next_index"`
+		PhaseCurrent   *int   `json:"phase_current"`
+		Status         string `json:"status"`
 	}
 	call(t, cs, "advance_phase", map[string]any{"doc_id": "vehicle-api"}, &out)
 	if out.CompletedIndex != 1 {
@@ -454,24 +511,28 @@ func TestAdvancePhase(t *testing.T) {
 	if out.NextIndex == nil || *out.NextIndex != 2 {
 		t.Errorf("next_index: got %v, want 2", out.NextIndex)
 	}
-	if out.Doc.PhaseCurrent == nil || *out.Doc.PhaseCurrent != 3 {
-		t.Errorf("phase_current: got %v, want 3", out.Doc.PhaseCurrent)
+	if out.PhaseCurrent == nil || *out.PhaseCurrent != 3 {
+		t.Errorf("phase_current: got %v, want 3", out.PhaseCurrent)
 	}
 
-	// Advance again — frontend done, no more todo → status flips to complete.
-	// Fresh struct so the omitempty next_index from the previous call
-	// doesn't bleed through.
+	// Advance again with return_doc — frontend done, no more todo → status
+	// flips to complete, and the full doc is attached on request. Fresh
+	// struct so the omitempty next_index from the previous call doesn't
+	// bleed through.
 	var final struct {
-		CompletedIndex int              `json:"completed_index"`
-		NextIndex      *int             `json:"next_index"`
-		Doc            *models.Document `json:"doc"`
+		NextIndex *int             `json:"next_index"`
+		Status    string           `json:"status"`
+		Doc       *models.Document `json:"doc"`
 	}
-	call(t, cs, "advance_phase", map[string]any{"doc_id": "vehicle-api"}, &final)
+	call(t, cs, "advance_phase", map[string]any{"doc_id": "vehicle-api", "return_doc": true}, &final)
 	if final.NextIndex != nil {
 		t.Errorf("next_index after final: got %v, want nil", final.NextIndex)
 	}
-	if final.Doc.Status != models.StatusComplete {
-		t.Errorf("status after final advance: %q, want complete", final.Doc.Status)
+	if final.Status != models.StatusComplete {
+		t.Errorf("status: %q, want complete", final.Status)
+	}
+	if final.Doc == nil {
+		t.Errorf("return_doc:true must attach doc")
 	}
 
 	// Third advance should error — nothing left.

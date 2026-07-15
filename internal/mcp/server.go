@@ -19,7 +19,7 @@ import (
 // Implementation identifies this server in MCP handshakes.
 var implementation = &sdk.Implementation{
 	Name:    "mneme",
-	Version: "1.4.0",
+	Version: "1.5.0",
 }
 
 // instructions is surfaced to MCP clients (Claude Code et al.) on connect.
@@ -39,7 +39,7 @@ Use search(q, types?) for a single ranked query across every content type (docum
 
 push_document is upsert-by-meta.id — reserve it for new documents or full rewrites. A document's project must already exist; call create_project(slug, name) once to register a new project before pushing documents that reference it.
 
-At the START of every session, call get_context_bundle(project, area?) — one call returns merged memory, the active plan's status, recent decisions, relevant snippets, and recent journal entries, as both structured data and a paste-ready digest. Prefer it over calling get_memory / get_decisions / get_snippets / get_journal individually at startup.
+At the START of every session, call get_context_bundle(project, area?) — one call returns merged memory, the active plan's status, recent decisions, relevant snippets, and recent journal entries, as a paste-ready markdown digest. Prefer it over calling get_memory / get_decisions / get_snippets / get_journal individually at startup.
 
 At session start, call get_memory(scope) to load persistent context (global, or project/area for the active project) instead of asking the user to re-explain. Use set_memory to record durable facts worth carrying across sessions.
 
@@ -105,7 +105,7 @@ type tools struct {
 func (t *tools) register(s *sdk.Server) {
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "push_document",
-		Description: "Create or upsert a document by meta.id. Validates block types and inline-only content shape. Returns the stored document.",
+		Description: "Create or upsert a document by meta.id. Validates block types and inline-only content. Returns a compact summary (no body); pass return_doc:true for the full stored document.",
 	}, t.pushDocument)
 
 	sdk.AddTool(s, &sdk.Tool{
@@ -150,12 +150,12 @@ func (t *tools) register(s *sdk.Server) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "get_decisions",
-		Description: "List decisions newest-first, optionally filtered by project and/or status. Returns full records (rationale, alternatives, consequences).",
+		Description: "List decisions newest-first, optionally filtered by project and/or status. Returns full records (rationale, alternatives, consequences) (default 20, max 100).",
 	}, t.getDecisions)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "query_decisions",
-		Description: "Full-text search decisions ranked by relevance — answers \"why did we choose X?\". Searches title, decision, rationale, alternatives, consequences. Optional project scope.",
+		Description: "Full-text search decisions ranked by relevance — answers \"why did we choose X?\". Searches title, decision, rationale, alternatives, consequences. Optional project scope (default 10, max 50).",
 	}, t.queryDecisions)
 
 	sdk.AddTool(s, &sdk.Tool{
@@ -165,12 +165,12 @@ func (t *tools) register(s *sdk.Server) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "get_snippets",
-		Description: "List snippets newest-first, optionally filtered by project, language, and/or tag. Returns full records including content.",
+		Description: "List snippets newest-first, optionally filtered by project, language, and/or tag. Returns full records including content (default 20, max 100).",
 	}, t.getSnippets)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "search_snippets",
-		Description: "Full-text search snippets ranked by relevance — answers \"how do we do X in this project?\". Searches title, description, content. Optional project/language/tag filters.",
+		Description: "Full-text search snippets ranked by relevance — answers \"how do we do X in this project?\". Searches title, description, content. Optional project/language/tag filters (default 10, max 50).",
 	}, t.searchSnippets)
 
 	sdk.AddTool(s, &sdk.Tool{
@@ -180,7 +180,7 @@ func (t *tools) register(s *sdk.Server) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "get_journal",
-		Description: "List dev-journal entries newest-first, optionally filtered by project and/or a since date (YYYY-MM-DD or RFC3339). Use limit for just the most recent few. Returns full entries (summary, accomplished, deferred).",
+		Description: "List dev-journal entries newest-first, optionally filtered by project and/or a since date (YYYY-MM-DD or RFC3339). Use limit for just the most recent few. Returns full entries (summary, accomplished, deferred) (default 20, max 100).",
 	}, t.getJournal)
 
 	sdk.AddTool(s, &sdk.Tool{
@@ -220,17 +220,17 @@ func (t *tools) register(s *sdk.Server) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "tick_task",
-		Description: "Toggle a task's done flag. Returns the updated task.",
+		Description: "Toggle a task's done flag. Returns {task_id, done}; pass return_doc for the full updated document.",
 	}, t.tickTask)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "update_task",
-		Description: "Patch a task's title, content, done, or tags fields.",
+		Description: "Patch a task's title, content, done, or tags. Returns the updated task; pass return_doc for the full document.",
 	}, t.updateTask)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "add_task",
-		Description: "Append a task to a subphase. If after_task_id is set, insert immediately after that task.",
+		Description: "Append a task to a subphase (after_task_id to position it). Returns the new task; pass return_doc for the full document.",
 	}, t.addTask)
 
 	sdk.AddTool(s, &sdk.Tool{
@@ -240,12 +240,12 @@ func (t *tools) register(s *sdk.Server) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "update_section",
-		Description: "Patch any field on a section block (title, description, variant, content, etc.).",
+		Description: "Patch a section block's fields. Returns the patched block; pass return_doc for the full document.",
 	}, t.updateSection)
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "add_section",
-		Description: "Append a section to body.sections. If after_section_id is set, insert immediately after that section.",
+		Description: "Append a section (after_section_id to position it). Returns the new block; pass return_doc for the full document.",
 	}, t.addSection)
 
 	sdk.AddTool(s, &sdk.Tool{
@@ -255,7 +255,7 @@ func (t *tools) register(s *sdk.Server) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "advance_phase",
-		Description: "Flip the current meta.phases entry from wip to done and the next one from todo to wip. Bumps the typed phase_current column.",
+		Description: "Flip the current meta.phases entry wip->done and the next todo->wip. Returns {completed_index, next_index, phase_current, phase_total, status}; pass return_doc for the full document.",
 	}, t.advancePhase)
 
 	sdk.AddTool(s, &sdk.Tool{
@@ -265,6 +265,6 @@ func (t *tools) register(s *sdk.Server) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "update_document_meta",
-		Description: "Replace a document's meta object. Body is left untouched. Known meta keys are re-promoted to typed columns.",
+		Description: "Replace a document's meta object (body untouched). Returns a compact summary; pass return_doc:true for the full document.",
 	}, t.updateDocumentMeta)
 }

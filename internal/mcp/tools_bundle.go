@@ -15,7 +15,16 @@ type getContextBundleInput struct {
 	Area    string `json:"area,omitempty" jsonschema:"optional area within the project; adds area-scoped memory"`
 }
 
-func (t *tools) getContextBundle(ctx context.Context, _ *sdk.CallToolRequest, in getContextBundleInput) (*sdk.CallToolResult, *bundle.Bundle, error) {
+// contextBundleOutput is the MCP-facing shape of get_context_bundle: only
+// the pre-rendered markdown digest. The structured bundle.Bundle (with
+// separate memory/decisions/snippets/env/journal fields) is still served
+// over REST at /api/v1/bundle for the Vue viewer — here we ship just the
+// digest, since duplicating it as structured data doubled the tokens.
+type contextBundleOutput struct {
+	Markdown string `json:"markdown"`
+}
+
+func (t *tools) getContextBundle(ctx context.Context, _ *sdk.CallToolRequest, in getContextBundleInput) (*sdk.CallToolResult, *contextBundleOutput, error) {
 	project := strings.TrimSpace(in.Project)
 	if project == "" {
 		return nil, nil, errors.New("project is required")
@@ -28,5 +37,5 @@ func (t *tools) getContextBundle(ctx context.Context, _ *sdk.CallToolRequest, in
 	if err != nil {
 		return nil, nil, translateStoreErr(err)
 	}
-	return nil, b, nil
+	return nil, &contextBundleOutput{Markdown: b.Markdown}, nil
 }

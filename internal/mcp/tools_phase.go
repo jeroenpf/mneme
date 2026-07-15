@@ -12,22 +12,28 @@ import (
 
 // advancePhaseInput is the argument shape for advance_phase.
 type advancePhaseInput struct {
-	DocID string `json:"doc_id" jsonschema:"document id"`
+	DocID     string `json:"doc_id" jsonschema:"document id"`
+	ReturnDoc bool   `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
 
-// advancePhaseOutput tells the caller which phase index just finished
-// and which (if any) is now wip.
-type advancePhaseOutput struct {
+// advancePhaseResult tells the caller which phase index just finished,
+// which (if any) is now wip, and the resulting phase counters + doc
+// status — enough to orient without the full document. The document is
+// attached only when the caller passes return_doc.
+type advancePhaseResult struct {
 	CompletedIndex int              `json:"completed_index"`
 	NextIndex      *int             `json:"next_index,omitempty"`
-	Doc            *models.Document `json:"doc"`
+	PhaseCurrent   *int             `json:"phase_current,omitempty"`
+	PhaseTotal     *int             `json:"phase_total,omitempty"`
+	Status         string           `json:"status"`
+	Doc            *models.Document `json:"doc,omitempty"`
 }
 
 // advancePhase flips the currently-wip entry in meta.phases to done
 // and the next entry from todo to wip. If there's no wip entry yet
 // (e.g. brand-new plan), the first todo entry is promoted to wip
 // without anything being completed.
-func (t *tools) advancePhase(ctx context.Context, _ *sdk.CallToolRequest, in advancePhaseInput) (*sdk.CallToolResult, *advancePhaseOutput, error) {
+func (t *tools) advancePhase(ctx context.Context, _ *sdk.CallToolRequest, in advancePhaseInput) (*sdk.CallToolResult, *advancePhaseResult, error) {
 	if in.DocID == "" {
 		return nil, nil, errors.New("doc_id is required")
 	}
@@ -56,7 +62,7 @@ func (t *tools) advancePhase(ctx context.Context, _ *sdk.CallToolRequest, in adv
 		}
 	}
 
-	out := &advancePhaseOutput{CompletedIndex: -1}
+	out := &advancePhaseResult{CompletedIndex: -1}
 	if wipIdx >= 0 {
 		phasesRaw[wipIdx].(map[string]any)["status"] = "done"
 		out.CompletedIndex = wipIdx
@@ -107,6 +113,11 @@ func (t *tools) advancePhase(ctx context.Context, _ *sdk.CallToolRequest, in adv
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
-	out.Doc = doc
+	out.PhaseCurrent = doc.PhaseCurrent
+	out.PhaseTotal = doc.PhaseTotal
+	out.Status = doc.Status
+	if in.ReturnDoc {
+		out.Doc = doc
+	}
 	return nil, out, nil
 }

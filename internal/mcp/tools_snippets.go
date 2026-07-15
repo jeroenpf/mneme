@@ -113,11 +113,11 @@ type getSnippetsInput struct {
 	Project  string `json:"project,omitempty" jsonschema:"filter to a project slug; omit for all snippets incl. global"`
 	Language string `json:"language,omitempty" jsonschema:"filter by source language (case-insensitive)"`
 	Tag      string `json:"tag,omitempty" jsonschema:"filter to snippets carrying this tag"`
-	Limit    int    `json:"limit,omitempty" jsonschema:"max rows (newest first); 0 = no limit"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"max rows (newest first); default 20, max 100"`
 }
 
 func (t *tools) getSnippets(ctx context.Context, _ *sdk.CallToolRequest, in getSnippetsInput) (*sdk.CallToolResult, *snippetsOutput, error) {
-	f := snippetFilterFrom(in.Project, in.Language, in.Tag, in.Limit)
+	f := snippetFilterFrom(in.Project, in.Language, in.Tag, clampLimit(in.Limit, 20, 100))
 	sns, err := t.store.ListSnippets(ctx, f)
 	if err != nil {
 		return nil, nil, translateStoreErr(err)
@@ -130,7 +130,7 @@ type searchSnippetsInput struct {
 	Project  string `json:"project,omitempty" jsonschema:"optional project slug to scope the search"`
 	Language string `json:"language,omitempty" jsonschema:"optional source language filter (case-insensitive)"`
 	Tag      string `json:"tag,omitempty" jsonschema:"optional tag filter"`
-	Limit    int    `json:"limit,omitempty" jsonschema:"max ranked results; 0 = no limit"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"max ranked results; default 10, max 50"`
 }
 
 func (t *tools) searchSnippets(ctx context.Context, _ *sdk.CallToolRequest, in searchSnippetsInput) (*sdk.CallToolResult, *snippetsOutput, error) {
@@ -138,7 +138,7 @@ func (t *tools) searchSnippets(ctx context.Context, _ *sdk.CallToolRequest, in s
 	if q == "" {
 		return nil, nil, errors.New("query is required")
 	}
-	f := snippetFilterFrom(in.Project, in.Language, in.Tag, in.Limit)
+	f := snippetFilterFrom(in.Project, in.Language, in.Tag, clampLimit(in.Limit, 10, 50))
 	sns, err := t.store.SearchSnippets(ctx, q, f)
 	if err != nil {
 		return nil, nil, translateStoreErr(err)

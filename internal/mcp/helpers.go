@@ -44,6 +44,24 @@ func summarize(d *models.Document) docSummary {
 	}
 }
 
+// docWriteResult is the lean confirmation for push_document /
+// update_document_meta: the document's meta summary, no body. The full
+// document is attached solely when the caller passes return_doc.
+type docWriteResult struct {
+	docSummary
+	Doc *models.Document `json:"doc,omitempty"`
+}
+
+// writeResult builds a docWriteResult, attaching the full document only
+// when returnDoc is set.
+func writeResult(doc *models.Document, returnDoc bool) *docWriteResult {
+	r := &docWriteResult{docSummary: summarize(doc)}
+	if returnDoc {
+		r.Doc = doc
+	}
+	return r
+}
+
 // translateStoreErr maps known store errors to messages aimed at the
 // LLM caller. Returned errors become CallToolResult IsError content.
 func translateStoreErr(err error) error {
