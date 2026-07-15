@@ -47,25 +47,42 @@ func TestPushDocumentCreatesThenUpserts(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
 
-	var first models.Document
-	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), &first)
-	if first.ID != "vehicle-api" {
-		t.Errorf("created id: got %q, want vehicle-api", first.ID)
+	var first struct {
+		ID    string           `json:"id"`
+		Title string           `json:"title"`
+		Doc   *models.Document `json:"doc"`
 	}
-	if first.Title != "Vehicle Listing API" {
-		t.Errorf("title: got %q", first.Title)
+	p1 := samplePlan("vehicle-api", "apollo")
+	p1["return_doc"] = true
+	call(t, cs, "push_document", p1, &first)
+	if first.ID != "vehicle-api" || first.Title != "Vehicle Listing API" {
+		t.Errorf("summary fields: got %+v", first)
 	}
 
 	// Re-push with a different title — should upsert (no duplicate id error).
-	payload := samplePlan("vehicle-api", "apollo")
-	payload["meta"].(map[string]any)["title"] = "Vehicle Listing API v2"
-	var second models.Document
-	call(t, cs, "push_document", payload, &second)
+	p2 := samplePlan("vehicle-api", "apollo")
+	p2["meta"].(map[string]any)["title"] = "Vehicle Listing API v2"
+	p2["return_doc"] = true
+	var second struct {
+		Title string           `json:"title"`
+		Doc   *models.Document `json:"doc"`
+	}
+	call(t, cs, "push_document", p2, &second)
 	if second.Title != "Vehicle Listing API v2" {
 		t.Errorf("upsert title: got %q", second.Title)
 	}
-	if !second.CreatedAt.Equal(first.CreatedAt) {
-		t.Errorf("upsert lost created_at: first=%v second=%v", first.CreatedAt, second.CreatedAt)
+	if !second.Doc.CreatedAt.Equal(first.Doc.CreatedAt) {
+		t.Errorf("upsert lost created_at")
+	}
+
+	// A default push (no return_doc) carries neither the body nor the doc.
+	var m map[string]any
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), &m)
+	if _, ok := m["body"]; ok {
+		t.Errorf("push_document leaked body by default")
+	}
+	if _, ok := m["doc"]; ok {
+		t.Errorf("push_document leaked doc without return_doc")
 	}
 }
 
