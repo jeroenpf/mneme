@@ -44,7 +44,9 @@ func (t *tools) advancePhase(ctx context.Context, _ *sdk.CallToolRequest, in adv
 
 	phasesRaw, ok := doc.Meta["phases"].([]any)
 	if !ok || len(phasesRaw) == 0 {
-		return nil, nil, errors.New("meta.phases is missing or empty — nothing to advance")
+		// No authored phases[] array — fall back to bumping the typed
+		// phase_current counter (the shape some plans track progress with).
+		return t.advancePhaseByCounter(ctx, doc, in.ReturnDoc)
 	}
 
 	// Locate the currently-wip phase.
@@ -117,6 +119,56 @@ func (t *tools) advancePhase(ctx context.Context, _ *sdk.CallToolRequest, in adv
 	out.PhaseTotal = doc.PhaseTotal
 	out.Status = doc.Status
 	if in.ReturnDoc {
+		out.Doc = doc
+	}
+	return nil, out, nil
+}
+
+// advancePhaseByCounter advances a plan that tracks progress with the
+// typed phase_current/phase_total counters but carries no meta.phases[]
+// array. It bumps phase_current by one; when the counter reaches
+// phase_total the document flips to complete instead of advancing. With
+// no phase_total it bumps but never auto-completes. It errors only when
+// the plan is already complete or has no phase_current to bump. The
+// completed_index/next_index it reports are virtual 0-based indices
+// derived from the 1-based phase_current.
+func (t *tools) advancePhaseByCounter(ctx context.Context, doc *models.Document, returnDoc bool) (*sdk.CallToolResult, *advancePhaseResult, error) {
+	if doc.PhaseCurrent == nil {
+		return nil, nil, errors.New("cannot advance: plan has neither meta.phases[] nor phase_current — set one via update_document_meta first")
+	}
+	old := *doc.PhaseCurrent
+	out := &advancePhaseResult{CompletedIndex: old - 1}
+
+	total := 0
+	if doc.PhaseTotal != nil {
+		total = *doc.PhaseTotal
+	}
+	switch {
+	case total > 0 && old >= total:
+		if doc.Status == models.StatusComplete {
+			return nil, nil, errors.New("nothing to advance — plan already complete")
+		}
+		if doc.Status == models.StatusInProgress || doc.Status == models.StatusTodo {
+			doc.Status = models.StatusComplete
+		}
+	default:
+		next := old + 1
+		doc.PhaseCurrent = &next
+		idx := next - 1
+		out.NextIndex = &idx
+	}
+
+	doc.Meta["phase_current"] = float64(*doc.PhaseCurrent)
+	if doc.PhaseTotal != nil {
+		doc.Meta["phase_total"] = float64(*doc.PhaseTotal)
+	}
+	if err := t.saveDoc(ctx, doc); err != nil {
+		return nil, nil, err
+	}
+	out.PhaseCurrent = doc.PhaseCurrent
+	out.PhaseTotal = doc.PhaseTotal
+	out.Status = doc.Status
+	if returnDoc {
 		out.Doc = doc
 	}
 	return nil, out, nil

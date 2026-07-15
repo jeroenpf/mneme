@@ -155,18 +155,26 @@ func walkSectionsByID(blocks []any, id string) (parent []any, idx int, block map
 	return nil, 0, nil
 }
 
-// walkTaskByID scans every subphase reachable from blocks (including
-// nested in section children) and finds a task whose "id" matches id.
-// Returns the subphase block (whose "tasks" array owns the task), the
-// index within that array, and the task map. Returns (nil, 0, nil) if
-// no match.
-func walkTaskByID(blocks []any, id string) (subphase map[string]any, idx int, task map[string]any) {
+// hasTasks reports whether a block owns a "tasks" array. The two plan
+// block types that carry tasks are subphase and task-list; tick/update/
+// remove/add_task should reach into either.
+func hasTasks(b map[string]any) bool {
+	t, _ := b["type"].(string)
+	return t == "subphase" || t == "task-list"
+}
+
+// walkTaskByID scans every task-holding block reachable from blocks
+// (subphase or task-list, including nested in section children) and
+// finds a task whose "id" matches id. Returns the container block (whose
+// "tasks" array owns the task), the index within that array, and the
+// task map. Returns (nil, 0, nil) if no match.
+func walkTaskByID(blocks []any, id string) (container map[string]any, idx int, task map[string]any) {
 	for _, raw := range blocks {
 		b, ok := raw.(map[string]any)
 		if !ok {
 			continue
 		}
-		if b["type"] == "subphase" {
+		if hasTasks(b) {
 			tasks, _ := b["tasks"].([]any)
 			for i, traw := range tasks {
 				tm, ok := traw.(map[string]any)
@@ -179,28 +187,29 @@ func walkTaskByID(blocks []any, id string) (subphase map[string]any, idx int, ta
 			}
 		}
 		if children, ok := b["children"].([]any); ok {
-			if sp, ix, tm := walkTaskByID(children, id); tm != nil {
-				return sp, ix, tm
+			if c, ix, tm := walkTaskByID(children, id); tm != nil {
+				return c, ix, tm
 			}
 		}
 	}
 	return nil, 0, nil
 }
 
-// findSubphase finds a subphase block by id (anywhere in the tree).
-func findSubphase(blocks []any, id string) map[string]any {
+// findTaskContainer finds a task-holding block (subphase or task-list) by
+// id, anywhere in the tree.
+func findTaskContainer(blocks []any, id string) map[string]any {
 	for _, raw := range blocks {
 		b, ok := raw.(map[string]any)
 		if !ok {
 			continue
 		}
-		if b["type"] == "subphase" {
+		if hasTasks(b) {
 			if bid, _ := b["id"].(string); bid == id {
 				return b
 			}
 		}
 		if children, ok := b["children"].([]any); ok {
-			if found := findSubphase(children, id); found != nil {
+			if found := findTaskContainer(children, id); found != nil {
 				return found
 			}
 		}
