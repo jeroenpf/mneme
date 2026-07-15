@@ -252,20 +252,27 @@ func TestTickAndUpdateTask(t *testing.T) {
 	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), nil)
 
 	var first struct {
-		Task map[string]any `json:"task"`
+		TaskID string           `json:"task_id"`
+		Done   bool             `json:"done"`
+		Doc    *models.Document `json:"doc"`
 	}
 	call(t, cs, "tick_task", map[string]any{"doc_id": "vehicle-api", "task_id": "t-001"}, &first)
-	if done, _ := first.Task["done"].(bool); !done {
-		t.Errorf("tick_task: expected done=true, got %+v", first.Task)
+	if !first.Done {
+		t.Errorf("tick_task: expected done=true, got %+v", first)
+	}
+	if first.Doc != nil {
+		t.Errorf("tick_task must omit doc by default")
 	}
 
-	// Tick again — toggles off.
-	var second struct {
-		Task map[string]any `json:"task"`
+	// return_doc:true re-attaches the full document (and toggles t-001 back off).
+	var withDoc struct {
+		Doc *models.Document `json:"doc"`
 	}
-	call(t, cs, "tick_task", map[string]any{"doc_id": "vehicle-api", "task_id": "t-001"}, &second)
-	if done, _ := second.Task["done"].(bool); done {
-		t.Errorf("tick_task toggle: expected done=false, got %+v", second.Task)
+	call(t, cs, "tick_task", map[string]any{
+		"doc_id": "vehicle-api", "task_id": "t-001", "return_doc": true,
+	}, &withDoc)
+	if withDoc.Doc == nil || withDoc.Doc.ID != "vehicle-api" {
+		t.Errorf("return_doc:true must attach the full doc")
 	}
 
 	// update_task patches title and tags.

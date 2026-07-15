@@ -10,22 +10,30 @@ import (
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
 
-// taskOutput is the structured payload returned from task-editing
-// tools. The doc field carries the freshly-saved document so the
-// caller can avoid a follow-up get_document.
-type taskOutput struct {
+// tickResult is the lean payload from tick_task: just the flipped
+// state. taskResult carries the edited task for update/add. Both attach
+// the full document only when the caller passes return_doc, so a routine
+// edit no longer re-serializes the whole plan into the session context.
+type tickResult struct {
+	TaskID string           `json:"task_id"`
+	Done   bool             `json:"done"`
+	Doc    *models.Document `json:"doc,omitempty"`
+}
+
+type taskResult struct {
 	Task map[string]any   `json:"task"`
-	Doc  *models.Document `json:"doc"`
+	Doc  *models.Document `json:"doc,omitempty"`
 }
 
 // --- tick_task --------------------------------------------------------
 
 type tickTaskInput struct {
-	DocID  string `json:"doc_id" jsonschema:"document id"`
-	TaskID string `json:"task_id" jsonschema:"task id within the document body"`
+	DocID     string `json:"doc_id" jsonschema:"document id"`
+	TaskID    string `json:"task_id" jsonschema:"task id within the document body"`
+	ReturnDoc bool   `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
 
-func (t *tools) tickTask(ctx context.Context, _ *sdk.CallToolRequest, in tickTaskInput) (*sdk.CallToolResult, *taskOutput, error) {
+func (t *tools) tickTask(ctx context.Context, _ *sdk.CallToolRequest, in tickTaskInput) (*sdk.CallToolResult, *tickResult, error) {
 	if in.TaskID == "" {
 		return nil, nil, errors.New("task_id is required")
 	}
@@ -41,15 +49,20 @@ func (t *tools) tickTask(ctx context.Context, _ *sdk.CallToolRequest, in tickTas
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
-	return nil, &taskOutput{Task: task, Doc: doc}, nil
+	out := &tickResult{TaskID: in.TaskID, Done: !current}
+	if in.ReturnDoc {
+		out.Doc = doc
+	}
+	return nil, out, nil
 }
 
 // --- update_task ------------------------------------------------------
 
 type updateTaskInput struct {
-	DocID  string         `json:"doc_id" jsonschema:"document id"`
-	TaskID string         `json:"task_id" jsonschema:"task id"`
-	Patch  map[string]any `json:"patch" jsonschema:"fields to overwrite — supports title, content, done, tags"`
+	DocID     string         `json:"doc_id" jsonschema:"document id"`
+	TaskID    string         `json:"task_id" jsonschema:"task id"`
+	Patch     map[string]any `json:"patch" jsonschema:"fields to overwrite — supports title, content, done, tags"`
+	ReturnDoc bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
 
 var taskUpdatableFields = map[string]bool{
@@ -59,7 +72,7 @@ var taskUpdatableFields = map[string]bool{
 	"tags":    true,
 }
 
-func (t *tools) updateTask(ctx context.Context, _ *sdk.CallToolRequest, in updateTaskInput) (*sdk.CallToolResult, *taskOutput, error) {
+func (t *tools) updateTask(ctx context.Context, _ *sdk.CallToolRequest, in updateTaskInput) (*sdk.CallToolResult, *taskResult, error) {
 	if in.TaskID == "" {
 		return nil, nil, errors.New("task_id is required")
 	}
@@ -84,7 +97,11 @@ func (t *tools) updateTask(ctx context.Context, _ *sdk.CallToolRequest, in updat
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
-	return nil, &taskOutput{Task: task, Doc: doc}, nil
+	out := &taskResult{Task: task}
+	if in.ReturnDoc {
+		out.Doc = doc
+	}
+	return nil, out, nil
 }
 
 // --- add_task ---------------------------------------------------------
@@ -94,9 +111,10 @@ type addTaskInput struct {
 	SectionID   string         `json:"section_id" jsonschema:"subphase id this task belongs to"`
 	Task        map[string]any `json:"task" jsonschema:"task object — must include id; typical fields: title, content, done, tags"`
 	AfterTaskID string         `json:"after_task_id,omitempty" jsonschema:"insert immediately after this task id (otherwise appends)"`
+	ReturnDoc   bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
 
-func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskInput) (*sdk.CallToolResult, *taskOutput, error) {
+func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskInput) (*sdk.CallToolResult, *taskResult, error) {
 	if in.SectionID == "" {
 		return nil, nil, errors.New("section_id is required")
 	}
@@ -148,7 +166,11 @@ func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskI
 	if err := t.saveDoc(ctx, doc); err != nil {
 		return nil, nil, err
 	}
-	return nil, &taskOutput{Task: in.Task, Doc: doc}, nil
+	out := &taskResult{Task: in.Task}
+	if in.ReturnDoc {
+		out.Doc = doc
+	}
+	return nil, out, nil
 }
 
 // --- remove_task ------------------------------------------------------
