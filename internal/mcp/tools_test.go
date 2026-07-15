@@ -361,6 +361,61 @@ func TestAddAndRemoveTask(t *testing.T) {
 	}
 }
 
+func TestTaskToolsOnTaskListBlock(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	// A plan whose steps live in a task-list block, not a subphase.
+	call(t, cs, "push_document", map[string]any{
+		"meta": map[string]any{"id": "tl", "title": "TL", "type": "plan", "project": "apollo"},
+		"body": map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "s", "title": "Steps", "children": []any{
+				map[string]any{"type": "task-list", "id": "tlist", "title": "Backlog", "tasks": []any{
+					map[string]any{"id": "k-1", "title": "First", "done": false},
+					map[string]any{"id": "k-2", "title": "Second", "done": false},
+				}},
+			}},
+		}},
+	}, nil)
+
+	var ticked struct {
+		TaskID string `json:"task_id"`
+		Done   bool   `json:"done"`
+	}
+	call(t, cs, "tick_task", map[string]any{"doc_id": "tl", "task_id": "k-1"}, &ticked)
+	if !ticked.Done {
+		t.Errorf("tick_task on task-list: %+v", ticked)
+	}
+
+	var patched struct {
+		Task map[string]any `json:"task"`
+	}
+	call(t, cs, "update_task", map[string]any{
+		"doc_id": "tl", "task_id": "k-2", "patch": map[string]any{"title": "Renamed"},
+	}, &patched)
+	if patched.Task["title"] != "Renamed" {
+		t.Errorf("update_task on task-list: %+v", patched.Task)
+	}
+
+	call(t, cs, "add_task", map[string]any{
+		"doc_id": "tl", "section_id": "tlist", "after_task_id": "k-1",
+		"task": map[string]any{"id": "k-3", "title": "Wedged"},
+	}, nil)
+	call(t, cs, "remove_task", map[string]any{"doc_id": "tl", "task_id": "k-2"}, nil)
+
+	var doc models.Document
+	call(t, cs, "get_document", map[string]any{"id": "tl"}, &doc)
+	sections, _ := doc.Body["sections"].([]any)
+	tl := sections[0].(map[string]any)["children"].([]any)[0].(map[string]any)
+	tasks, _ := tl["tasks"].([]any)
+	var ids []string
+	for _, raw := range tasks {
+		ids = append(ids, raw.(map[string]any)["id"].(string))
+	}
+	if len(ids) != 2 || ids[0] != "k-1" || ids[1] != "k-3" {
+		t.Errorf("task-list final order: got %v, want [k-1 k-3]", ids)
+	}
+}
+
 func TestUpdateSectionRejectsBlockMarkdown(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "p")

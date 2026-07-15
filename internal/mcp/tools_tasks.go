@@ -108,7 +108,7 @@ func (t *tools) updateTask(ctx context.Context, _ *sdk.CallToolRequest, in updat
 
 type addTaskInput struct {
 	DocID       string         `json:"doc_id" jsonschema:"document id"`
-	SectionID   string         `json:"section_id" jsonschema:"subphase id this task belongs to"`
+	SectionID   string         `json:"section_id" jsonschema:"id of the subphase or task-list to append the task into"`
 	Task        map[string]any `json:"task" jsonschema:"task object — must include id; typical fields: title, content, done, tags"`
 	AfterTaskID string         `json:"after_task_id,omitempty" jsonschema:"insert immediately after this task id (otherwise appends)"`
 	ReturnDoc   bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
@@ -133,12 +133,12 @@ func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskI
 	if err != nil {
 		return nil, nil, err
 	}
-	sp := findSubphase(sections, in.SectionID)
-	if sp == nil {
-		return nil, nil, fmt.Errorf("subphase %q not found", in.SectionID)
+	container := findTaskContainer(sections, in.SectionID)
+	if container == nil {
+		return nil, nil, fmt.Errorf("subphase or task-list %q not found", in.SectionID)
 	}
 
-	tasks, _ := sp["tasks"].([]any)
+	tasks, _ := container["tasks"].([]any)
 	insertAt := len(tasks)
 	if in.AfterTaskID != "" {
 		found := false
@@ -160,7 +160,7 @@ func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskI
 	tasks = append(tasks, nil)
 	copy(tasks[insertAt+1:], tasks[insertAt:])
 	tasks[insertAt] = in.Task
-	sp["tasks"] = tasks
+	container["tasks"] = tasks
 
 	setSections(doc.Body, sections)
 	if err := t.saveDoc(ctx, doc); err != nil {

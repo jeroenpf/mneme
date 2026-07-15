@@ -230,7 +230,7 @@ func (t *tools) register(s *sdk.Server) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "add_task",
-		Description: "Append a task to a subphase (after_task_id to position it). Returns the new task; pass return_doc for the full document.",
+		Description: "Append a task to a subphase or task-list block (after_task_id to position it). Returns the new task; pass return_doc for the full document.",
 	}, t.addTask)
 
 	sdk.AddTool(s, &sdk.Tool{
