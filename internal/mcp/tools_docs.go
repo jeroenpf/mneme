@@ -8,6 +8,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jeroenpfeil/mneme/internal/docmeta"
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
@@ -27,8 +28,8 @@ func requireProjectForPlan(doc *models.Document) error {
 // --- push_document ----------------------------------------------------
 
 type pushInput struct {
-	Meta map[string]any `json:"meta" jsonschema:"document meta. Keys: id (required, stable slug), title (required), type (required; one of plan, report, spec, adr, brainstorm, journal), project (project slug; REQUIRED for type=plan so the plan surfaces in get_context_bundle — the project must already exist via create_project), status (one of todo, in-progress, complete, blocked, archived; default todo — this is the DOCUMENT lifecycle status, distinct from phase/task state which uses wip/done), category, ticket, repo, tags (array of strings), phase_current + phase_total (integers, plan progress). Unknown keys are stored verbatim."`
-	Body map[string]any `json:"body" jsonschema:"document body as a block tree: {sections:[...]}. Every block needs a unique id and a type; unknown or misnamed fields are REJECTED (not silently dropped), so use these exact field names. Block shapes: section {title, content?, children?[]} — content is markdown prose under the heading, children are nested blocks; text {content}; task-list {title?, tasks:[{id, title, content?, done}]}; subphase {num, title, session?, description?, tasks[], children?[]}; callout {variant, title?, content} where variant is one of info|warn|success|danger|note; code {lang, filename?, content} where content is the code and lang is e.g. go|ts|sql|bash; diagram {title?, content} where content is mermaid source; table {title?, cols[], rows[][]}; key-value {title?, data{}}. INLINE-ONLY: every content/title/description string renders as inline markdown only (emphasis, code spans, links, :icon:). Blank lines, - / * bullet lists, 1. numbered lists, and # headings DO NOT render — they collapse to one line and the write path REJECTS them. For multiple paragraphs / lists / labelled fields, use child blocks: one text block per paragraph, callout for notes, key-value for labelled fields, table for tabular data. Exceptions: code.content and diagram.content keep their newlines."`
+	Meta      map[string]any `json:"meta" jsonschema:"document meta. Keys: id (required, stable slug), title (required), type (required; one of plan, report, spec, adr, brainstorm, journal), project (project slug; REQUIRED for type=plan so the plan surfaces in get_context_bundle — the project must already exist via create_project), status (one of todo, in-progress, complete, blocked, archived; default todo — this is the DOCUMENT lifecycle status, distinct from phase/task state which uses wip/done), category, ticket, repo, tags (array of strings), phase_current + phase_total (integers, plan progress). Unknown keys are stored verbatim."`
+	Body      map[string]any `json:"body" jsonschema:"document body as a block tree: {sections:[...]}. Every block needs a unique id and a type; unknown or misnamed fields are REJECTED (not silently dropped), so use these exact field names. Block shapes: section {title, content?, children?[]} — content is markdown prose under the heading, children are nested blocks; text {content}; task-list {title?, tasks:[{id, title, content?, done}]}; subphase {num, title, session?, description?, tasks[], children?[]}; callout {variant, title?, content} where variant is one of info|warn|success|danger|note; code {lang, filename?, content} where content is the code and lang is e.g. go|ts|sql|bash; diagram {title?, content} where content is mermaid source; table {title?, cols[], rows[][]}; key-value {title?, data{}}. INLINE-ONLY: every content/title/description string renders as inline markdown only (emphasis, code spans, links, :icon:). Blank lines, - / * bullet lists, 1. numbered lists, and # headings DO NOT render — they collapse to one line and the write path REJECTS them. For multiple paragraphs / lists / labelled fields, use child blocks: one text block per paragraph, callout for notes, key-value for labelled fields, table for tabular data. Exceptions: code.content and diagram.content keep their newlines."`
 	ReturnDoc bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full stored document; default false (a compact summary is returned)"`
 }
 
@@ -174,6 +175,7 @@ func (t *tools) archiveDocument(ctx context.Context, _ *sdk.CallToolRequest, in 
 	if err := t.store.ArchiveDocument(ctx, in.ID); err != nil {
 		return nil, nil, translateStoreErr(err)
 	}
+	t.broadcast(live.Event{Type: "documents", ID: in.ID, Op: "archive_document"})
 	return nil, &okResult{OK: true}, nil
 }
 

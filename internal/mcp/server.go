@@ -13,6 +13,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jeroenpfeil/mneme/internal/embed"
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
 
@@ -65,15 +66,20 @@ type Server struct {
 // embedding job queue write tools notify after a successful write; pass nil
 // (or a nil embed.Client-backed setup) to disable embedding — it defaults to
 // a NopEnqueuer so the tools stay agnostic to whether Voyage is configured.
+// bc is the live pub/sub broadcaster write tools notify after a successful
+// write; pass nil to disable live updates — it defaults to a NopBroadcaster.
 // client (may be nil) embeds the `search` query for hybrid ranking; nil ⇒
 // FTS-only.
-func New(st store.Store, enq embed.Enqueuer, client embed.Client) *Server {
+func New(st store.Store, enq embed.Enqueuer, bc live.Broadcaster, client embed.Client) *Server {
 	if enq == nil {
 		enq = embed.NopEnqueuer{}
 	}
+	if bc == nil {
+		bc = live.NopBroadcaster{}
+	}
 	s := &Server{
 		sdk:   sdk.NewServer(implementation, &sdk.ServerOptions{Instructions: instructions}),
-		tools: &tools{store: st, enq: enq, client: client},
+		tools: &tools{store: st, enq: enq, bc: bc, client: client},
 	}
 	s.tools.register(s.sdk)
 	return s
@@ -91,11 +97,13 @@ func (s *Server) Handler() http.Handler {
 // tools bundles the store dependency so the per-tool handler files
 // (tools_*.go) can stay focused on input/output shapes. enq receives an
 // embedding job after each successful write (a NopEnqueuer when embedding
-// is disabled). client (may be nil) embeds the `search` query for hybrid
-// ranking.
+// is disabled). bc receives a live event after each successful write (a
+// NopBroadcaster when live updates are disabled). client (may be nil)
+// embeds the `search` query for hybrid ranking.
 type tools struct {
 	store  store.Store
 	enq    embed.Enqueuer
+	bc     live.Broadcaster
 	client embed.Client
 }
 

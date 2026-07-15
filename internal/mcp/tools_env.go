@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
 
@@ -72,6 +73,7 @@ func (t *tools) setEnv(ctx context.Context, _ *sdk.CallToolRequest, in setEnvInp
 	if err := t.store.SetEnv(ctx, e); err != nil {
 		return nil, nil, translateStoreErr(err)
 	}
+	t.broadcast(live.Event{Type: "env", ID: key, Project: project})
 	return nil, e, nil
 }
 

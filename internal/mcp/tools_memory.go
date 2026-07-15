@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
@@ -104,6 +105,7 @@ func (t *tools) setMemory(ctx context.Context, _ *sdk.CallToolRequest, in setMem
 	if err := t.store.SetMemory(ctx, m); err != nil {
 		return nil, nil, translateStoreErr(err)
 	}
+	t.broadcast(live.Event{Type: "memory", ID: in.Key, Project: project})
 	return nil, m, nil
 }
 
@@ -136,5 +138,6 @@ func (t *tools) deleteMemory(ctx context.Context, _ *sdk.CallToolRequest, in del
 	if err := t.store.DeleteMemory(ctx, scope, pp, ap, in.Key); err != nil {
 		return nil, nil, translateStoreErr(err)
 	}
+	t.broadcast(live.Event{Type: "memory", ID: in.Key, Project: project, Op: "delete_memory"})
 	return nil, &okResult{OK: true}, nil
 }

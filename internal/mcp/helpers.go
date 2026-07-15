@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jeroenpfeil/mneme/internal/embed"
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
@@ -19,15 +20,15 @@ type okResult struct {
 // docSummary is the lightweight view of a document used by
 // list_documents and search_documents — body stripped.
 type docSummary struct {
-	ID           string    `json:"id"`
-	Title        string    `json:"title"`
-	Project      *string   `json:"project,omitempty"`
-	Type         string    `json:"type"`
-	Status       string    `json:"status"`
-	Ticket       *string   `json:"ticket,omitempty"`
-	Tags         []string  `json:"tags"`
-	PhaseCurrent *int      `json:"phase_current,omitempty"`
-	PhaseTotal   *int      `json:"phase_total,omitempty"`
+	ID           string   `json:"id"`
+	Title        string   `json:"title"`
+	Project      *string  `json:"project,omitempty"`
+	Type         string   `json:"type"`
+	Status       string   `json:"status"`
+	Ticket       *string  `json:"ticket,omitempty"`
+	Tags         []string `json:"tags"`
+	PhaseCurrent *int     `json:"phase_current,omitempty"`
+	PhaseTotal   *int     `json:"phase_total,omitempty"`
 }
 
 func summarize(d *models.Document) docSummary {
@@ -104,13 +105,23 @@ func (t *tools) saveDoc(ctx context.Context, doc *models.Document) error {
 	return nil
 }
 
-// enqueue notifies the embedding worker that a source changed. It's a
-// no-op when embedding is disabled (NopEnqueuer) and skips empty ids.
+// enqueue notifies the embedding worker that a source changed, and
+// broadcasts the same change to live SSE subscribers. It's a no-op when
+// embedding/live are disabled (NopEnqueuer/NopBroadcaster) and skips empty
+// ids. The broadcast is doc-level here; document edits that know their
+// changed block broadcast from their handler instead (see P3).
 func (t *tools) enqueue(sourceType, id string) {
-	if id != "" {
-		t.enq.Enqueue(embed.SourceRef{Type: sourceType, ID: id})
+	if id == "" {
+		return
 	}
+	t.enq.Enqueue(embed.SourceRef{Type: sourceType, ID: id})
+	t.bc.Broadcast(live.Event{Type: sourceType, ID: id})
 }
+
+// broadcast is the direct live hook for writes that don't route through
+// enqueue (archive, memory, env) — and, in P3, for document edits that
+// carry a block id.
+func (t *tools) broadcast(ev live.Event) { t.bc.Broadcast(ev) }
 
 // sectionsArray returns body.sections as []any, creating it if missing.
 // Mutations to the returned slice must be written back via setSections.

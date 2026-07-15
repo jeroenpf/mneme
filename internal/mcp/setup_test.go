@@ -15,6 +15,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/jeroenpfeil/mneme/internal/embed"
+	"github.com/jeroenpfeil/mneme/internal/live"
 	mcpsrv "github.com/jeroenpfeil/mneme/internal/mcp"
 	"github.com/jeroenpfeil/mneme/internal/migrations"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -88,10 +89,23 @@ func (fakeEmbedClient) Embed(_ context.Context, texts []string, _ string) ([][]f
 func newClientWith(t *testing.T, client embed.Client) *sdk.ClientSession {
 	t.Helper()
 	resetDB(t)
-
 	st := store.NewWithPool(testPool)
-	srv := mcpsrv.New(st, nil, client)
+	return connect(t, mcpsrv.New(st, nil, nil, client))
+}
 
+// newClientWithBroadcaster is newClient with an injectable live broadcaster,
+// so tests can assert which events a write emits. FTS-only (nil embed client).
+func newClientWithBroadcaster(t *testing.T, bc live.Broadcaster) *sdk.ClientSession {
+	t.Helper()
+	resetDB(t)
+	st := store.NewWithPool(testPool)
+	return connect(t, mcpsrv.New(st, nil, bc, nil))
+}
+
+// connect wires an in-memory MCP client session to srv and registers
+// teardown. Shared by the newClient* helpers.
+func connect(t *testing.T, srv *mcpsrv.Server) *sdk.ClientSession {
+	t.Helper()
 	t1, t2 := sdk.NewInMemoryTransports()
 	ctx := context.Background()
 
