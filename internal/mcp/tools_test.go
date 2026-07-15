@@ -482,9 +482,10 @@ func TestAdvancePhase(t *testing.T) {
 
 	// Plan starts: [done, wip, todo] — advance flips API Layer to done, Frontend to wip.
 	var out struct {
-		CompletedIndex int              `json:"completed_index"`
-		NextIndex      *int             `json:"next_index"`
-		Doc            *models.Document `json:"doc"`
+		CompletedIndex int    `json:"completed_index"`
+		NextIndex      *int   `json:"next_index"`
+		PhaseCurrent   *int   `json:"phase_current"`
+		Status         string `json:"status"`
 	}
 	call(t, cs, "advance_phase", map[string]any{"doc_id": "vehicle-api"}, &out)
 	if out.CompletedIndex != 1 {
@@ -493,24 +494,28 @@ func TestAdvancePhase(t *testing.T) {
 	if out.NextIndex == nil || *out.NextIndex != 2 {
 		t.Errorf("next_index: got %v, want 2", out.NextIndex)
 	}
-	if out.Doc.PhaseCurrent == nil || *out.Doc.PhaseCurrent != 3 {
-		t.Errorf("phase_current: got %v, want 3", out.Doc.PhaseCurrent)
+	if out.PhaseCurrent == nil || *out.PhaseCurrent != 3 {
+		t.Errorf("phase_current: got %v, want 3", out.PhaseCurrent)
 	}
 
-	// Advance again — frontend done, no more todo → status flips to complete.
-	// Fresh struct so the omitempty next_index from the previous call
-	// doesn't bleed through.
+	// Advance again with return_doc — frontend done, no more todo → status
+	// flips to complete, and the full doc is attached on request. Fresh
+	// struct so the omitempty next_index from the previous call doesn't
+	// bleed through.
 	var final struct {
-		CompletedIndex int              `json:"completed_index"`
-		NextIndex      *int             `json:"next_index"`
-		Doc            *models.Document `json:"doc"`
+		NextIndex *int             `json:"next_index"`
+		Status    string           `json:"status"`
+		Doc       *models.Document `json:"doc"`
 	}
-	call(t, cs, "advance_phase", map[string]any{"doc_id": "vehicle-api"}, &final)
+	call(t, cs, "advance_phase", map[string]any{"doc_id": "vehicle-api", "return_doc": true}, &final)
 	if final.NextIndex != nil {
 		t.Errorf("next_index after final: got %v, want nil", final.NextIndex)
 	}
-	if final.Doc.Status != models.StatusComplete {
-		t.Errorf("status after final advance: %q, want complete", final.Doc.Status)
+	if final.Status != models.StatusComplete {
+		t.Errorf("status: %q, want complete", final.Status)
+	}
+	if final.Doc == nil {
+		t.Errorf("return_doc:true must attach doc")
 	}
 
 	// Third advance should error — nothing left.
