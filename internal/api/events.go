@@ -25,6 +25,14 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
+	// Emit an initial comment so the very first *body* byte reaches the client
+	// immediately. A header-only flush is enough for a direct connection, but
+	// some proxies (notably Vite's dev proxy) withhold the response until the
+	// first body byte — which would otherwise be the 20s heartbeat, stalling
+	// the browser's `onopen` for 20s. This makes it fire at once.
+	if _, err := w.Write([]byte(": connected\n\n")); err != nil {
+		return
+	}
 	flusher.Flush() // open the stream so the client's onopen fires
 
 	ch, cancel := h.Hub.Subscribe()

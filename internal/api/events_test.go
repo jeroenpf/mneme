@@ -65,3 +65,37 @@ func TestEventsStream(t *testing.T) {
 		}
 	}
 }
+
+// TestEventsStreamSendsInitialByte asserts the handler writes a body byte the
+// instant the stream opens — before any broadcast or the 20s heartbeat. Some
+// proxies (notably Vite's dev proxy) withhold the whole response until the
+// first body byte; without this the browser's onopen would stall for 20s.
+func TestEventsStreamSendsInitialByte(t *testing.T) {
+	hub := live.NewHub()
+	cfg := &config.Config{CORSOrigins: []string{"*"}}
+	srv := httptest.NewServer(api.Router(cfg, nil, nil, nil, nil, hub))
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/events", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the first byte with NO broadcast. Without the initial comment this
+	// blocks until the 20s heartbeat and the 2s deadline trips.
+	got := make(chan byte, 1)
+	go func() {
+		if b, err := bufio.NewReader(resp.Body).ReadByte(); err == nil {
+			got <- b
+		}
+	}()
+	select {
+	case <-got:
+	case <-time.After(2 * time.Second):
+		t.Fatal("no initial byte within 2s — proxy would stall onopen until the heartbeat")
+	}
+}
