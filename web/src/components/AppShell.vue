@@ -1,7 +1,16 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import { useEventStream } from '@/composables/useEventStream'
 import ThemePicker from './ThemePicker.vue'
+
+// Touching the shared stream here (the app shell mounts for the whole app's
+// life) opens the singleton EventSource at boot, so live updates and the
+// status dot work on every route — not only after a live view has mounted.
+const { status } = useEventStream()
+const statusLabel = computed(() =>
+  status.value === 'open' ? 'connected' : status.value === 'connecting' ? 'connecting…' : 'disconnected',
+)
 
 // The persistent primary navigation — identical on every route. Order matches
 // the mockup (design/theme-explorations.html): Registry first, then the stores.
@@ -42,9 +51,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 <template>
   <div class="shell">
     <aside class="rail">
-      <RouterLink to="/" class="brand">
-        <span class="glyph">⬡</span><span class="word">mneme</span>
-      </RouterLink>
+      <div class="brandbar">
+        <RouterLink to="/" class="brand">
+          <span class="glyph">⬡</span><span class="word">mneme</span>
+        </RouterLink>
+        <span
+          class="conn-dot"
+          :class="`conn-${status}`"
+          data-test="conn-status"
+          :data-status="status"
+          role="status"
+          :aria-label="`Live updates: ${statusLabel}`"
+          :title="`Live updates: ${statusLabel}`"
+        />
+      </div>
 
       <div class="project"><b>mneme</b></div>
 
@@ -101,12 +121,52 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   background: var(--bg-surface);
   border-right: 1px solid var(--border);
 }
+.brandbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
 .brand {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: 2px var(--space-2);
   text-decoration: none;
+}
+/* Live-connection indicator: green when streaming, amber (pulsing) while
+   (re)connecting, red if the stream is closed. Pushed to the rail's edge. */
+.conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  margin-left: auto;
+  margin-right: var(--space-2);
+  background: var(--text-faint);
+}
+.conn-open {
+  background: var(--green);
+}
+.conn-connecting {
+  background: var(--yellow);
+  animation: conn-pulse 1.2s ease-in-out infinite;
+}
+.conn-closed {
+  background: var(--red);
+}
+@keyframes conn-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conn-connecting {
+    animation: none;
+  }
 }
 .glyph {
   color: var(--accent);

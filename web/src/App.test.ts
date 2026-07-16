@@ -1,9 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import App from './App.vue'
 import { useTheme } from '@/composables/useTheme'
+
+// AppShell (in the rail) opens the shared live stream in setup; stub it since
+// jsdom has no EventSource. Its behaviour is covered by useEventStream.test.ts.
+vi.mock('@/composables/useEventStream', () => ({
+  useEventStream: () => ({ status: ref('open'), subscribe: () => () => {}, onReconnect: () => () => {} }),
+}))
 
 const Home = defineComponent({ render: () => h('div', { 'data-test': 'page-marker' }, 'home') })
 const Blank = defineComponent({ render: () => h('div') })

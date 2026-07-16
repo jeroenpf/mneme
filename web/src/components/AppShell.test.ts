@@ -1,9 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref, type Ref } from 'vue'
 import AppShell from './AppShell.vue'
 import { useTheme } from '@/composables/useTheme'
+
+// AppShell opens the shared live stream in setup — mock it (jsdom has no
+// EventSource) and drive the status through a holder so the connection dot is
+// testable. Its own behaviour is covered by useEventStream.test.ts.
+const holder = vi.hoisted(() => ({ status: null as Ref<'connecting' | 'open' | 'closed'> | null }))
+vi.mock('@/composables/useEventStream', () => ({
+  useEventStream: () => ({
+    status: holder.status,
+    subscribe: () => () => {},
+    onReconnect: () => () => {},
+  }),
+}))
 
 const Blank = defineComponent({ render: () => h('div') })
 
@@ -42,6 +54,7 @@ beforeEach(() => {
   // Reset the useTheme module singleton (ThemePicker lives in the rail).
   useTheme().setTheme('paper')
   localStorage.clear()
+  holder.status = ref('open')
 })
 
 // The primary destinations, in the rail's order (matches the mockup).
@@ -126,6 +139,25 @@ describe('AppShell', () => {
     await input.trigger('keyup.enter')
     await flushPromises()
     expect(w.vm.$router.currentRoute.value.fullPath).toBe('/')
+  })
+
+  it('reflects the live-stream status on the connection dot', async () => {
+    holder.status = ref('connecting')
+    const w = await mountShell(makeRouter())
+    const dot = w.get('[data-test="conn-status"]')
+
+    expect(dot.classes()).toContain('conn-connecting')
+    expect(dot.attributes('aria-label')).toContain('connecting')
+
+    holder.status.value = 'open'
+    await w.vm.$nextTick()
+    expect(dot.classes()).toContain('conn-open')
+    expect(dot.attributes('aria-label')).toContain('connected')
+
+    holder.status.value = 'closed'
+    await w.vm.$nextTick()
+    expect(dot.classes()).toContain('conn-closed')
+    expect(dot.attributes('aria-label')).toContain('disconnected')
   })
 
   it('focuses the rail search when "/" is pressed outside a field', async () => {
