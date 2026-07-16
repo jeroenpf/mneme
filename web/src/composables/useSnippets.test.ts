@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { groupSnippets } from './useSnippets'
+import { describe, expect, it, vi } from 'vitest'
+import * as snippetsApi from '@/api/snippets'
+import { groupSnippets, useSnippets } from './useSnippets'
 import type { Snippet } from '@/api/snippets'
 
 const snip = (over: Partial<Snippet>): Snippet => ({
@@ -23,5 +24,20 @@ describe('groupSnippets', () => {
     ])
     expect(groups.map((g) => g.project)).toEqual(['', 'apollo'])
     expect(groups[1].snippets.map((s) => s.title)).toEqual(['newer', 'older'])
+  })
+})
+
+describe('useSnippets silent refresh', () => {
+  it('swaps items without ever toggling loading', async () => {
+    const spy = vi.spyOn(snippetsApi, 'listSnippets').mockResolvedValue([snip({ id: 'a' })])
+    const { items, loading, refresh } = useSnippets()
+    await vi.waitFor(() => expect(loading.value).toBe(false))
+
+    spy.mockResolvedValue([snip({ id: 'a' }), snip({ id: 'b' })])
+    const p = refresh({ silent: true })
+    expect(loading.value).toBe(false) // no loading flip → list stays mounted
+    await p
+    expect(items.value).toHaveLength(2)
+    expect(loading.value).toBe(false)
   })
 })

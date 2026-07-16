@@ -5,14 +5,23 @@ import FilterToolbar from '@/components/FilterToolbar.vue'
 import StatsRow from '@/components/StatsRow.vue'
 import { useDebounced } from '@/composables/useDebounced'
 import { useDocuments } from '@/composables/useDocuments'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import { aggregateCounts, useProjects } from '@/composables/useProjects'
 import { sortDocuments, useRegistryFilters } from '@/composables/useRegistryFilters'
 
 const { state, apiFilter, update } = useRegistryFilters()
 const { items, loading, error, refresh } = useDocuments(apiFilter)
-const { items: projects } = useProjects()
+const { items: projects, refresh: refreshProjects } = useProjects()
 
 const counts = computed(() => aggregateCounts(projects.value))
+
+// Live updates: when the agent pushes/archives a document over MCP, silently
+// refetch both the list and the project stats (grid stays mounted) and flash
+// the changed/added card.
+useLiveRefresh('documents', {
+  refresh: () => Promise.all([refresh({ silent: true }), refreshProjects({ silent: true })]),
+  flashTarget: (ev) => `[data-flash-id="${ev.id}"]`,
+})
 
 // Live search: local input, debounced 300ms into the URL (and thus the API).
 const search = ref(state.value.q ?? '')
@@ -68,7 +77,7 @@ function clearFilters() {
 
       <div v-else-if="error" class="error mn-body-sm" data-test="error">
         <p>could not load documents: {{ error.message }}</p>
-        <button class="retry mn-mono-sm" @click="refresh">retry</button>
+        <button class="retry mn-mono-sm" @click="refresh()">retry</button>
       </div>
 
       <template v-else>
@@ -85,7 +94,7 @@ function clearFilters() {
         </p>
 
         <div v-else-if="active.length" class="doc-grid" data-test="grid">
-          <DocCard v-for="d in active" :key="d.id" :doc="d" />
+          <DocCard v-for="d in active" :key="d.id" :doc="d" :data-flash-id="d.id" />
         </div>
 
         <section v-if="archived.length">
@@ -97,7 +106,7 @@ function clearFilters() {
             {{ showArchived ? '▾' : '▸' }} archived ({{ archived.length }})
           </button>
           <div v-if="showArchived" class="doc-grid archived-grid mt-3" data-test="archived-grid">
-            <DocCard v-for="d in archived" :key="d.id" :doc="d" />
+            <DocCard v-for="d in archived" :key="d.id" :doc="d" :data-flash-id="d.id" />
           </div>
         </section>
       </template>

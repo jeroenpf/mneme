@@ -4,9 +4,13 @@ import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import type { Decision } from '@/api/decisions'
 import { listDecisions } from '@/api/decisions'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import DecisionsView from './DecisionsView.vue'
 
 vi.mock('@/api/decisions', () => ({ listDecisions: vi.fn() }))
+// Stub the live layer: it constructs a real EventSource (absent in jsdom).
+// Its own behaviour is covered by useLiveRefresh.test.ts.
+vi.mock('@/composables/useLiveRefresh', () => ({ useLiveRefresh: vi.fn() }))
 
 const dec = (over: Partial<Decision>): Decision => ({
   id: over.id ?? 'd1',
@@ -75,5 +79,12 @@ describe('DecisionsView', () => {
     await flushPromises()
     expect(w.text()).toContain('Use pgx')
     expect(w.text()).not.toContain('Raw SQL only')
+  })
+
+  it('subscribes to live decisions events and targets the changed row', async () => {
+    await mountView()
+    expect(useLiveRefresh).toHaveBeenCalledWith('decisions', expect.anything())
+    const opts = vi.mocked(useLiveRefresh).mock.calls[0]![1]
+    expect(opts.flashTarget?.({ type: 'decisions', id: 'a' })).toBe('[data-flash-id="a"]')
   })
 })

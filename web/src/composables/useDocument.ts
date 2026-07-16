@@ -1,14 +1,7 @@
 import { ref, watch, type Ref } from 'vue'
 import { getDocument } from '@/api/documents'
 import type { Document } from '@/types'
-
-export interface RefreshOptions {
-  // A silent refresh swaps the doc in place without toggling `loading` or
-  // blanking the view on failure — used by live updates so the content isn't
-  // torn down and rebuilt on every agent write. Best-effort: a failed silent
-  // refetch keeps the current doc rather than surfacing an error.
-  silent?: boolean
-}
+import type { RefreshOptions } from './refresh'
 
 export interface UseDocumentResult {
   doc: Ref<Document | null>

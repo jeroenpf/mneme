@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { groupSnippets, useSnippets } from '@/composables/useSnippets'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import SnippetCard from '@/components/SnippetCard.vue'
 
 const { items, loading, error, refresh } = useSnippets()
+
+// Live updates: when the agent saves a snippet over MCP, silently refetch
+// (list stays mounted) and flash the changed/added card.
+useLiveRefresh('snippets', {
+  refresh: () => refresh({ silent: true }),
+  flashTarget: (ev) => `[data-flash-id="${ev.id}"]`,
+})
 
 const projectFilter = ref('') // '' = all
 const languageFilter = ref('') // '' = all
@@ -53,7 +61,7 @@ const projectLabel = (slug: string) => (slug === '' ? 'global' : slug)
 
       <div v-else-if="error" class="error mn-body-sm" data-test="error">
         <p>could not load snippets: {{ error.message }}</p>
-        <button class="retry mn-mono-sm" @click="refresh">retry</button>
+        <button class="retry mn-mono-sm" @click="refresh()">retry</button>
       </div>
 
       <template v-else>
@@ -83,7 +91,12 @@ const projectLabel = (slug: string) => (slug === '' ? 'global' : slug)
               <span class="scope-prefix mn-mono-sm">project /</span> {{ projectLabel(group.project) }}
             </h2>
             <div class="cards">
-              <SnippetCard v-for="s in group.snippets" :key="s.id" :snippet="s" />
+              <SnippetCard
+                v-for="s in group.snippets"
+                :key="s.id"
+                :snippet="s"
+                :data-flash-id="s.id"
+              />
             </div>
           </section>
         </template>

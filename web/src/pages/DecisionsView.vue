@@ -2,8 +2,16 @@
 import { computed, ref } from 'vue'
 import type { Decision, DecisionStatus } from '@/api/decisions'
 import { groupDecisions, useDecisions } from '@/composables/useDecisions'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 
 const { items, loading, error, refresh } = useDecisions()
+
+// Live updates: when the agent logs a decision over MCP, silently refetch
+// (list stays mounted) and flash the changed/added row.
+useLiveRefresh('decisions', {
+  refresh: () => refresh({ silent: true }),
+  flashTarget: (ev) => `[data-flash-id="${ev.id}"]`,
+})
 
 const projectFilter = ref('') // '' = all
 const statusFilter = ref<'' | DecisionStatus>('')
@@ -56,7 +64,7 @@ const hasDetail = (d: Decision) =>
 
       <div v-else-if="error" class="error mn-body-sm" data-test="error">
         <p>could not load decisions: {{ error.message }}</p>
-        <button class="retry mn-mono-sm" @click="refresh">retry</button>
+        <button class="retry mn-mono-sm" @click="refresh()">retry</button>
       </div>
 
       <template v-else>
@@ -89,6 +97,7 @@ const hasDetail = (d: Decision) =>
                 v-for="d in group.decisions"
                 :key="d.id"
                 class="decision"
+                :data-flash-id="d.id"
                 :data-test="`decision-${d.id}`"
               >
                 <button

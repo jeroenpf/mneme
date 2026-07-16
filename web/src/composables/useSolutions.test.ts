@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { groupSolutions } from './useSolutions'
+import { describe, expect, it, vi } from 'vitest'
+import * as solutionsApi from '@/api/solutions'
+import { groupSolutions, useSolutions } from './useSolutions'
 import type { Solution } from '@/api/solutions'
 
 const sol = (over: Partial<Solution>): Solution => ({
@@ -22,5 +23,20 @@ describe('groupSolutions', () => {
     ])
     expect(groups.map((g) => g.project)).toEqual(['', 'apollo'])
     expect(groups[1].solutions.map((s) => s.error_description)).toEqual(['newer', 'older'])
+  })
+})
+
+describe('useSolutions silent refresh', () => {
+  it('swaps items without ever toggling loading', async () => {
+    const spy = vi.spyOn(solutionsApi, 'listSolutions').mockResolvedValue([sol({ id: 'a' })])
+    const { items, loading, refresh } = useSolutions()
+    await vi.waitFor(() => expect(loading.value).toBe(false))
+
+    spy.mockResolvedValue([sol({ id: 'a' }), sol({ id: 'b' })])
+    const p = refresh({ silent: true })
+    expect(loading.value).toBe(false) // no loading flip → list stays mounted
+    await p
+    expect(items.value).toHaveLength(2)
+    expect(loading.value).toBe(false)
   })
 })

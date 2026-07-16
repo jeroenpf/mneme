@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { listSnippets, type Snippet } from '@/api/snippets'
+import type { RefreshOptions } from './refresh'
 
 export interface ProjectSnippets {
   project: string // '' for global
@@ -34,7 +35,7 @@ export interface UseSnippetsResult {
   items: Ref<Snippet[]>
   loading: Ref<boolean>
   error: Ref<Error | null>
-  refresh: () => Promise<void>
+  refresh: (opts?: RefreshOptions) => Promise<void>
 }
 
 export function useSnippets(): UseSnippetsResult {
@@ -42,15 +43,20 @@ export function useSnippets(): UseSnippetsResult {
   const loading = ref(true)
   const error = ref<Error | null>(null)
 
-  async function refresh() {
-    loading.value = true
-    error.value = null
+  async function refresh(opts?: RefreshOptions) {
+    const silent = opts?.silent ?? false
+    if (!silent) {
+      loading.value = true
+      error.value = null
+    }
     try {
       items.value = await listSnippets()
+      if (silent) error.value = null // recovered — show fresh content
     } catch (err) {
+      if (silent) return // best-effort: keep the current list visible
       error.value = err instanceof Error ? err : new Error(String(err))
     } finally {
-      loading.value = false
+      if (!silent) loading.value = false
     }
   }
 

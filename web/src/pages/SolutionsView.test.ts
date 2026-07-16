@@ -4,9 +4,13 @@ import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import type { Solution } from '@/api/solutions'
 import { listSolutions } from '@/api/solutions'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import SolutionsView from './SolutionsView.vue'
 
 vi.mock('@/api/solutions', () => ({ listSolutions: vi.fn() }))
+// Stub the live layer: it constructs a real EventSource (absent in jsdom).
+// Its own behaviour is covered by useLiveRefresh.test.ts.
+vi.mock('@/composables/useLiveRefresh', () => ({ useLiveRefresh: vi.fn() }))
 
 const sol = (over: Partial<Solution>): Solution => ({
   id: over.id ?? 's1',
@@ -76,5 +80,12 @@ describe('SolutionsView', () => {
     await flushPromises()
     expect(w.text()).toContain('Apollo docker timeout')
     expect(w.text()).not.toContain('Global mDNS stall')
+  })
+
+  it('subscribes to live solutions events and targets the changed card', async () => {
+    await mountView()
+    expect(useLiveRefresh).toHaveBeenCalledWith('solutions', expect.anything())
+    const opts = vi.mocked(useLiveRefresh).mock.calls[0]![1]
+    expect(opts.flashTarget?.({ type: 'solutions', id: 'a' })).toBe('[data-flash-id="a"]')
   })
 })

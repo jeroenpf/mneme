@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { listProjects } from '@/api/projects'
 import type { ProjectStats } from '@/types'
+import type { RefreshOptions } from './refresh'
 
 export interface RegistryCounts {
   total: number
@@ -13,7 +14,7 @@ export interface UseProjectsResult {
   items: Ref<ProjectStats[]>
   loading: Ref<boolean>
   error: Ref<Error | null>
-  refresh: () => Promise<void>
+  refresh: (opts?: RefreshOptions) => Promise<void>
 }
 
 export function useProjects(): UseProjectsResult {
@@ -21,15 +22,20 @@ export function useProjects(): UseProjectsResult {
   const loading = ref(true)
   const error = ref<Error | null>(null)
 
-  async function refresh() {
-    loading.value = true
-    error.value = null
+  async function refresh(opts?: RefreshOptions) {
+    const silent = opts?.silent ?? false
+    if (!silent) {
+      loading.value = true
+      error.value = null
+    }
     try {
       items.value = await listProjects()
+      if (silent) error.value = null // recovered — show fresh content
     } catch (err) {
+      if (silent) return // best-effort: keep the current stats visible
       error.value = err instanceof Error ? err : new Error(String(err))
     } finally {
-      loading.value = false
+      if (!silent) loading.value = false
     }
   }
 

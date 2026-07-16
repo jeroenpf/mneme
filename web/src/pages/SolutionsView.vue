@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { groupSolutions, useSolutions } from '@/composables/useSolutions'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import SolutionCard from '@/components/SolutionCard.vue'
 
 const { items, loading, error, refresh } = useSolutions()
+
+// Live updates: when the agent logs a solution over MCP, silently refetch
+// (list stays mounted) and flash the changed/added card.
+useLiveRefresh('solutions', {
+  refresh: () => refresh({ silent: true }),
+  flashTarget: (ev) => `[data-flash-id="${ev.id}"]`,
+})
 
 const projectFilter = ref('') // '' = all
 const tagFilter = ref('') // '' = all
@@ -45,7 +53,7 @@ const projectLabel = (slug: string) => (slug === '' ? 'global' : slug)
 
       <div v-else-if="error" class="error-box mn-body-sm" data-test="error">
         <p>could not load solutions: {{ error.message }}</p>
-        <button class="retry mn-mono-sm" @click="refresh">retry</button>
+        <button class="retry mn-mono-sm" @click="refresh()">retry</button>
       </div>
 
       <template v-else>
@@ -71,7 +79,12 @@ const projectLabel = (slug: string) => (slug === '' ? 'global' : slug)
               <span class="scope-prefix mn-mono-sm">project /</span> {{ projectLabel(group.project) }}
             </h2>
             <div class="cards">
-              <SolutionCard v-for="s in group.solutions" :key="s.id" :solution="s" />
+              <SolutionCard
+                v-for="s in group.solutions"
+                :key="s.id"
+                :solution="s"
+                :data-flash-id="s.id"
+              />
             </div>
           </section>
         </template>

@@ -4,9 +4,13 @@ import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import type { Snippet } from '@/api/snippets'
 import { listSnippets } from '@/api/snippets'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import SnippetsView from './SnippetsView.vue'
 
 vi.mock('@/api/snippets', () => ({ listSnippets: vi.fn() }))
+// Stub the live layer: it constructs a real EventSource (absent in jsdom).
+// Its own behaviour is covered by useLiveRefresh.test.ts.
+vi.mock('@/composables/useLiveRefresh', () => ({ useLiveRefresh: vi.fn() }))
 
 const snip = (over: Partial<Snippet>): Snippet => ({
   id: over.id ?? 's1',
@@ -93,5 +97,12 @@ describe('SnippetsView', () => {
     await flushPromises()
     expect(w.text()).toContain('Cursor pagination')
     expect(w.text()).not.toContain('Errgroup fan-out')
+  })
+
+  it('subscribes to live snippets events and targets the changed card', async () => {
+    await mountView()
+    expect(useLiveRefresh).toHaveBeenCalledWith('snippets', expect.anything())
+    const opts = vi.mocked(useLiveRefresh).mock.calls[0]![1]
+    expect(opts.flashTarget?.({ type: 'snippets', id: 'a' })).toBe('[data-flash-id="a"]')
   })
 })

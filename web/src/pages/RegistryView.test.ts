@@ -5,10 +5,14 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import type { Document, ProjectStats } from '@/types'
 import { listDocuments } from '@/api/documents'
 import { listProjects } from '@/api/projects'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import RegistryView from './RegistryView.vue'
 
 vi.mock('@/api/documents', () => ({ listDocuments: vi.fn() }))
 vi.mock('@/api/projects', () => ({ listProjects: vi.fn() }))
+// Stub the live layer: it constructs a real EventSource (absent in jsdom).
+// Its own behaviour is covered by useLiveRefresh.test.ts.
+vi.mock('@/composables/useLiveRefresh', () => ({ useLiveRefresh: vi.fn() }))
 
 const doc = (id: string, over: Partial<Document> = {}): Document => ({
   id,
@@ -124,6 +128,21 @@ describe('RegistryView', () => {
     expect(vi.mocked(listDocuments)).toHaveBeenLastCalledWith(
       expect.objectContaining({ q: 'zigbee' }),
     )
+  })
+
+  it('subscribes to live documents events, refetching list + stats and flashing the card', async () => {
+    await mountView(makeRouter())
+    expect(useLiveRefresh).toHaveBeenCalledWith('documents', expect.anything())
+    const opts = vi.mocked(useLiveRefresh).mock.calls[0]![1]
+    expect(opts.flashTarget?.({ type: 'documents', id: 'alpha' })).toBe('[data-flash-id="alpha"]')
+
+    // The handed-in refresh silently refetches both the doc list and the
+    // project stats so a new card and the stat counts stay in sync.
+    vi.mocked(listDocuments).mockClear()
+    vi.mocked(listProjects).mockClear()
+    await opts.refresh()
+    expect(listDocuments).toHaveBeenCalledOnce()
+    expect(listProjects).toHaveBeenCalledOnce()
   })
 
   it('offers clear filters when a filtered view is empty', async () => {

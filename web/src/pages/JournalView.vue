@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { groupJournal, useJournal } from '@/composables/useJournal'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import JournalEntryCard from '@/components/JournalEntryCard.vue'
 
 const { items, loading, error, refresh } = useJournal()
+
+// Live updates: when the agent appends a journal entry over MCP, silently
+// refetch (list stays mounted) and flash the new entry.
+useLiveRefresh('journal', {
+  refresh: () => refresh({ silent: true }),
+  flashTarget: (ev) => `[data-flash-id="${ev.id}"]`,
+})
 
 const projectFilter = ref('') // '' = all
 
@@ -35,7 +43,7 @@ const projectLabel = (slug: string) => (slug === '' ? 'global' : slug)
 
       <div v-else-if="error" class="error mn-body-sm" data-test="error">
         <p>could not load the journal: {{ error.message }}</p>
-        <button class="retry mn-mono-sm" @click="refresh">retry</button>
+        <button class="retry mn-mono-sm" @click="refresh()">retry</button>
       </div>
 
       <template v-else>
@@ -57,7 +65,12 @@ const projectLabel = (slug: string) => (slug === '' ? 'global' : slug)
               <span class="scope-prefix mn-mono-sm">project /</span> {{ projectLabel(group.project) }}
             </h2>
             <div class="cards">
-              <JournalEntryCard v-for="e in group.entries" :key="e.id" :entry="e" />
+              <JournalEntryCard
+                v-for="e in group.entries"
+                :key="e.id"
+                :entry="e"
+                :data-flash-id="e.id"
+              />
             </div>
           </section>
         </template>

@@ -58,4 +58,30 @@ describe('useDocuments', () => {
     await vi.waitFor(() => expect(loading.value).toBe(false))
     expect(error.value?.message).toBe('boom')
   })
+
+  it('silent refresh swaps items without ever toggling loading', async () => {
+    const doc = (id: string) => ({
+      id,
+      title: id,
+      type: 'plan' as const,
+      status: 'todo' as const,
+      tags: [],
+      meta: {},
+      body: {},
+      created_at: '',
+      updated_at: '',
+    })
+    const spy = vi
+      .spyOn(documentsApi, 'listDocuments')
+      .mockResolvedValue({ items: [doc('a')], next_cursor: null })
+    const { items, loading, refresh } = useDocuments(ref({}))
+    await vi.waitFor(() => expect(loading.value).toBe(false))
+
+    spy.mockResolvedValue({ items: [doc('a'), doc('b')], next_cursor: null })
+    const p = refresh({ silent: true })
+    expect(loading.value).toBe(false) // no loading flip → grid stays mounted
+    await p
+    expect(items.value).toHaveLength(2)
+    expect(loading.value).toBe(false)
+  })
 })

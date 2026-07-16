@@ -4,9 +4,13 @@ import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import type { JournalEntry } from '@/api/journal'
 import { listJournal } from '@/api/journal'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import JournalView from './JournalView.vue'
 
 vi.mock('@/api/journal', () => ({ listJournal: vi.fn() }))
+// Stub the live layer: it constructs a real EventSource (absent in jsdom).
+// Its own behaviour is covered by useLiveRefresh.test.ts.
+vi.mock('@/composables/useLiveRefresh', () => ({ useLiveRefresh: vi.fn() }))
 
 const entry = (over: Partial<JournalEntry>): JournalEntry => ({
   id: over.id ?? 'e1',
@@ -75,5 +79,12 @@ describe('JournalView', () => {
     await flushPromises()
     expect(w.text()).toContain('Apollo pagination')
     expect(w.text()).not.toContain('Mneme migration runner')
+  })
+
+  it('subscribes to live journal events and targets the new entry', async () => {
+    await mountView()
+    expect(useLiveRefresh).toHaveBeenCalledWith('journal', expect.anything())
+    const opts = vi.mocked(useLiveRefresh).mock.calls[0]![1]
+    expect(opts.flashTarget?.({ type: 'journal', id: 'a' })).toBe('[data-flash-id="a"]')
   })
 })
