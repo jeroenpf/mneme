@@ -16,7 +16,7 @@ const projects: ProjectStats[] = [
 
 function mountToolbar(state: Partial<RegistryFilterState> = {}) {
   return mount(FilterToolbar, {
-    props: { state: { sort: 'updated', ...state }, projects },
+    props: { state: { sort: 'updated', statuses: [], ...state }, projects },
   })
 }
 
@@ -27,19 +27,32 @@ function pill(w: ReturnType<typeof mountToolbar>, label: string) {
 }
 
 describe('FilterToolbar', () => {
-  it('marks the matching status pill active, or "all" when unfiltered', () => {
-    expect(pill(mountToolbar(), 'all').classes()).toContain('active')
-    const w = mountToolbar({ status: 'complete' })
-    expect(pill(w, 'complete').classes()).toContain('active')
-    expect(pill(w, 'all').classes()).not.toContain('active')
+  it('marks each selected status pill active, and "all" only when all four are selected', () => {
+    const trio = mountToolbar({ statuses: ['todo', 'in-progress', 'blocked'] })
+    expect(pill(trio, 'todo').classes()).toContain('active')
+    expect(pill(trio, 'complete').classes()).not.toContain('active')
+    expect(pill(trio, 'all').classes()).not.toContain('active')
+
+    const all = mountToolbar({ statuses: ['todo', 'in-progress', 'complete', 'blocked'] })
+    expect(pill(all, 'all').classes()).toContain('active')
   })
 
-  it('emits a status patch on pill click, and clears on active-pill click', async () => {
-    const w = mountToolbar({ status: 'complete' })
-    await pill(w, 'todo').trigger('click')
-    expect(w.emitted('change')?.[0]).toEqual([{ status: 'todo' }])
+  it('toggles a status into/out of the selection in canonical order', async () => {
+    const w = mountToolbar({ statuses: ['todo', 'in-progress', 'blocked'] })
     await pill(w, 'complete').trigger('click')
-    expect(w.emitted('change')?.[1]).toEqual([{ status: undefined }])
+    expect(w.emitted('change')?.[0]).toEqual([
+      { statuses: ['todo', 'in-progress', 'complete', 'blocked'] },
+    ])
+    await pill(w, 'in-progress').trigger('click')
+    expect(w.emitted('change')?.[1]).toEqual([{ statuses: ['todo', 'blocked'] }])
+  })
+
+  it('selects all four statuses when "all" is clicked', async () => {
+    const w = mountToolbar({ statuses: ['todo'] })
+    await pill(w, 'all').trigger('click')
+    expect(w.emitted('change')?.[0]).toEqual([
+      { statuses: ['todo', 'in-progress', 'complete', 'blocked'] },
+    ])
   })
 
   it('lists projects in the dropdown and emits a project patch', async () => {

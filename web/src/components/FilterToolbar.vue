@@ -1,16 +1,30 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { DocumentStatus, DocumentType, ProjectStats } from '@/types'
-import type { RegistryFilterState, SortKey } from '@/composables/useRegistryFilters'
+import { PILL_STATUSES, type RegistryFilterState, type SortKey } from '@/composables/useRegistryFilters'
 
 const props = defineProps<{ state: RegistryFilterState; projects: ProjectStats[] }>()
 const emit = defineEmits<{ change: [patch: Partial<RegistryFilterState>] }>()
 
-const STATUS_PILLS: DocumentStatus[] = ['todo', 'in-progress', 'complete', 'blocked']
+const STATUS_PILLS: readonly DocumentStatus[] = PILL_STATUSES
 const TYPES: DocumentType[] = ['plan', 'report', 'spec', 'adr', 'brainstorm', 'journal']
 const SORTS: SortKey[] = ['updated', 'created', 'title']
 
+const allActive = computed(() => STATUS_PILLS.every((s) => props.state.statuses.includes(s)))
+
+function isActive(s: DocumentStatus): boolean {
+  return props.state.statuses.includes(s)
+}
+
+// Toggle membership, re-emitting the whole selection in canonical pill order.
 function toggleStatus(s: DocumentStatus) {
-  emit('change', { status: props.state.status === s ? undefined : s })
+  const next = new Set(props.state.statuses)
+  next.has(s) ? next.delete(s) : next.add(s)
+  emit('change', { statuses: STATUS_PILLS.filter((x) => next.has(x)) })
+}
+
+function selectAll() {
+  emit('change', { statuses: [...STATUS_PILLS] })
 }
 
 function onProject(e: Event) {
@@ -30,18 +44,12 @@ function onSort(e: Event) {
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <button
-      class="pill"
-      :class="{ active: !state.status }"
-      @click="emit('change', { status: undefined })"
-    >
-      all
-    </button>
+    <button class="pill" :class="{ active: allActive }" @click="selectAll">all</button>
     <button
       v-for="s in STATUS_PILLS"
       :key="s"
       class="pill"
-      :class="{ active: state.status === s }"
+      :class="{ active: isActive(s) }"
       @click="toggleStatus(s)"
     >
       {{ s }}

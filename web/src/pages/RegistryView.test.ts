@@ -87,9 +87,10 @@ describe('RegistryView', () => {
     expect(bar.find('input[type="search"]').exists()).toBe(true)
   })
 
-  it('renders a card per active doc and keeps archived collapsed', async () => {
+  it('hides complete by default, showing only working-status cards, and keeps archived collapsed', async () => {
     const w = await mountView(makeRouter())
-    expect(w.find('[data-test="grid"]').findAll('.doc-card')).toHaveLength(2)
+    // alpha (in-progress) shows; beta (complete) is hidden by the default trio.
+    expect(w.find('[data-test="grid"]').findAll('.doc-card')).toHaveLength(1)
     expect(w.find('[data-test="archived-grid"]').exists()).toBe(false)
     const toggle = w.find('[data-test="archived-toggle"]')
     expect(toggle.text()).toContain('archived (1)')
@@ -103,16 +104,25 @@ describe('RegistryView', () => {
     expect(nums).toEqual(['7', '2', '3', '1'])
   })
 
-  it('writes status pill clicks to the url and refetches', async () => {
+  it('reveals complete docs when the complete pill is toggled on', async () => {
     const router = makeRouter()
     const w = await mountView(router)
+    expect(w.find('[data-test="grid"]').findAll('.doc-card')).toHaveLength(1)
     const pill = w.findAll('button.pill').find((p) => p.text() === 'complete')
     await pill!.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.status).toBe('complete')
-    expect(vi.mocked(listDocuments)).toHaveBeenLastCalledWith(
-      expect.objectContaining({ status: 'complete' }),
-    )
+    expect(router.currentRoute.value.query.status).toBe('todo,in-progress,complete,blocked')
+    // alpha (in-progress) + beta (complete) now both show.
+    expect(w.find('[data-test="grid"]').findAll('.doc-card')).toHaveLength(2)
+  })
+
+  it('filters status client-side without refetching', async () => {
+    const w = await mountView(makeRouter())
+    vi.mocked(listDocuments).mockClear()
+    const pill = w.findAll('button.pill').find((p) => p.text() === 'complete')
+    await pill!.trigger('click')
+    await flushPromises()
+    expect(listDocuments).not.toHaveBeenCalled()
   })
 
   it('debounces search input into the url q param', async () => {
@@ -143,6 +153,21 @@ describe('RegistryView', () => {
     await opts.refresh()
     expect(listDocuments).toHaveBeenCalledOnce()
     expect(listProjects).toHaveBeenCalledOnce()
+  })
+
+  it('shows a hint when no statuses are selected, whose button shows all', async () => {
+    const router = makeRouter()
+    await router.push('/?status=none')
+    await router.isReady()
+    const w = mount(RegistryView, { global: { plugins: [router] } })
+    await flushPromises()
+    expect(w.find('[data-test="grid"]').exists()).toBe(false)
+    const hint = w.find('[data-test="no-statuses"]')
+    expect(hint.text()).toContain('no statuses selected')
+    await hint.find('button').trigger('click')
+    await flushPromises()
+    // "all" reveals every non-archived doc: alpha (in-progress) + beta (complete).
+    expect(w.find('[data-test="grid"]').findAll('.doc-card')).toHaveLength(2)
   })
 
   it('offers clear filters when a filtered view is empty', async () => {

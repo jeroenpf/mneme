@@ -5,7 +5,7 @@ import type { Document, DocumentFilter, DocumentStatus, DocumentType } from '@/t
 export type SortKey = 'updated' | 'created' | 'title'
 
 export interface RegistryFilterState {
-  status?: DocumentStatus
+  statuses: DocumentStatus[]
   type?: DocumentType
   project?: string
   q?: string
@@ -18,7 +18,14 @@ export interface UseRegistryFiltersResult {
   update: (patch: Partial<RegistryFilterState>) => void
 }
 
-const STATUSES: readonly DocumentStatus[] = ['todo', 'in-progress', 'complete', 'blocked', 'archived']
+// The statuses offered as filter pills, in display/canonical order.
+// `archived` is deliberately absent — it lives in its own collapsed
+// section, independent of these pills.
+export const PILL_STATUSES: readonly DocumentStatus[] = ['todo', 'in-progress', 'complete', 'blocked']
+// Shown when no explicit selection is in the URL: the working set,
+// hiding `complete` (and `archived`).
+export const DEFAULT_STATUSES: readonly DocumentStatus[] = ['todo', 'in-progress', 'blocked']
+
 const TYPES: readonly DocumentType[] = ['plan', 'report', 'spec', 'adr', 'brainstorm', 'journal']
 const SORTS: readonly SortKey[] = ['updated', 'created', 'title']
 
@@ -31,6 +38,26 @@ function pick<T extends string>(raw: string | undefined, allowed: readonly T[]):
   return allowed.includes(raw as T) ? (raw as T) : undefined
 }
 
+// Multi-select status <-> URL round-trip. Absent → the default trio;
+// the `none` sentinel → an explicit empty selection (show nothing);
+// a CSV → those statuses, canonicalised to PILL_STATUSES order with
+// duplicates and unknown values dropped.
+function parseStatuses(raw: string | undefined): DocumentStatus[] {
+  if (raw === undefined) return [...DEFAULT_STATUSES]
+  if (raw === 'none') return []
+  const want = new Set(raw.split(','))
+  return PILL_STATUSES.filter((s) => want.has(s))
+}
+
+// Inverse of parseStatuses. Returns undefined (omit the param) when the
+// selection equals the default trio, `none` for an empty selection, and
+// a canonical CSV otherwise.
+function serializeStatuses(statuses: DocumentStatus[]): string | undefined {
+  const csv = PILL_STATUSES.filter((s) => statuses.includes(s)).join(',')
+  if (csv === DEFAULT_STATUSES.join(',')) return undefined
+  return csv === '' ? 'none' : csv
+}
+
 // Filter state lives in the URL query (?status=&type=&project=&q=&sort=)
 // so views are linkable and survive reload. sort is client-side only and
 // never reaches the API.
@@ -39,17 +66,19 @@ export function useRegistryFilters(): UseRegistryFiltersResult {
   const router = useRouter()
 
   const state = computed<RegistryFilterState>(() => ({
-    status: pick(first(route.query.status), STATUSES),
+    statuses: parseStatuses(first(route.query.status)),
     type: pick(first(route.query.type), TYPES),
     project: first(route.query.project),
     q: first(route.query.q),
     sort: pick(first(route.query.sort), SORTS) ?? 'updated',
   }))
 
+  // Status is filtered client-side (RegistryView already fetches the page
+  // and partitions it), so it never reaches the API — only project/type/q
+  // do, which is what triggers a refetch.
   const apiFilter = computed<DocumentFilter>(() => {
     const s = state.value
     const f: DocumentFilter = {}
-    if (s.status) f.status = s.status
     if (s.type) f.type = s.type
     if (s.project) f.project = s.project
     if (s.q) f.q = s.q
@@ -59,7 +88,8 @@ export function useRegistryFilters(): UseRegistryFiltersResult {
   function update(patch: Partial<RegistryFilterState>) {
     const next = { ...state.value, ...patch }
     const query: Record<string, string> = {}
-    if (next.status) query.status = next.status
+    const status = serializeStatuses(next.statuses)
+    if (status !== undefined) query.status = status
     if (next.type) query.type = next.type
     if (next.project) query.project = next.project
     if (next.q) query.q = next.q

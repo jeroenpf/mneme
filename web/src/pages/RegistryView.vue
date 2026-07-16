@@ -7,7 +7,12 @@ import { useDebounced } from '@/composables/useDebounced'
 import { useDocuments } from '@/composables/useDocuments'
 import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import { aggregateCounts, useProjects } from '@/composables/useProjects'
-import { sortDocuments, useRegistryFilters } from '@/composables/useRegistryFilters'
+import {
+  DEFAULT_STATUSES,
+  PILL_STATUSES,
+  sortDocuments,
+  useRegistryFilters,
+} from '@/composables/useRegistryFilters'
 
 const { state, apiFilter, update } = useRegistryFilters()
 const { items, loading, error, refresh } = useDocuments(apiFilter)
@@ -40,18 +45,35 @@ watch(
 // One fetch feeds both grids: unfiltered lists include archived docs,
 // so the page partitions client-side. With a status filter active the
 // archived list is empty and the section hides itself.
+// Status is filtered here (client-side): the fetch returns the whole page
+// including archived and complete; the active grid keeps only non-archived
+// docs whose status is in the selected set. Archived stays in its own
+// section, independent of the status pills.
 const sorted = computed(() => sortDocuments(items.value, state.value.sort))
-const active = computed(() => sorted.value.filter((d) => d.status !== 'archived'))
+const statusSet = computed(() => new Set(state.value.statuses))
+const active = computed(() =>
+  sorted.value.filter((d) => d.status !== 'archived' && statusSet.value.has(d.status)),
+)
 const archived = computed(() => sorted.value.filter((d) => d.status === 'archived'))
 const showArchived = ref(false)
 
-const hasFilters = computed(() =>
-  Boolean(state.value.status || state.value.type || state.value.project || state.value.q),
+// Selection differs from the default working set (or a project/type/q filter
+// is active) — decides the empty-state copy (clear-filters vs. nothing-yet).
+const isDefaultStatuses = computed(() => {
+  const s = state.value.statuses
+  return s.length === DEFAULT_STATUSES.length && DEFAULT_STATUSES.every((x) => s.includes(x))
+})
+const hasFilters = computed(
+  () => Boolean(state.value.type || state.value.project || state.value.q) || !isDefaultStatuses.value,
 )
 
 function clearFilters() {
   search.value = ''
-  update({ status: undefined, type: undefined, project: undefined, q: undefined })
+  update({ statuses: [...DEFAULT_STATUSES], type: undefined, project: undefined, q: undefined })
+}
+
+function showAll() {
+  update({ statuses: [...PILL_STATUSES] })
 }
 </script>
 
@@ -82,7 +104,16 @@ function clearFilters() {
 
       <template v-else>
         <p
-          v-if="active.length === 0 && archived.length === 0"
+          v-if="state.statuses.length === 0"
+          class="mn-body-sm py-8 text-center"
+          data-test="no-statuses"
+        >
+          no statuses selected —
+          <button class="link" @click="showAll">show all</button>
+        </p>
+
+        <p
+          v-else-if="active.length === 0 && archived.length === 0"
           class="mn-body-sm py-8 text-center"
           data-test="empty"
         >

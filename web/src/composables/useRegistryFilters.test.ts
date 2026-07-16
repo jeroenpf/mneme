@@ -30,21 +30,10 @@ async function withFilters(query = ''): Promise<[UseRegistryFiltersResult, Route
 }
 
 describe('useRegistryFilters', () => {
-  it('parses valid query params into typed state', async () => {
-    const [{ state }] = await withFilters('?status=complete&type=plan&project=mneme&q=zigbee&sort=title')
+  it('defaults statuses to the working trio when ?status is absent', async () => {
+    const [{ state }] = await withFilters('')
     expect(state.value).toEqual({
-      status: 'complete',
-      type: 'plan',
-      project: 'mneme',
-      q: 'zigbee',
-      sort: 'title',
-    })
-  })
-
-  it('drops invalid enum values and defaults sort to updated', async () => {
-    const [{ state }] = await withFilters('?status=bogus&type=nope&sort=wat')
-    expect(state.value).toEqual({
-      status: undefined,
+      statuses: ['todo', 'in-progress', 'blocked'],
       type: undefined,
       project: undefined,
       q: undefined,
@@ -52,9 +41,62 @@ describe('useRegistryFilters', () => {
     })
   })
 
-  it('excludes sort from the api filter', async () => {
-    const [{ apiFilter }] = await withFilters('?status=todo&sort=title')
-    expect(apiFilter.value).toEqual({ status: 'todo' })
+  it('parses a single status and the other typed params', async () => {
+    const [{ state }] = await withFilters('?status=complete&type=plan&project=mneme&q=zigbee&sort=title')
+    expect(state.value).toEqual({
+      statuses: ['complete'],
+      type: 'plan',
+      project: 'mneme',
+      q: 'zigbee',
+      sort: 'title',
+    })
+  })
+
+  it('parses status=none as an empty selection', async () => {
+    const [{ state }] = await withFilters('?status=none')
+    expect(state.value.statuses).toEqual([])
+  })
+
+  it('parses a csv into canonical pill order, dropping duplicates and unknown values', async () => {
+    const [{ state }] = await withFilters('?status=blocked,todo,bogus,todo')
+    expect(state.value.statuses).toEqual(['todo', 'blocked'])
+  })
+
+  it('drops invalid enum values (status=bogus becomes an empty selection)', async () => {
+    const [{ state }] = await withFilters('?status=bogus&type=nope&sort=wat')
+    expect(state.value).toEqual({
+      statuses: [],
+      type: undefined,
+      project: undefined,
+      q: undefined,
+      sort: 'updated',
+    })
+  })
+
+  it('excludes status and sort from the api filter', async () => {
+    const [{ apiFilter }] = await withFilters('?status=todo&type=plan&sort=title')
+    expect(apiFilter.value).toEqual({ type: 'plan' })
+  })
+
+  it('update() omits status when it equals the default trio', async () => {
+    const [{ update }, router] = await withFilters('?status=blocked&q=zigbee')
+    update({ statuses: ['todo', 'in-progress', 'blocked'] })
+    await new Promise((r) => setTimeout(r))
+    expect(router.currentRoute.value.query).toEqual({ q: 'zigbee' })
+  })
+
+  it('update() writes status=none for an empty selection', async () => {
+    const [{ update }, router] = await withFilters('')
+    update({ statuses: [] })
+    await new Promise((r) => setTimeout(r))
+    expect(router.currentRoute.value.query).toEqual({ status: 'none' })
+  })
+
+  it('update() writes a partial selection as a canonical csv', async () => {
+    const [{ update }, router] = await withFilters('')
+    update({ statuses: ['complete', 'todo'] })
+    await new Promise((r) => setTimeout(r))
+    expect(router.currentRoute.value.query).toEqual({ status: 'todo,complete' })
   })
 
   it('update() merges a patch into the url, dropping empties and default sort', async () => {
@@ -62,13 +104,6 @@ describe('useRegistryFilters', () => {
     update({ type: 'plan', q: '' })
     await new Promise((r) => setTimeout(r))
     expect(router.currentRoute.value.query).toEqual({ status: 'todo', type: 'plan' })
-  })
-
-  it('update() can clear a previously set param', async () => {
-    const [{ update }, router] = await withFilters('?status=todo&q=zigbee')
-    update({ status: undefined })
-    await new Promise((r) => setTimeout(r))
-    expect(router.currentRoute.value.query).toEqual({ q: 'zigbee' })
   })
 })
 

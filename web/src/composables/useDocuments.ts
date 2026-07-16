@@ -33,8 +33,16 @@ export function useDocuments(filter: Ref<DocumentFilter>): UseDocumentsResult {
     }
   }
 
-  // Wrap refresh so a filter change never leaks the watch args in as opts.
-  watch(filter, () => refresh(), { immediate: true, deep: true })
+  // Refetch only when the filter's *contents* change. Callers may pass a
+  // computed that yields a fresh object on any upstream change (e.g. a
+  // client-side status toggle in the registry); watching the serialized
+  // value — not the reference — skips redundant fetches for value-equal
+  // filters. The callback also never leaks the watch args in as opts.
+  watch(
+    () => JSON.stringify(filter.value),
+    () => refresh(),
+    { immediate: true },
+  )
 
   return { items, loading, error, refresh }
 }
