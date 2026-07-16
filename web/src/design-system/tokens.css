@@ -25,19 +25,19 @@
   --rail-width:    224px;
   --sidebar-width: 272px;
   --topbar-height: 54px;
-  --content-max:   840px;
+  --content-max:   760px;
 
   /* ── Type families (Paper/Ink default; Slate overrides --font-display) ── */
   --font-display: 'Archivo', 'Inter', system-ui, sans-serif;
   --font-body:    'Inter', system-ui, -apple-system, sans-serif;
   --font-mono:    'IBM Plex Mono', 'SF Mono', Menlo, monospace;
 
-  /* ── Type scale ── */
-  --fs-display:   30px;   --lh-display:   1.2;
-  --fs-h1:        22px;   --lh-h1:        1.25;
-  --fs-h2:        15px;   --lh-h2:        1.35;
-  --fs-h3:        13px;   --lh-h3:        1.4;
-  --fs-body:      14.5px; --lh-body:      1.65;
+  /* ── Type scale — matched to the design mockup's editorial hierarchy ── */
+  --fs-display:   32px;   --lh-display:   1.15;
+  --fs-h1:        24px;   --lh-h1:        1.2;
+  --fs-h2:        20px;   --lh-h2:        1.2;
+  --fs-h3:        16px;   --lh-h3:        1.35;
+  --fs-body:      15.5px; --lh-body:      1.65;
   --fs-body-sm:   13px;   --lh-body-sm:   1.55;
   --fs-meta:      12px;   --lh-meta:      1.5;
   --fs-mono:      12.5px; --lh-mono:      1.55;
@@ -103,6 +103,11 @@
   --accent-border: rgba(47, 93, 128, 0.24);
   --accent-glow:   rgba(47, 93, 128, 0.16);
 
+  /* Editorial second accent — carries section numbers & the active TOC marker.
+     Amber on Paper (a warm print counterpoint to the steel accent); on Slate
+     and Ink it folds into the accent so there's a single signature hue. */
+  --eyebrow:       #a9640f;
+
   --green:  #2f6b4f; --green-dim:  rgba(47, 107, 79, 0.10);  --green-border:  rgba(47, 107, 79, 0.28);
   --yellow: #8a5a12; --yellow-dim: rgba(138, 90, 18, 0.10);  --yellow-border: rgba(138, 90, 18, 0.28);
   --red:    #9b2c2c; --red-dim:    rgba(155, 44, 44, 0.09);  --red-border:    rgba(155, 44, 44, 0.26);
@@ -146,6 +151,7 @@
   --accent-dim:    rgba(15, 124, 120, 0.10);
   --accent-border: rgba(15, 124, 120, 0.26);
   --accent-glow:   rgba(15, 124, 120, 0.18);
+  --eyebrow:       #0f7c78;
 
   --green:  #2f8a5c; --green-dim:  rgba(47, 138, 92, 0.10);  --green-border:  rgba(47, 138, 92, 0.28);
   --yellow: #b1791b; --yellow-dim: rgba(177, 121, 27, 0.10); --yellow-border: rgba(177, 121, 27, 0.28);
@@ -189,6 +195,7 @@
   --accent-dim:    rgba(230, 151, 90, 0.13);
   --accent-border: rgba(230, 151, 90, 0.30);
   --accent-glow:   rgba(230, 151, 90, 0.20);
+  --eyebrow:       #e6975a;
 
   --green:  #63b98a; --green-dim:  rgba(99, 185, 138, 0.12);  --green-border:  rgba(99, 185, 138, 0.28);
   --yellow: #d9b45c; --yellow-dim: rgba(217, 180, 92, 0.12);  --yellow-border: rgba(217, 180, 92, 0.28);

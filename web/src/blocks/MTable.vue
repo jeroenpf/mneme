@@ -25,25 +25,37 @@ defineProps<{ id?: string; title?: string; cols?: string[]; rows?: string[][] }>
 </template>
 
 <style scoped>
+/* Two-tone: a shaded header row anchors a lighter body. The light body also
+   lets the table read when nested inside a surface-colored card. */
 .wrap {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   overflow-x: auto;
 }
 table {
   width: 100%;
   border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
 }
 th {
   text-align: left;
   padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-strong);
+  vertical-align: bottom;
 }
 td {
   padding: var(--space-2) var(--space-4);
+  vertical-align: top;
+}
+/* First column carries the row's subject — give it primary weight so wide,
+   wrappy tables stay scannable down the left edge. */
+td:first-child {
+  color: var(--text-primary);
+  font-weight: 500;
 }
 tbody tr + tr td {
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--border);
 }
 </style>

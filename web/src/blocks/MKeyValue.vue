@@ -17,24 +17,31 @@ defineProps<{ id?: string; title?: string; data?: Record<string, string> }>()
 </template>
 
 <style scoped>
+/* Two-tone: a shaded key column separated by a divider from a lighter value
+   column. The tone contrast makes rows scannable, and the light value column
+   keeps the block legible even when it sits inside a surface-colored card. */
 .kv {
   display: grid;
-  grid-template-columns: minmax(120px, auto) 1fr;
-  border: 1px solid var(--border);
+  grid-template-columns: 168px 1fr;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
-  background: var(--bg-surface);
   overflow: hidden;
 }
 .kv dt,
 .kv dd {
   padding: var(--space-2) var(--space-4);
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--border);
 }
 .kv dt:first-of-type,
 .kv dd:first-of-type {
   border-top: none;
 }
 .kv dt {
-  align-self: center;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+}
+.kv dd {
+  margin: 0;
+  background: var(--bg-elevated);
 }
 </style>

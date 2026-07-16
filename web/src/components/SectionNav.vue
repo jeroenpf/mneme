@@ -31,16 +31,16 @@ onBeforeUnmount(() => observer?.disconnect())
 
 <template>
   <nav class="secnav">
-    <h3 class="mn-label">sections</h3>
+    <h3 class="mn-label">On this page</h3>
     <a
       v-for="item in items"
       :key="item.id"
       :href="`#${item.id}`"
-      class="mn-mono-sm link"
+      class="link"
       :class="{ active: activeId === item.id }"
     >
-      <span v-if="item.num" class="num">{{ item.num }}</span>
-      {{ item.title }}
+      <span class="num mn-mono-sm">{{ item.num }}</span>
+      <span class="title mn-body-sm">{{ item.title }}</span>
     </a>
   </nav>
 </template>
@@ -55,28 +55,42 @@ onBeforeUnmount(() => observer?.disconnect())
   margin-bottom: var(--space-2);
 }
 .link {
-  display: block;
+  display: grid;
+  grid-template-columns: 1.4em 1fr;
+  gap: var(--space-2);
+  align-items: baseline;
   padding: var(--space-1) var(--space-2);
   margin-left: calc(-1 * var(--space-2));
   border-left: 2px solid transparent;
   border-radius: var(--radius-xs);
-  color: var(--text-muted);
   text-decoration: none;
   transition:
     color var(--duration-fast) var(--ease-out),
     background var(--duration-fast) var(--ease-out);
 }
+.num {
+  color: var(--text-faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.title {
+  color: var(--text-muted);
+}
 .link:hover {
-  color: var(--text-secondary);
   background: var(--bg-hover);
 }
+.link:hover .title {
+  color: var(--text-secondary);
+}
 .link.active {
-  color: var(--accent);
   background: var(--accent-dim);
   border-left-color: var(--accent);
 }
-.num {
-  color: var(--text-faint);
-  margin-right: var(--space-1);
+.link.active .title {
+  color: var(--accent);
+  font-weight: 500;
+}
+.link.active .num {
+  color: var(--eyebrow);
 }
 </style>

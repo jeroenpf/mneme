@@ -30,7 +30,16 @@ const phases = computed(() => phasesFromMeta(doc.value?.meta))
 const navItems = computed(() => sectionNavItems(doc.value?.body))
 const blocks = computed(() => {
   const sections = doc.value?.body?.sections
-  return Array.isArray(sections) ? (sections as Array<Record<string, unknown>>) : []
+  if (!Array.isArray(sections)) return []
+  // The TOC numbers every top-level entry 01…NN. Mirror that number onto the
+  // body's `section` blocks so their masthead marker matches the nav. Subphase
+  // blocks carry their own phase-number badge, so only sections are annotated.
+  const numById = new Map(navItems.value.map((i) => [i.id, i.num]))
+  return (sections as Array<Record<string, unknown>>).map((b) =>
+    b?.type === 'section' && typeof b.id === 'string' && numById.has(b.id)
+      ? { ...b, num: numById.get(b.id) }
+      : b,
+  )
 })
 
 // Deep links: scroll once content exists (initial load), then follow

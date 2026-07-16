@@ -43,6 +43,28 @@ describe('MSection', () => {
     expect(w.text()).toContain('child text')
   })
 
+  it('renders a sequential section number in the header when num is provided', () => {
+    const w = mount(MSection, { props: { id: 's', num: '03', title: 'Third' } })
+    const numEl = w.find('.sec-num')
+    expect(numEl.exists()).toBe(true)
+    expect(numEl.text()).toBe('03')
+    // the number lives in the same header as the h2
+    expect(w.find('.sec-head h2').exists()).toBe(true)
+  })
+
+  it('omits the number and the masthead header for nested sections', () => {
+    const w = mount(MSection, {
+      props: {
+        id: 'outer',
+        title: 'Outer',
+        children: [{ type: 'section', id: 'inner', num: '99', title: 'Inner', children: [] }],
+      },
+    })
+    // nested section renders a plain h3 with no sec-head / sec-num
+    expect(w.find('#inner .sec-num').exists()).toBe(false)
+    expect(w.find('#inner .sec-head').exists()).toBe(false)
+  })
+
   it('demotes nested section headings to mn-h3', () => {
     const w = mount(MSection, {
       props: {

@@ -3,8 +3,8 @@ import { mount } from '@vue/test-utils'
 import SectionNav from './SectionNav.vue'
 
 const items = [
-  { id: 'overview', title: 'Overview', kind: 'section' as const, num: undefined },
-  { id: 'sp-1-7', title: 'Viewer', kind: 'subphase' as const, num: '1.7' },
+  { id: 'overview', title: 'Overview', kind: 'section' as const, num: '01' },
+  { id: 'sp-1-7', title: 'Viewer', kind: 'subphase' as const, num: '02' },
 ]
 
 // jsdom has no IntersectionObserver — install a controllable fake.
@@ -30,11 +30,13 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('SectionNav', () => {
-  it('renders hash links with subphase nums', () => {
+  it('renders hash links with sequential nums and titles', () => {
     const w = mount(SectionNav, { props: { items } })
     const links = w.findAll('a')
     expect(links.map((a) => a.attributes('href'))).toEqual(['#overview', '#sp-1-7'])
-    expect(links[1].text()).toContain('1.7')
+    expect(links[0].text()).toContain('01')
+    expect(links[0].text()).toContain('Overview')
+    expect(links[1].text()).toContain('02')
   })
 
   it('observes the anchored elements and highlights the intersecting one', async () => {
