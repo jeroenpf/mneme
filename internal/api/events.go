@@ -45,7 +45,10 @@ func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if _, err := w.Write([]byte(": ping\n\n")); err != nil {
+			// A named `ping` event (not a `:` comment) so the browser can see
+			// it: the client's liveness watchdog uses it to detect a half-open
+			// connection that never fires onerror (e.g. behind a dev proxy).
+			if _, err := w.Write([]byte("event: ping\ndata: {}\n\n")); err != nil {
 				return
 			}
 			flusher.Flush()

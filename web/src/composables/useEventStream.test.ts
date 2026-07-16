@@ -2,13 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEventStream } from './useEventStream'
 
 // jsdom has no EventSource. FakeES records instances and lets the test drive
-// open/error/message callbacks the composable installs.
+// open/error/message/ping callbacks the composable installs.
 class FakeES {
   static instances: FakeES[] = []
   url: string
+  closed = false
   onopen: (() => void) | null = null
   onerror: (() => void) | null = null
   onmessage: ((e: { data: string }) => void) | null = null
+  listeners: Record<string, Set<(e: unknown) => void>> = {}
 
   constructor(url: string) {
     this.url = url
@@ -26,15 +28,27 @@ class FakeES {
   raw(data: string) {
     this.onmessage?.({ data })
   }
-  close() {}
+  addEventListener(type: string, fn: (e: unknown) => void) {
+    ;(this.listeners[type] ??= new Set()).add(fn)
+  }
+  ping() {
+    this.listeners['ping']?.forEach((fn) => fn({}))
+  }
+  close() {
+    this.closed = true
+  }
 }
 
 describe('createEventStream', () => {
   beforeEach(() => {
     FakeES.instances = []
     vi.stubGlobal('EventSource', FakeES)
+    vi.useFakeTimers() // drive the liveness watchdog deterministically
   })
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
   it('opens exactly one EventSource at the given url', () => {
     createEventStream('/api/events')
@@ -93,5 +107,43 @@ describe('createEventStream', () => {
     es.error()
     es.open() // reconnect — resync
     expect(onReconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('a heartbeat keeps a quiet-but-healthy connection alive (no reconnect)', () => {
+    createEventStream('/api/events')
+    FakeES.instances[0].open()
+    // Past the stale threshold in wall-clock, but pings keep arriving.
+    for (let elapsed = 0; elapsed < 90_000; elapsed += 15_000) {
+      vi.advanceTimersByTime(15_000)
+      FakeES.instances.at(-1)!.ping()
+    }
+    expect(FakeES.instances).toHaveLength(1) // never reconnected
+  })
+
+  it('force-reconnects a half-open connection that goes silent past the threshold', () => {
+    const stream = createEventStream('/api/events')
+    const es0 = FakeES.instances[0]
+    es0.open()
+    expect(FakeES.instances).toHaveLength(1)
+
+    // No ping, no message: after the stale window the watchdog opens a fresh
+    // EventSource and closes the dead one.
+    vi.advanceTimersByTime(60_000)
+    expect(FakeES.instances.length).toBeGreaterThanOrEqual(2)
+    expect(es0.closed).toBe(true)
+    expect(stream.status.value).toBe('connecting')
+  })
+
+  it('resyncs when the watchdog-forced reconnection opens', () => {
+    const stream = createEventStream('/api/events')
+    FakeES.instances[0].open()
+    const onReconnect = vi.fn()
+    stream.onReconnect(onReconnect)
+
+    vi.advanceTimersByTime(60_000) // stale → new EventSource
+    const es1 = FakeES.instances.at(-1)!
+    es1.open() // the replacement connects
+    expect(onReconnect).toHaveBeenCalledTimes(1)
+    expect(stream.status.value).toBe('open')
   })
 })
