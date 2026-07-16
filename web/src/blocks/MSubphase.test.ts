@@ -50,12 +50,12 @@ describe('MSubphase', () => {
     expect(w.find('.sub-num').text()).toBe('1')
   })
 
-  it('splits a run-on labeled description into one paragraph per label', () => {
+  it('renders a blank-line-separated description as one paragraph per block', () => {
     const w = mount(MSubphase, {
       props: {
         num: '1',
         title: 'P',
-        description: '**Files:** a.go. **Outcome:** works. **AC:** green.',
+        description: '**Files:** a.go.\n\n**Outcome:** works.\n\n**AC:** green.',
       },
     })
     const paras = w.findAll('.mn-prose p')

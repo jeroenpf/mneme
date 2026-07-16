@@ -430,9 +430,15 @@ func TestUpdateSectionRejectsBlockMarkdown(t *testing.T) {
 		"doc_id": "d", "section_id": "s",
 		"patch": map[string]any{"content": "- one\n- two"},
 	})
-	if !strings.Contains(msg, "inline-only") {
-		t.Errorf("want inline-only guidance, got %q", msg)
+	if !strings.Contains(msg, "child block") {
+		t.Errorf("want child-block guidance, got %q", msg)
 	}
+
+	// A blank-line paragraph break, by contrast, is now accepted in content.
+	call(t, cs, "update_section", map[string]any{
+		"doc_id": "d", "section_id": "s",
+		"patch": map[string]any{"content": "first para\n\nsecond para"},
+	}, nil)
 }
 
 func TestSectionUpdateAddRemove(t *testing.T) {

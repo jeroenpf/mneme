@@ -113,7 +113,7 @@ type tools struct {
 func (t *tools) register(s *sdk.Server) {
 	sdk.AddTool(s, &sdk.Tool{
 		Name:        "push_document",
-		Description: "Create or upsert a document by meta.id. Validates block types and inline-only content. Returns a compact summary (no body); pass return_doc:true for the full stored document.",
+		Description: "Create or upsert a document by meta.id. Validates block types and prose content (body prose allows blank-line paragraphs; lists/headings/code fences must be child blocks). Returns a compact summary (no body); pass return_doc:true for the full stored document.",
 	}, t.pushDocument)
 
 	sdk.AddTool(s, &sdk.Tool{

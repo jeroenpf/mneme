@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { renderInline } from '@/lib/markdown'
+import { renderParagraphs } from '@/lib/markdown'
 
 const props = defineProps<{ id?: string; variant?: string; title?: string; content?: string }>()
 
@@ -13,7 +13,7 @@ const GLYPHS: Record<string, string> = {
 }
 
 const variant = computed(() => (props.variant && props.variant in GLYPHS ? props.variant : 'note'))
-const html = computed(() => renderInline(props.content))
+const paragraphs = computed(() => renderParagraphs(props.content))
 </script>
 
 <template>
@@ -21,7 +21,9 @@ const html = computed(() => renderInline(props.content))
     <span class="glyph mn-mono" aria-hidden="true">{{ GLYPHS[variant] }}</span>
     <div class="min-w-0">
       <strong v-if="title" class="mn-label title">{{ title }}</strong>
-      <div class="mn-body-sm mn-md" v-html="html" />
+      <div v-if="paragraphs.length" class="mn-prose">
+        <p v-for="(para, i) in paragraphs" :key="i" class="mn-body-sm mn-md" v-html="para" />
+      </div>
     </div>
   </aside>
 </template>

@@ -132,10 +132,10 @@ var (
 	reFence   = regexp.MustCompile("(?m)^```")
 )
 
-// detectBlockMarkdown returns a human label for the first block-level
-// markdown construct in s, or "" when s is safe for inline rendering.
-// These are exactly the constructs renderInline (inline-only) flattens.
-func detectBlockMarkdown(s string) string {
+// detectBlockStructure returns a human label for the first list, heading,
+// or fenced-code construct in s — block markdown that maps to a distinct
+// typed block and cannot render inside a prose field — or "" when none.
+func detectBlockStructure(s string) string {
 	switch {
 	case reList.MatchString(s) || reOrdered.MatchString(s):
 		return "a list"
@@ -143,33 +143,67 @@ func detectBlockMarkdown(s string) string {
 		return "a heading"
 	case reFence.MatchString(s):
 		return "a fenced code block"
-	case strings.Contains(s, "\n\n"):
+	}
+	return ""
+}
+
+// detectBlockMarkdown extends detectBlockStructure with the paragraph-break
+// check, for strictly-inline fields (titles, task titles, key-value values)
+// that render as a single line where even a blank line would collapse.
+func detectBlockMarkdown(s string) string {
+	if sig := detectBlockStructure(s); sig != "" {
+		return sig
+	}
+	if strings.Contains(s, "\n\n") {
 		return "multiple paragraphs"
 	}
 	return ""
 }
 
-// inlineProseFields lists the string fields per block type that render
-// through renderInline. Fields absent here are exempt on purpose:
-// code.content and diagram.content carry newline-significant source.
-var inlineProseFields = map[string][]string{
-	"section":  {"title", "content"},
+// paragraphProseFields render through renderParagraphs on the client: body
+// prose that carries paragraph flow. Blank-line paragraphs are allowed —
+// a paragraph break is prose, not structure — but a list, heading, or code
+// fence still maps to a distinct typed block and is rejected here.
+var paragraphProseFields = map[string][]string{
+	"section":  {"content"},
 	"text":     {"content"},
-	"callout":  {"title", "content"},
-	"subphase": {"title", "description"},
+	"callout":  {"content"},
+	"subphase": {"description"},
 }
 
-// validateInlineFields rejects block-level markdown in a block's
-// inline-only prose fields, teaching the caller to split into children.
+// inlineProseFields render strictly inline through renderInline — titles and
+// other single-line fields where even a paragraph break flattens. Every
+// block-level construct, blank lines included, is rejected. Fields absent
+// from both maps are exempt on purpose: code.content and diagram.content
+// carry newline-significant source.
+var inlineProseFields = map[string][]string{
+	"section":  {"title"},
+	"callout":  {"title"},
+	"subphase": {"title"},
+}
+
+// validateInlineFields enforces the prose contract per block type: body
+// prose accepts paragraphs but not list/heading/fence structure; titles and
+// collection values (task titles, key-value values) accept neither. Both
+// teach the caller to move real structure into typed child blocks.
 func validateInlineFields(b map[string]any, typ, path string) error {
+	for _, f := range paragraphProseFields[typ] {
+		s, _ := b[f].(string)
+		if sig := detectBlockStructure(s); sig != "" {
+			return fmt.Errorf("%s: %s.%s contains %s, but this field renders "+
+				"paragraphs of inline markdown only. Move it into a typed child block: "+
+				"a {type:\"task-list\",...} for a list, {type:\"code\",...} for a code "+
+				"block, or a nested {type:\"section\",...} for a heading. Plain "+
+				"paragraphs are fine — separate them with a blank line. "+
+				"See push_document for block shapes.", path, typ, f, sig)
+		}
+	}
 	for _, f := range inlineProseFields[typ] {
 		s, _ := b[f].(string)
 		if sig := detectBlockMarkdown(s); sig != "" {
 			return fmt.Errorf("%s: %s.%s contains %s, but this field renders "+
-				"inline-only — newlines, lists, and headings collapse to one line. "+
-				"Split structure into child blocks: one {type:\"text\",content:...} "+
-				"per paragraph, a {type:\"callout\",...} for notes, or {type:\"code\",...}. "+
-				"See push_document for block shapes.", path, typ, f, sig)
+				"inline-only — it must stay a single line. Move any structure into "+
+				"child blocks. See push_document for block shapes.", path, typ, f, sig)
 		}
 	}
 	// tasks and data are collections, not walked as children, so scan here.

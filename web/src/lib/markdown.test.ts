@@ -63,19 +63,23 @@ describe('renderParagraphs', () => {
     expect(renderParagraphs('one line\nsame para')).toEqual(['one line\nsame para'])
   })
 
-  it('breaks before inline bold field-labels so a run of labeled clauses stacks', () => {
+  it('does not infer breaks from inline bold labels — only blank lines split', () => {
+    // A single-line run of "**Label:**" clauses is one paragraph; the renderer
+    // never guesses that a bold label starts a new line.
     expect(
       renderParagraphs('**Files:** a.go, b.go. **Outcome:** it works. **AC:** tests green.'),
+    ).toEqual([
+      '<strong>Files:</strong> a.go, b.go. <strong>Outcome:</strong> it works. <strong>AC:</strong> tests green.',
+    ])
+  })
+
+  it('splits a blank-line-separated labeled run into one paragraph each', () => {
+    expect(
+      renderParagraphs('**Files:** a.go, b.go.\n\n**Outcome:** it works.\n\n**AC:** tests green.'),
     ).toEqual([
       '<strong>Files:</strong> a.go, b.go.',
       '<strong>Outcome:</strong> it works.',
       '<strong>AC:</strong> tests green.',
-    ])
-  })
-
-  it('leaves ordinary bold (no trailing colon) alone', () => {
-    expect(renderParagraphs('use **bold** and **italic** freely')).toEqual([
-      'use <strong>bold</strong> and <strong>italic</strong> freely',
     ])
   })
 })

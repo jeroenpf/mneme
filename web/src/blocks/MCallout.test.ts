@@ -21,4 +21,12 @@ describe('MCallout', () => {
     expect(w.text()).toContain('Locked')
     expect(w.html()).toContain('<code>sdk</code>')
   })
+
+  it('splits content into paragraphs on blank lines', () => {
+    const w = mount(MCallout, { props: { content: 'first para\n\nsecond para' } })
+    const paras = w.findAll('.mn-prose p')
+    expect(paras).toHaveLength(2)
+    expect(paras[0]!.text()).toBe('first para')
+    expect(paras[1]!.text()).toBe('second para')
+  })
 })

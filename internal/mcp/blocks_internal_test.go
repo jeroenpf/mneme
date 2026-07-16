@@ -36,6 +36,25 @@ func TestDetectBlockMarkdown(t *testing.T) {
 	}
 }
 
+func TestDetectBlockStructure(t *testing.T) {
+	// Structure (list/heading/fence) is flagged; a blank-line paragraph break
+	// is NOT — that's the difference from detectBlockMarkdown.
+	flagged := map[string]string{
+		"- a\n- b":    "a list",
+		"1. a\n2. b":  "a list",
+		"# Heading":   "a heading",
+		"```\nx\n```": "a fenced code block",
+	}
+	for in, want := range flagged {
+		if got := detectBlockStructure(in); got != want {
+			t.Errorf("detectBlockStructure(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := detectBlockStructure("one\n\ntwo"); got != "" {
+		t.Errorf("detectBlockStructure(%q) = %q, want none (paragraphs are prose)", "one\n\ntwo", got)
+	}
+}
+
 func TestValidateBodyAcceptsCanonicalBlocks(t *testing.T) {
 	body := sectionBody(
 		map[string]any{"type": "text", "id": "p", "content": "prose"},
@@ -99,16 +118,57 @@ func TestValidateBodyRejectsUnknownFieldWithAllowedList(t *testing.T) {
 	}
 }
 
-func TestValidateBodyRejectsBlockMarkdownInProse(t *testing.T) {
+func TestValidateBodyAllowsParagraphsInBodyProse(t *testing.T) {
+	// A blank-line paragraph break is prose flow, allowed in every body prose
+	// field: section.content, text.content, callout.content, subphase.description.
+	blocks := []map[string]any{
+		{"type": "text", "id": "p", "content": "**What:** a\n\n**Why:** b"},
+		{"type": "callout", "id": "c", "variant": "note", "content": "one\n\ntwo"},
+		{"type": "subphase", "id": "sp", "num": "1", "title": "P", "description": "a\n\nb"},
+	}
+	for _, b := range blocks {
+		if err := validateBody(sectionBody(b)); err != nil {
+			t.Errorf("paragraph break in %s body prose must be allowed: %v", b["type"], err)
+		}
+	}
+	// section.content itself (the migrated-plan shape) also allows paragraphs.
+	body := map[string]any{"sections": []any{
+		map[string]any{"type": "section", "id": "s", "title": "S", "content": "one\n\ntwo"},
+	}}
+	if err := validateBody(body); err != nil {
+		t.Errorf("paragraph break in section.content must be allowed: %v", err)
+	}
+}
+
+func TestValidateBodyRejectsStructureInBodyProse(t *testing.T) {
+	// Lists, headings, and code fences still map to typed blocks — rejected in
+	// prose, with an error teaching the child-block fix.
+	for _, b := range []map[string]any{
+		{"type": "text", "id": "p", "content": "- a\n- b"},
+		{"type": "text", "id": "p", "content": "# Heading"},
+		{"type": "callout", "id": "c", "variant": "note", "content": "```\ncode\n```"},
+		{"type": "subphase", "id": "sp", "num": "1", "title": "P", "description": "1. first\n2. second"},
+	} {
+		err := validateBody(sectionBody(b))
+		if err == nil {
+			t.Fatalf("expected rejection of block structure in %s body prose", b["type"])
+		}
+		if !strings.Contains(err.Error(), "child block") {
+			t.Errorf("error must teach the child-block fix, got %q", err.Error())
+		}
+	}
+}
+
+func TestValidateBodyRejectsParagraphsInTitles(t *testing.T) {
+	// Titles stay a single line — even a paragraph break is rejected.
 	err := validateBody(sectionBody(
-		map[string]any{"type": "text", "id": "p", "content": "**What:** a\n\n**Why:** b"},
+		map[string]any{"type": "callout", "id": "c", "variant": "note", "title": "line one\n\nline two", "content": "ok"},
 	))
 	if err == nil {
-		t.Fatal("expected rejection of paragraph break in text.content")
+		t.Fatal("expected rejection of a paragraph break in callout.title")
 	}
-	if !strings.Contains(err.Error(), "inline-only") ||
-		!strings.Contains(err.Error(), "child blocks") {
-		t.Errorf("error must teach the fix, got %q", err.Error())
+	if !strings.Contains(err.Error(), "inline-only") {
+		t.Errorf("title error must teach inline-only, got %q", err.Error())
 	}
 }
 

@@ -44,21 +44,16 @@ export function renderInline(src: string | undefined | null): string {
   return (marked.parseInline(escapeHtml(iconed)) as string).trim()
 }
 
-// renderParagraphs splits a prose field (text/section content, subphase
-// description) into paragraphs, each rendered as inline markdown. Block
-// STRUCTURE still comes only from typed blocks — this just lets one prose
-// field hold several paragraphs, which is what prose is.
-//
-// A paragraph break is a blank line (the authoring convention: separate
-// paragraphs with one blank line, not a separate block per paragraph). As a
-// migration aid it also breaks before an inline bold field-label —
-// "**Files:** … **Outcome:** …" — that trails text on the same line, so a
-// description authored as one run of labeled clauses still renders one line
-// each without needing a rewrite.
+// renderParagraphs splits a prose field (section/text/callout content,
+// subphase description) into paragraphs on blank lines, each rendered as
+// inline markdown. Block STRUCTURE still comes only from typed blocks — a
+// blank-line break is prose flow, not structure, so one prose field may hold
+// several paragraphs, which is what prose is. The split is explicit: only a
+// blank line starts a new paragraph. We do NOT infer breaks from inline bold
+// labels — a "**Note:**" mid-sentence is prose, not a paragraph boundary.
 export function renderParagraphs(src: string | undefined | null): string[] {
   if (!src) return []
-  const withBreaks = src.replace(/(\S)[ \t]+(\*\*[^*\n]+:\*\*)/g, '$1\n\n$2')
-  return withBreaks
+  return src
     .split(/\n[ \t]*\n/)
     .map((para) => renderInline(para))
     .filter(Boolean)

@@ -25,7 +25,7 @@ type sectionResult struct {
 type updateSectionInput struct {
 	DocID     string         `json:"doc_id" jsonschema:"document id"`
 	SectionID string         `json:"section_id" jsonschema:"id of the section block to patch (anywhere in the body tree)"`
-	Patch     map[string]any `json:"patch" jsonschema:"fields to set on the section (id and children are protected). Set title (the heading) and/or content (a markdown prose string rendered directly under the heading — this is how a section carries its description). content/title are inline-only: blank lines, - / 1. lists, and # headings are REJECTED — split structure into child blocks."`
+	Patch     map[string]any `json:"patch" jsonschema:"fields to set on the section (id and children are protected). Set title (the heading) and/or content (markdown prose rendered directly under the heading). title is inline-only — a single line. content is prose: multiple paragraphs are fine, separated by a blank line — but lists (- / 1.), # headings, and fenced code blocks must become child blocks."`
 	ReturnDoc bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
 
@@ -87,7 +87,7 @@ func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in up
 
 type addSectionInput struct {
 	DocID          string         `json:"doc_id" jsonschema:"document id"`
-	Section        map[string]any `json:"section" jsonschema:"section block — must include id and type (type:section). Carries title (heading), an optional content string (markdown prose rendered under the heading), and/or a children array of nested blocks. children may be any block type — text, code, diagram (mermaid), table, callout, key-value, task-list, subphase; this is how you add a code block or mermaid chart to an existing plan. See push_document for exact block shapes; unknown/misnamed fields are rejected. Prose fields (title/content/description) are inline-only: blank lines, - / 1. lists, and # headings are REJECTED — use child blocks for structure."`
+	Section        map[string]any `json:"section" jsonschema:"section block — must include id and type (type:section). Carries title (heading), an optional content string (markdown prose rendered under the heading), and/or a children array of nested blocks. children may be any block type — text, code, diagram (mermaid), table, callout, key-value, task-list, subphase; this is how you add a code block or mermaid chart to an existing plan. See push_document for exact block shapes; unknown/misnamed fields are rejected. Titles are inline-only (a single line); content/description are prose that may hold multiple paragraphs separated by a blank line — but lists, headings, and code fences must be child blocks."`
 	AfterSectionID string         `json:"after_section_id,omitempty" jsonschema:"insert immediately after this top-level section (otherwise appends)"`
 	ReturnDoc      bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
