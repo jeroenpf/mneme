@@ -115,7 +115,9 @@ watch(
   padding: var(--space-8) var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  /* Generous separation between top-level sections — with the larger type,
+     the old 32px read as cramped. Sections group at ~3× their internal gap. */
+  gap: var(--space-12);
   min-width: 0;
 }
 

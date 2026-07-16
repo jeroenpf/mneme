@@ -19,10 +19,14 @@ defineProps<{ id?: string; title?: string; data?: Record<string, string> }>()
 <style scoped>
 /* Two-tone: a shaded key column separated by a divider from a lighter value
    column. The tone contrast makes rows scannable, and the light value column
-   keeps the block legible even when it sits inside a surface-colored card. */
+   keeps the block legible even when it sits inside a surface-colored card.
+
+   The key column uses fit-content so it hugs short keys but never grows past a
+   cap; long, spaceless keys (file paths, identifiers) break inside it instead
+   of overflowing under the divider. */
 .kv {
   display: grid;
-  grid-template-columns: 168px 1fr;
+  grid-template-columns: fit-content(220px) 1fr;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -31,6 +35,7 @@ defineProps<{ id?: string; title?: string; data?: Record<string, string> }>()
 .kv dd {
   padding: var(--space-2) var(--space-4);
   border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
 }
 .kv dt:first-of-type,
 .kv dd:first-of-type {
