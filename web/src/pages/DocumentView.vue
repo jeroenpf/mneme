@@ -32,11 +32,13 @@ const blocks = computed(() => {
   const sections = doc.value?.body?.sections
   if (!Array.isArray(sections)) return []
   // The TOC numbers every top-level entry 01…NN. Mirror that number onto the
-  // body's `section` blocks so their masthead marker matches the nav. Subphase
-  // blocks carry their own phase-number badge, so only sections are annotated.
+  // body's section AND subphase blocks so their masthead marker matches the
+  // nav — a subphase renders as a numbered section, not a badged card.
   const numById = new Map(navItems.value.map((i) => [i.id, i.num]))
   return (sections as Array<Record<string, unknown>>).map((b) =>
-    b?.type === 'section' && typeof b.id === 'string' && numById.has(b.id)
+    (b?.type === 'section' || b?.type === 'subphase') &&
+    typeof b.id === 'string' &&
+    numById.has(b.id)
       ? { ...b, num: numById.get(b.id) }
       : b,
   )

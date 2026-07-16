@@ -96,7 +96,11 @@ describe('DocumentView', () => {
     ])
     expect(w.find('#overview').exists()).toBe(true)
     expect(w.find('#overview').html()).toContain('<strong>world</strong>')
-    expect(w.find('#sp-1-7').text()).toContain('1.7')
+    // Sections and subphases both carry the sequential nav number in the body
+    // (01, 02, …) rather than a subphase's own phase number — a subphase renders
+    // as a numbered section.
+    expect(w.find('#overview .sec-num').text()).toBe('01')
+    expect(w.find('#sp-1-7 .sec-num').text()).toBe('02')
     expect(w.find('[data-test="doc-status"]').text()).toContain('in-progress')
   })
 

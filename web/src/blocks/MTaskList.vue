@@ -37,7 +37,7 @@ defineProps<{ id?: string; title?: string; tasks?: TaskItem[] }>()
 .tasks {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   list-style: none;
   padding: 0;
   margin: 0;
@@ -45,23 +45,36 @@ defineProps<{ id?: string; title?: string; tasks?: TaskItem[] }>()
 .task {
   display: flex;
   gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out);
 }
+.task:hover {
+  background: var(--bg-hover);
+}
+/* Rounded-square checkbox — an empty box for todo, a filled green box with an
+   inverse check for done, matching the phase spine's "done is green" language.
+   (The task model carries only a `done` boolean — no separate wip state.) */
 .box {
   flex: none;
-  width: 13px;
-  height: 13px;
-  margin-top: 3px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-xs);
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
   font-family: var(--font-mono);
-  font-size: 9px;
-  line-height: 11px;
-  text-align: center;
-  color: var(--accent);
+  font-size: 10px;
+  line-height: 1;
+  color: transparent;
 }
 .box.done {
-  background: var(--accent-dim);
-  border-color: var(--accent-border);
+  background: var(--green);
+  border-color: var(--green);
+  /* light check in the light themes, dark in Ink — always the node's inverse */
+  color: var(--bg-elevated);
 }
 .title,
 .title :deep(*) {

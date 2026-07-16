@@ -26,12 +26,24 @@ defineProps<{ id?: string; title?: string; cols?: string[]; rows?: string[][] }>
 
 <style scoped>
 /* Two-tone: a shaded header row anchors a lighter body. The light body also
-   lets the table read when nested inside a surface-colored card. */
+   lets the table read when nested inside a surface-colored card.
+
+   Tables carry more columns than prose has words, so they break out wider than
+   the reading measure — centred on the column's axis and bounded by the doc's
+   available width, so a dense table breathes without ever pushing the page into
+   a horizontal scrollbar. On narrow viewports min-width pins it to the column. */
 .wrap {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   overflow-x: auto;
+  width: min(
+    1080px,
+    calc(100vw - var(--rail-width) - var(--sidebar-width) - 2 * var(--space-8))
+  );
+  min-width: 100%;
+  margin-left: 50%;
+  transform: translateX(-50%);
 }
 table {
   width: 100%;
@@ -40,13 +52,13 @@ table {
 }
 th {
   text-align: left;
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-strong);
   vertical-align: bottom;
 }
 td {
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
   vertical-align: top;
 }
 /* First column carries the row's subject — give it primary weight so wide,
