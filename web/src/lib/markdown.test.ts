@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderInline } from './markdown'
+import { renderInline, renderParagraphs } from './markdown'
 
 describe('renderInline', () => {
   it('renders bold, italic, and inline code', () => {
@@ -41,5 +41,41 @@ describe('renderInline', () => {
     expect(renderInline(undefined)).toBe('')
     expect(renderInline(null)).toBe('')
     expect(renderInline('')).toBe('')
+  })
+})
+
+describe('renderParagraphs', () => {
+  it('returns an empty array for undefined/null/empty', () => {
+    expect(renderParagraphs(undefined)).toEqual([])
+    expect(renderParagraphs(null)).toEqual([])
+    expect(renderParagraphs('')).toEqual([])
+  })
+
+  it('renders a single paragraph as one entry', () => {
+    expect(renderParagraphs('just **one** para')).toEqual(['just <strong>one</strong> para'])
+  })
+
+  it('splits on blank lines into separate paragraphs', () => {
+    expect(renderParagraphs('first para\n\nsecond para')).toEqual(['first para', 'second para'])
+  })
+
+  it('collapses a single newline within a paragraph (soft wrap, not a break)', () => {
+    expect(renderParagraphs('one line\nsame para')).toEqual(['one line\nsame para'])
+  })
+
+  it('breaks before inline bold field-labels so a run of labeled clauses stacks', () => {
+    expect(
+      renderParagraphs('**Files:** a.go, b.go. **Outcome:** it works. **AC:** tests green.'),
+    ).toEqual([
+      '<strong>Files:</strong> a.go, b.go.',
+      '<strong>Outcome:</strong> it works.',
+      '<strong>AC:</strong> tests green.',
+    ])
+  })
+
+  it('leaves ordinary bold (no trailing colon) alone', () => {
+    expect(renderParagraphs('use **bold** and **italic** freely')).toEqual([
+      'use <strong>bold</strong> and <strong>italic</strong> freely',
+    ])
   })
 })

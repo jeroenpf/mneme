@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { renderInline } from '@/lib/markdown'
+import { renderParagraphs } from '@/lib/markdown'
 
 const props = defineProps<{ id?: string; content?: string }>()
-const html = computed(() => renderInline(props.content))
+const paragraphs = computed(() => renderParagraphs(props.content))
 </script>
 
 <template>
-  <p v-if="html" class="mn-body mn-md" v-html="html" />
+  <div v-if="paragraphs.length" class="mn-prose">
+    <p v-for="(html, i) in paragraphs" :key="i" class="mn-body mn-md" v-html="html" />
+  </div>
 </template>

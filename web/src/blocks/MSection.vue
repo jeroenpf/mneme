@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, provide } from 'vue'
 import BlockRenderer from './BlockRenderer.vue'
-import { renderInline } from '@/lib/markdown'
+import { renderInline, renderParagraphs } from '@/lib/markdown'
 
 const props = defineProps<{
   id?: string
@@ -23,8 +23,8 @@ const html = computed(() => renderInline(props.title))
 // A section may carry its prose directly as `content` (the ergonomic
 // channel that update_section patches) as well as nested `children`.
 // Render both, mirroring MText so a section content string and a text
-// block look identical.
-const contentHtml = computed(() => renderInline(props.content))
+// block look identical — including multi-paragraph prose.
+const contentParagraphs = computed(() => renderParagraphs(props.content))
 </script>
 
 <template>
@@ -34,7 +34,9 @@ const contentHtml = computed(() => renderInline(props.content))
       <h2 class="mn-h2 mn-md heading" v-html="html" />
     </div>
     <h3 v-else-if="html" class="mn-h3 mn-md subheading" v-html="html" />
-    <p v-if="contentHtml" class="mn-body mn-md" v-html="contentHtml" />
+    <div v-if="contentParagraphs.length" class="mn-prose">
+      <p v-for="(para, i) in contentParagraphs" :key="i" class="mn-body mn-md" v-html="para" />
+    </div>
     <BlockRenderer :blocks="(children ?? []) as Array<Record<string, unknown>>" />
   </section>
 </template>

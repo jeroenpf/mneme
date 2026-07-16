@@ -64,6 +64,14 @@ html, body, #app {
   color: var(--accent-hover);
 }
 
+/* A run of paragraphs from a single prose field (renderParagraphs). Grouped a
+   touch tighter than the surrounding block gap so the run reads as one unit. */
+.mn-prose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 /* Anchor targets clear the sticky topbar when scrolled to. */
 .mn-anchor {
   scroll-margin-top: calc(var(--topbar-height) + var(--space-4));

@@ -29,4 +29,38 @@ describe('MSubphase', () => {
     expect(w.text()).not.toContain('session')
     expect(w.find('ul').exists()).toBe(false)
   })
+
+  it('renders a top-level subphase as a numbered masthead (mn-h2)', () => {
+    const w = mount(MSubphase, { props: { num: '1', title: 'Backend foundation' } })
+    expect(w.find('.sec-head h2').classes()).toContain('mn-h2')
+    expect(w.find('.sec-num').text()).toBe('1')
+    expect(w.find('.sub-head').exists()).toBe(false)
+  })
+
+  it('demotes a nested subphase to a lighter mn-h3 subheading', () => {
+    // A subphase inside a parent section (e.g. a phase under "Implementation
+    // phases") must read as subordinate, not at the same weight.
+    const w = mount(MSubphase, {
+      props: { num: '1', title: 'Backend foundation' },
+      global: { provide: { 'mn-section-depth': 1 } },
+    })
+    expect(w.find('h2').exists()).toBe(false)
+    expect(w.find('.sub-head h3').classes()).toContain('mn-h3')
+    expect(w.find('.sec-head').exists()).toBe(false)
+    expect(w.find('.sub-num').text()).toBe('1')
+  })
+
+  it('splits a run-on labeled description into one paragraph per label', () => {
+    const w = mount(MSubphase, {
+      props: {
+        num: '1',
+        title: 'P',
+        description: '**Files:** a.go. **Outcome:** works. **AC:** green.',
+      },
+    })
+    const paras = w.findAll('.mn-prose p')
+    expect(paras).toHaveLength(3)
+    expect(paras[0]!.html()).toContain('<strong>Files:</strong>')
+    expect(paras[2]!.html()).toContain('<strong>AC:</strong>')
+  })
 })
