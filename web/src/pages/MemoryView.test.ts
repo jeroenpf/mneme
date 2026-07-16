@@ -4,6 +4,7 @@ import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import type { MemoryEntry } from '@/api/memory'
 import { deleteMemory, listMemory, setMemory } from '@/api/memory'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import MemoryView from './MemoryView.vue'
 
 vi.mock('@/api/memory', () => ({
@@ -11,6 +12,9 @@ vi.mock('@/api/memory', () => ({
   setMemory: vi.fn(),
   deleteMemory: vi.fn(),
 }))
+// Stub the live layer: it constructs a real EventSource (absent in jsdom).
+// Its own behaviour is covered by useLiveRefresh.test.ts.
+vi.mock('@/composables/useLiveRefresh', () => ({ useLiveRefresh: vi.fn() }))
 
 const globalEntry: MemoryEntry = {
   id: 'g1',
@@ -96,5 +100,12 @@ describe('MemoryView', () => {
     expect(vi.mocked(setMemory)).toHaveBeenCalledWith(
       expect.objectContaining({ scope: 'global', key: 'shell', value: 'zsh' }),
     )
+  })
+
+  it('subscribes to live memory events and targets the changed entry by key', async () => {
+    await mountView()
+    expect(useLiveRefresh).toHaveBeenCalledWith('memory', expect.anything())
+    const opts = vi.mocked(useLiveRefresh).mock.calls[0]![1]
+    expect(opts.flashTarget?.({ type: 'memory', id: 'editor' })).toBe('[data-flash-id="editor"]')
   })
 })

@@ -43,4 +43,20 @@ describe('useEnv', () => {
     expect(items.value).toEqual([])
     expect(vi.mocked(listEnv)).not.toHaveBeenCalled()
   })
+
+  it('silent refresh swaps items without ever toggling loading', async () => {
+    const { items, loading, refresh } = useEnv(ref('apollo'))
+    await flushPromises()
+    expect(loading.value).toBe(false)
+
+    vi.mocked(listEnv).mockResolvedValueOnce([
+      entry({ key: 'API_PORT', value: '8443' }),
+      entry({ key: 'DB_SERVICE', value: 'postgres' }),
+    ])
+    const p = refresh({ silent: true })
+    expect(loading.value).toBe(false) // no loading flip → rows stay mounted
+    await p
+    expect(items.value.map((e) => e.key)).toEqual(['API_PORT', 'DB_SERVICE'])
+    expect(loading.value).toBe(false)
+  })
 })

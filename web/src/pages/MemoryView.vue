@@ -7,9 +7,19 @@ import {
   type MemoryTarget,
 } from '@/api/memory'
 import { groupMemory, useMemory } from '@/composables/useMemory'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 
 const { items, loading, error, refresh } = useMemory()
 const grouped = computed(() => groupMemory(items.value))
+
+// Live updates: when the agent writes memory over MCP, silently refetch
+// (view stays mounted) and flash the changed entry. The event carries the
+// key as its id; keys can repeat across scopes, so this flashes the first
+// match — the live layer is convenience, correctness is the refetch.
+useLiveRefresh('memory', {
+  refresh: () => refresh({ silent: true }),
+  flashTarget: (ev) => `[data-flash-id="${ev.id}"]`,
+})
 
 type AddTarget = Omit<MemoryTarget, 'key'>
 
@@ -124,7 +134,7 @@ function add(section: Section) {
 
       <div v-else-if="error" class="error mn-body-sm" data-test="error">
         <p>could not load memory: {{ error.message }}</p>
-        <button class="retry mn-mono-sm" @click="refresh">retry</button>
+        <button class="retry mn-mono-sm" @click="refresh()">retry</button>
       </div>
 
       <template v-else>
@@ -151,6 +161,7 @@ function add(section: Section) {
               v-for="entry in section.entries"
               :key="entry.id"
               class="entry"
+              :data-flash-id="entry.key"
               data-test="entry"
             >
               <span class="entry-key mn-mono">{{ entry.key }}</span>

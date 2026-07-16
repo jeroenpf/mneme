@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as memoryApi from '@/api/memory'
 import type { MemoryEntry } from '@/api/memory'
-import { groupMemory } from './useMemory'
+import { groupMemory, useMemory } from './useMemory'
 
 const entry = (over: Partial<MemoryEntry> & Pick<MemoryEntry, 'scope' | 'key' | 'value'>): MemoryEntry => ({
   id: `${over.scope}:${over.project ?? ''}:${over.area ?? ''}:${over.key}`,
@@ -40,5 +41,25 @@ describe('groupMemory', () => {
     const g = groupMemory([])
     expect(g.global).toEqual([])
     expect(g.projects).toEqual([])
+  })
+})
+
+describe('useMemory silent refresh', () => {
+  it('swaps items without ever toggling loading', async () => {
+    const spy = vi
+      .spyOn(memoryApi, 'listMemory')
+      .mockResolvedValue([entry({ scope: 'global', key: 'editor', value: 'vscode' })])
+    const { items, loading, refresh } = useMemory()
+    await vi.waitFor(() => expect(loading.value).toBe(false))
+
+    spy.mockResolvedValue([
+      entry({ scope: 'global', key: 'editor', value: 'vscode' }),
+      entry({ scope: 'global', key: 'shell', value: 'zsh' }),
+    ])
+    const p = refresh({ silent: true })
+    expect(loading.value).toBe(false) // no loading flip → view stays mounted
+    await p
+    expect(items.value).toHaveLength(2)
+    expect(loading.value).toBe(false)
   })
 })

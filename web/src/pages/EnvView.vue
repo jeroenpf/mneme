@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { deleteEnv, setEnv, type EnvEntry } from '@/api/env'
 import { useEnv } from '@/composables/useEnv'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import { useProjects } from '@/composables/useProjects'
 
 const route = useRoute()
@@ -24,6 +25,15 @@ watch(selected, (p) => {
 })
 
 const { items, loading, error, refresh } = useEnv(selected)
+
+// Live updates: when the agent writes env over MCP, silently refetch and
+// flash the changed row — but only for the project currently in view, since
+// env is project-scoped (a write to another project must not steal focus).
+useLiveRefresh('env', {
+  refresh: () => refresh({ silent: true }),
+  match: (ev) => ev.project === selected.value,
+  flashTarget: (ev) => `[data-flash-id="${ev.id}"]`,
+})
 
 const actionError = ref<string | null>(null)
 async function run(fn: () => Promise<unknown>) {
@@ -129,7 +139,7 @@ const isEmpty = computed(() => items.value.length === 0)
 
         <div v-else-if="error" class="error mn-body-sm" data-test="error">
           <p>could not load env: {{ error.message }}</p>
-          <button class="retry mn-mono-sm" @click="refresh">retry</button>
+          <button class="retry mn-mono-sm" @click="refresh()">retry</button>
         </div>
 
         <template v-else>
@@ -142,7 +152,13 @@ const isEmpty = computed(() => items.value.length === 0)
             <div class="row row-head mn-mono-sm">
               <span>key</span><span>value</span><span>description</span><span></span>
             </div>
-            <div v-for="entry in items" :key="entry.id" class="row" data-test="entry">
+            <div
+              v-for="entry in items"
+              :key="entry.id"
+              class="row"
+              :data-flash-id="entry.key"
+              data-test="entry"
+            >
               <span class="entry-key mn-mono">{{ entry.key }}</span>
               <input
                 class="entry-value mn-mono"

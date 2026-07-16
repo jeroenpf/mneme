@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import type { EnvEntry } from '@/api/env'
 import { deleteEnv, listEnv, setEnv } from '@/api/env'
 import { listProjects } from '@/api/projects'
+import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import EnvView from './EnvView.vue'
 
 vi.mock('@/api/env', () => ({
@@ -13,6 +14,9 @@ vi.mock('@/api/env', () => ({
   deleteEnv: vi.fn(),
 }))
 vi.mock('@/api/projects', () => ({ listProjects: vi.fn() }))
+// Stub the live layer: it constructs a real EventSource (absent in jsdom).
+// Its own behaviour is covered by useLiveRefresh.test.ts.
+vi.mock('@/composables/useLiveRefresh', () => ({ useLiveRefresh: vi.fn() }))
 
 const portEntry: EnvEntry = {
   id: 'e1',
@@ -108,5 +112,15 @@ describe('EnvView', () => {
     expect(vi.mocked(setEnv)).toHaveBeenCalledWith(
       expect.objectContaining({ project: 'apollo', key: 'DB_SERVICE', value: 'postgres' }),
     )
+  })
+
+  it('subscribes to live env events scoped to the selected project', async () => {
+    await mountView() // selected defaults to the only project, 'apollo'
+    expect(useLiveRefresh).toHaveBeenCalledWith('env', expect.anything())
+    const opts = vi.mocked(useLiveRefresh).mock.calls[0]![1]
+    // Only events for the project in view are acted on.
+    expect(opts.match?.({ type: 'env', id: 'API_PORT', project: 'apollo' })).toBe(true)
+    expect(opts.match?.({ type: 'env', id: 'API_PORT', project: 'other' })).toBe(false)
+    expect(opts.flashTarget?.({ type: 'env', id: 'API_PORT' })).toBe('[data-flash-id="API_PORT"]')
   })
 })
