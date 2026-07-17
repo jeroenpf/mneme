@@ -7,7 +7,7 @@ WEB     := web
 GO_PKGS := ./...
 
 .DEFAULT_GOAL := help
-.PHONY: help dev up down logs psql seed test build tidy clean reset setup-host verify-host
+.PHONY: help dev start up down logs psql seed test build tidy clean reset setup-host verify-host
 
 help: ## Show this list
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -16,6 +16,15 @@ help: ## Show this list
 dev: up ## Start full stack: postgres + Go (via air) + Vite. Ctrl-C stops Vite; backend stays running.
 	cd $(WEB) && npm install --silent && \
 		NODE_EXTRA_CA_CERTS="$$(mkcert -CAROOT)/rootCA.pem" npm run dev
+
+start: ## Build the SPA and run the stack at https://mneme.dev:8443 (embedded, no dev server). Re-run to pick up updates.
+	cd $(WEB) && npm install --silent && npm run build
+	rm -rf internal/web/dist && cp -r $(WEB)/dist internal/web/dist
+	touch internal/web/dist/.gitkeep
+	$(COMPOSE) up -d --build
+	$(COMPOSE) restart app
+	@echo ""
+	@echo "  Mneme is running → https://mneme.dev:8443"
 
 up: ## Bring up backend containers in the background
 	$(COMPOSE) up -d
