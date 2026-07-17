@@ -31,10 +31,11 @@ You do **not** need Go installed — the Go server compiles inside the Docker co
 
 ## 1. Get the code
 
-Clone the repository (ask the maintainer for the URL / access), then enter it:
+Clone the repository (it's private — you'll need access granted to your GitHub account),
+then enter it:
 
 ```bash
-git clone <repo-url> mneme
+git clone https://github.com/jeroenpf/mneme.git
 cd mneme
 ```
 
