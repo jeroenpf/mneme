@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpfeil/mneme/internal/ids"
 	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
@@ -112,7 +113,7 @@ func (t *tools) updateTask(ctx context.Context, _ *sdk.CallToolRequest, in updat
 type addTaskInput struct {
 	DocID       string         `json:"doc_id" jsonschema:"document id"`
 	SectionID   string         `json:"section_id" jsonschema:"id of the subphase or task-list to append the task into"`
-	Task        map[string]any `json:"task" jsonschema:"task object — must include id; typical fields: title, content, done, tags"`
+	Task        map[string]any `json:"task" jsonschema:"task object — id is optional (Mneme mints one when omitted; a supplied id must be unique in the document). Typical fields: title, content, done, tags"`
 	AfterTaskID string         `json:"after_task_id,omitempty" jsonschema:"insert immediately after this task id (otherwise appends)"`
 	ReturnDoc   bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
@@ -123,9 +124,6 @@ func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskI
 	}
 	if in.Task == nil {
 		return nil, nil, errors.New("task is required")
-	}
-	if id, _ := in.Task["id"].(string); id == "" {
-		return nil, nil, errors.New("task.id is required")
 	}
 
 	doc, err := t.loadDoc(ctx, in.DocID)
@@ -139,6 +137,15 @@ func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskI
 	container := findTaskContainer(sections, in.SectionID)
 	if container == nil {
 		return nil, nil, fmt.Errorf("subphase or task-list %q not found", in.SectionID)
+	}
+	// Mint a task id when the caller omits one, and reject a supplied id
+	// already used by another block or task in the document.
+	taken, err := existingIDSet(doc.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+	if _, err := resolveIDs([]idNode{{node: in.Task, kind: ids.KindTask, path: "task"}}, taken); err != nil {
+		return nil, nil, err
 	}
 
 	tasks, _ := container["tasks"].([]any)

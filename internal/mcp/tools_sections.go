@@ -17,6 +17,7 @@ import (
 // whole document into the session context.
 type sectionResult struct {
 	Section map[string]any   `json:"section"`
+	Created []createdID      `json:"created,omitempty"`
 	Doc     *models.Document `json:"doc,omitempty"`
 }
 
@@ -87,7 +88,7 @@ func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in up
 
 type addSectionInput struct {
 	DocID          string         `json:"doc_id" jsonschema:"document id"`
-	Section        map[string]any `json:"section" jsonschema:"block to append; must include a unique id and valid type. Uses the same block shapes, nesting, prose rules, and validation documented by push_document.body."`
+	Section        map[string]any `json:"section" jsonschema:"block to append; must include a valid type. id is optional — omit it and Mneme mints a stable one (returned in 'created'), including for any nested children/tasks; a supplied id must be unique in the document. Uses the same block shapes, nesting, prose rules, and validation documented by push_document.body."`
 	AfterSectionID string         `json:"after_section_id,omitempty" jsonschema:"insert immediately after this top-level section (otherwise appends)"`
 	ReturnDoc      bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }
@@ -95,10 +96,6 @@ type addSectionInput struct {
 func (t *tools) addSection(ctx context.Context, _ *sdk.CallToolRequest, in addSectionInput) (*sdk.CallToolResult, *sectionResult, error) {
 	if in.Section == nil {
 		return nil, nil, errors.New("section is required")
-	}
-	id, _ := in.Section["id"].(string)
-	if id == "" {
-		return nil, nil, errors.New("section.id is required")
 	}
 	typ, _ := in.Section["type"].(string)
 	if typ == "" {
@@ -119,6 +116,22 @@ func (t *tools) addSection(ctx context.Context, _ *sdk.CallToolRequest, in addSe
 	if doc.Body == nil {
 		doc.Body = map[string]any{}
 	}
+	// Mint ids for the new block and any children/tasks that omit one, and
+	// reject a supplied id that collides with one already in the document.
+	taken, err := existingIDSet(doc.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+	var subNodes []idNode
+	if err := collectIDNodes([]any{in.Section}, "section", &subNodes); err != nil {
+		return nil, nil, err
+	}
+	created, err := resolveIDs(subNodes, taken)
+	if err != nil {
+		return nil, nil, err
+	}
+	id, _ := in.Section["id"].(string)
+
 	sections, err := sectionsArray(doc.Body)
 	if err != nil {
 		return nil, nil, err
@@ -151,7 +164,7 @@ func (t *tools) addSection(ctx context.Context, _ *sdk.CallToolRequest, in addSe
 		return nil, nil, err
 	}
 	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: id, Op: "add_section"})
-	out := &sectionResult{Section: in.Section}
+	out := &sectionResult{Section: in.Section, Created: created}
 	if in.ReturnDoc {
 		out.Doc = doc
 	}

@@ -47,10 +47,13 @@ func summarize(d *models.Document) docSummary {
 
 // docWriteResult is the lean confirmation for push_document /
 // update_document_meta: the document's meta summary, no body. The full
-// document is attached solely when the caller passes return_doc.
+// document is attached solely when the caller passes return_doc. Created
+// lists any block/task ids the server minted for nodes the caller left
+// unnamed, so the caller learns their stable handles.
 type docWriteResult struct {
 	docSummary
-	Doc *models.Document `json:"doc,omitempty"`
+	Created []createdID      `json:"created,omitempty"`
+	Doc     *models.Document `json:"doc,omitempty"`
 }
 
 // writeResult builds a docWriteResult, attaching the full document only

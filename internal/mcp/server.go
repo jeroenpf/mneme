@@ -124,7 +124,7 @@ func addTool[In, Out any](s *sdk.Server, tool *sdk.Tool, handler sdk.ToolHandler
 func (t *tools) register(s *sdk.Server) {
 	addTool(s, &sdk.Tool{
 		Name:        "push_document",
-		Description: "Create or upsert a document by meta.id. Validates block types and prose content (body prose allows blank-line paragraphs; lists/headings/code fences must be child blocks). Returns a compact summary (no body); pass return_doc:true for the full stored document.",
+		Description: "Create or upsert a document by meta.id. Validates block types and prose content (body prose allows blank-line paragraphs; lists/headings/code fences must be child blocks). Mints stable ids for blocks/tasks that omit them and rejects duplicate ids (listed in 'created'). Returns a compact summary (no body); pass return_doc:true for the full stored document.",
 	}, t.pushDocument)
 
 	addTool(s, &sdk.Tool{
@@ -249,7 +249,7 @@ func (t *tools) register(s *sdk.Server) {
 
 	addTool(s, &sdk.Tool{
 		Name:        "add_task",
-		Description: "Append a task to a subphase or task-list block (after_task_id to position it). Returns the new task; pass return_doc for the full document.",
+		Description: "Append a task to a subphase or task-list block (after_task_id to position it). Generates the task id when omitted, and rejects a supplied id already used in the document. Returns the new task; pass return_doc for the full document.",
 	}, t.addTask)
 
 	addTool(s, &sdk.Tool{
@@ -264,7 +264,7 @@ func (t *tools) register(s *sdk.Server) {
 
 	addTool(s, &sdk.Tool{
 		Name:        "add_section",
-		Description: "Append any validated document block, including a section, code, Mermaid diagram, table, callout, key-value, task-list, or subphase. Exact shapes are documented by push_document.body. Returns the new block; pass return_doc for the full document.",
+		Description: "Append any validated document block, including a section, code, Mermaid diagram, table, callout, key-value, task-list, or subphase. Exact shapes are documented by push_document.body. Mints ids for the block and any nested children/tasks that omit them (listed in 'created'). Returns the new block; pass return_doc for the full document.",
 	}, t.addSection)
 
 	addTool(s, &sdk.Tool{
