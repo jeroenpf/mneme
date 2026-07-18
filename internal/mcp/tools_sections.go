@@ -87,7 +87,7 @@ func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in up
 
 type addSectionInput struct {
 	DocID          string         `json:"doc_id" jsonschema:"document id"`
-	Section        map[string]any `json:"section" jsonschema:"section block — must include id and type (type:section). Carries title (heading), an optional content string (markdown prose rendered under the heading), and/or a children array of nested blocks. children may be any block type — text, code, diagram (mermaid), table, callout, key-value, task-list, subphase; this is how you add a code block or mermaid chart to an existing plan. See push_document for exact block shapes; unknown/misnamed fields are rejected. Titles are inline-only (a single line); content/description are prose that may hold multiple paragraphs separated by a blank line — but lists, headings, and code fences must be child blocks."`
+	Section        map[string]any `json:"section" jsonschema:"block to append; must include a unique id and valid type. Uses the same block shapes, nesting, prose rules, and validation documented by push_document.body."`
 	AfterSectionID string         `json:"after_section_id,omitempty" jsonschema:"insert immediately after this top-level section (otherwise appends)"`
 	ReturnDoc      bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false"`
 }

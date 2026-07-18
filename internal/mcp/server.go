@@ -40,15 +40,15 @@ Use search(q, types?) for a single ranked query across every content type (docum
 
 push_document is upsert-by-meta.id — reserve it for new documents or full rewrites. A document's project must already exist; call create_project(slug, name) once to register a new project before pushing documents that reference it.
 
-At the START of every session, call get_context_bundle(project, area?) — one call returns merged memory, the active plan's status, recent decisions, relevant snippets, and recent journal entries, as a paste-ready markdown digest. Prefer it over calling get_memory / get_decisions / get_snippets / get_journal individually at startup.
+At the start of every session, call get_context_bundle(project, area?) — one call returns merged memory, the active plan's status, recent decisions, relevant snippets, and recent journal entries as a paste-ready markdown digest. Use the individual read tools only when you need more detail or history than the bundle contains.
 
-At session start, call get_memory(scope) to load persistent context (global, or project/area for the active project) instead of asking the user to re-explain. Use set_memory to record durable facts worth carrying across sessions.
+Use set_memory to record durable facts worth carrying across sessions. Use get_memory when you need to inspect a specific scope beyond the session bundle.
 
 Record durable decisions with log_decision as you make them (tech/library choices, pattern selections, trade-off resolutions) so the "why" stays searchable via query_decisions. This is the mutable decision log — distinct from hardened ADRs that graduate to the repo as markdown.
 
 Save reusable code patterns and project conventions with save_snippet as you establish them, and consult get_snippets / search_snippets before re-implementing one so the codebase stays consistent.
 
-At the end of a work session, record what happened with append_journal (summary + what you accomplished + what you deferred); call get_journal at the start of the next session to orient on where you left off.
+At the end of a work session, record what happened with append_journal (summary + what you accomplished + what you deferred). Use get_journal when you need history beyond the recent entries in the session bundle.
 
 Before debugging a non-obvious or environment-specific error, call find_solution(query) to check for a known fix; after solving one, record it with log_solution (error_description + solution) so the next session finds it instead of re-debugging.
 
@@ -107,171 +107,182 @@ type tools struct {
 	client embed.Client
 }
 
+// addTool keeps the advertised output contract deliberately minimal. The
+// concrete Out type still gives handlers compile-time type safety and the SDK
+// still serializes it into content + structuredContent, but avoiding the
+// inferred field-by-field schema prevents every tool from advertising a large
+// shape callers do not need in order to invoke it. Input schemas stay fully
+// inferred and validated by the SDK.
+func addTool[In, Out any](s *sdk.Server, tool *sdk.Tool, handler sdk.ToolHandlerFor[In, Out]) {
+	tool.OutputSchema = map[string]any{"type": "object"}
+	sdk.AddTool(s, tool, handler)
+}
+
 // register installs every Phase 1.4 tool on the SDK server. Adding a
 // new tool means: define request/response structs, write the handler
-// method on *tools, and add one sdk.AddTool line here.
+// method on *tools, and add one addTool line here.
 func (t *tools) register(s *sdk.Server) {
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "push_document",
 		Description: "Create or upsert a document by meta.id. Validates block types and prose content (body prose allows blank-line paragraphs; lists/headings/code fences must be child blocks). Returns a compact summary (no body); pass return_doc:true for the full stored document.",
 	}, t.pushDocument)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "create_project",
 		Description: "Register a new project (slug + human-friendly name, optional description) so documents can reference it. push_document errors on an unknown project; create it first. Returns the stored project (slug normalized to kebab-case).",
 	}, t.createProject)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "get_memory",
-		Description: "Load persistent memory for a scope as a flat key/value object. scope=global returns global keys; scope=project (with project) merges global+project; scope=area (with project+area) merges global+project+area, most-specific winning. Call at session start to orient.",
+		Description: "Load persistent memory for a specific scope beyond the session bundle. Global, project, and area values are merged from least to most specific.",
 	}, t.getMemory)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "set_memory",
 		Description: "Upsert a memory key/value at a scope (global | project | area). project required for project/area scope; area required for area scope. Returns the stored entry.",
 	}, t.setMemory)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "delete_memory",
 		Description: "Delete a memory key at a scope. Same scope args as set_memory.",
 	}, t.deleteMemory)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "get_env",
 		Description: "Load a project's non-secret env registry as a flat {key: value} object — ports, service names, local URLs, Docker service names. Call this instead of asking \"what port does X run on?\". Never holds secrets.",
 	}, t.getEnv)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "set_env",
 		Description: "Upsert a non-secret env entry for a project (key + value, optional description) — ports, service names, local URLs. NEVER secrets/tokens/passwords. Returns the stored entry.",
 	}, t.setEnv)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "list_env",
 		Description: "List a project's env entries as full records including descriptions. Use get_env for a flat key/value map.",
 	}, t.listEnv)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "log_decision",
 		Description: "Record an architecture decision (ADR) — the mutable decision log Claude Code writes as a session side-effect. Omit id to create (title + decision required; project optional, omit for a global decision; status defaults to accepted). Pass id to update an existing decision, e.g. flip status proposed→accepted→deprecated. Returns the stored decision.",
 	}, t.logDecision)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "get_decisions",
 		Description: "List decisions newest-first, optionally filtered by project and/or status. Returns full records (rationale, alternatives, consequences) (default 20, max 100).",
 	}, t.getDecisions)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "query_decisions",
 		Description: "Full-text search decisions ranked by relevance — answers \"why did we choose X?\". Searches title, decision, rationale, alternatives, consequences. Optional project scope (default 10, max 50).",
 	}, t.queryDecisions)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "save_snippet",
 		Description: "Save a reusable code pattern or project convention — the snippet library that keeps Claude Code consistent without re-explaining. Omit id to create (title + content required; project optional, omit for a global snippet; language free-text like go/typescript/sql). Pass id to update an existing snippet (refine the pattern). Returns the stored snippet.",
 	}, t.saveSnippet)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "get_snippets",
 		Description: "List snippets newest-first, optionally filtered by project, language, and/or tag. Returns full records including content (default 20, max 100).",
 	}, t.getSnippets)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "search_snippets",
 		Description: "Full-text search snippets ranked by relevance — answers \"how do we do X in this project?\". Searches title, description, content. Optional project/language/tag filters (default 10, max 50).",
 	}, t.searchSnippets)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "append_journal",
 		Description: "Append a dev-journal entry — the per-session log of what was built, deferred, and changed. Omit id to create (summary required; project optional, omit for a global entry; session_ref is a free-text phase/session id). Pass id to refine the current session's entry as you go. Returns the stored entry.",
 	}, t.appendJournal)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "get_journal",
 		Description: "List dev-journal entries newest-first, optionally filtered by project and/or a since date (YYYY-MM-DD or RFC3339). Use limit for just the most recent few. Returns full entries (summary, accomplished, deferred) (default 20, max 100).",
 	}, t.getJournal)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "log_solution",
 		Description: "Log an error and the fix that worked — the searchable error/solution database. Omit id to create (error_description + solution required; project optional, omit for a global gotcha). Pass id to refine an existing entry. Returns the stored solution.",
 	}, t.logSolution)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "find_solution",
 		Description: "Search the error/solution database for a fix, ranked by relevance — call this BEFORE debugging to check whether an error has a known fix. Returns the top 3 matches by default (pass limit to widen). Optional project/tag filters.",
 	}, t.findSolution)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "get_context_bundle",
-		Description: "Assemble everything needed to start a session on a project in one call: merged memory (global+project+area), the active plan's status, recent decisions, relevant snippets, and recent journal entries — returned as structured data plus a paste-ready markdown digest. Call this FIRST in every session. Args: project (required), area (optional).",
+		Description: "Return the paste-ready markdown digest for starting a project session: merged memory, active-plan status, recent decisions, relevant snippets, and recent journal entries. Call this first in every session.",
 	}, t.getContextBundle)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "list_documents",
 		Description: "List documents, optionally filtered by project, type, or status. Body is omitted for compactness.",
 	}, t.listDocuments)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "get_document",
 		Description: "Fetch a single document including its body.",
 	}, t.getDocument)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "search_documents",
 		Description: "Full-text search across documents. Returns ranked matches without bodies.",
 	}, t.searchDocuments)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "search",
-		Description: "Unified full-text search across documents, decisions, snippets, solutions, and journal — ranked by relevance, newest-first on ties. Args: q (required); types (optional subset of documents|decisions|snippets|solutions|journal, default all); project (optional scope); limit (default 10). Returns ranked hits with type, id, title, excerpt, project, score. Superset of search_documents.",
+		Description: "Search documents, decisions, snippets, solutions, and journal in one ranked query when you do not know which content type holds the answer. Returns compact hits and is a superset of search_documents.",
 	}, t.search)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "tick_task",
 		Description: "Toggle a task's done flag. Returns {task_id, done}; pass return_doc for the full updated document.",
 	}, t.tickTask)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "update_task",
 		Description: "Patch a task's title, content, done, or tags. Returns the updated task; pass return_doc for the full document.",
 	}, t.updateTask)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "add_task",
 		Description: "Append a task to a subphase or task-list block (after_task_id to position it). Returns the new task; pass return_doc for the full document.",
 	}, t.addTask)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "remove_task",
 		Description: "Remove a task from its subphase.",
 	}, t.removeTask)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "update_section",
 		Description: "Patch a section block's fields. Returns the patched block; pass return_doc for the full document.",
 	}, t.updateSection)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "add_section",
-		Description: "Append a section (after_section_id to position it). Returns the new block; pass return_doc for the full document.",
+		Description: "Append any validated document block, including a section, code, Mermaid diagram, table, callout, key-value, task-list, or subphase. Exact shapes are documented by push_document.body. Returns the new block; pass return_doc for the full document.",
 	}, t.addSection)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "remove_section",
 		Description: "Remove a section block from body.sections.",
 	}, t.removeSection)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "advance_phase",
 		Description: "Flip the current meta.phases entry wip->done and the next todo->wip. Returns {completed_index, next_index, phase_current, phase_total, status}; pass return_doc for the full document. Falls back to bumping phase_current when meta.phases[] is absent.",
 	}, t.advancePhase)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "archive_document",
 		Description: "Set a document's status to archived.",
 	}, t.archiveDocument)
 
-	sdk.AddTool(s, &sdk.Tool{
+	addTool(s, &sdk.Tool{
 		Name:        "update_document_meta",
 		Description: "Replace a document's meta object (body untouched). Returns a compact summary; pass return_doc:true for the full document.",
 	}, t.updateDocumentMeta)

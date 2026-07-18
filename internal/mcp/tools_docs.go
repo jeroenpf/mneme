@@ -186,7 +186,7 @@ func (t *tools) archiveDocument(ctx context.Context, _ *sdk.CallToolRequest, in 
 
 type updateMetaInput struct {
 	ID        string         `json:"id" jsonschema:"document id"`
-	Meta      map[string]any `json:"meta" jsonschema:"new meta object — REPLACES the existing meta in full, so send every key you want to keep (a dropped project would orphan a plan). Same keys and valid values as push_document: id, title, type (plan|report|spec|adr|brainstorm|journal), project (required for plans), status (todo|in-progress|complete|blocked|archived), category, ticket, repo, tags, phase_current, phase_total."`
+	Meta      map[string]any `json:"meta" jsonschema:"new meta object — REPLACES the existing meta in full, so send every key you want to keep; dropping project would orphan a plan. Uses the same keys and rules as push_document.meta."`
 	ReturnDoc bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full updated document; default false (a compact summary is returned)"`
 }
 
