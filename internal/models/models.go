@@ -10,6 +10,7 @@ import (
 // represented as pointers so JSON encoding produces null rather than "".
 type Document struct {
 	ID           string         `json:"id"`
+	PublicID     string         `json:"public_id"`
 	Title        string         `json:"title"`
 	Project      *string        `json:"project,omitempty"`
 	Category     *string        `json:"category,omitempty"`
@@ -29,6 +30,7 @@ type Document struct {
 // Project mirrors the projects row.
 type Project struct {
 	ID          string    `json:"id"`
+	PublicID    string    `json:"public_id"`
 	Name        string    `json:"name"`
 	Slug        string    `json:"slug"`
 	Description *string   `json:"description,omitempty"`
@@ -183,6 +185,7 @@ const (
 // (cross-project) decision.
 type Decision struct {
 	ID           string         `json:"id"`
+	PublicID     string         `json:"public_id"`
 	Title        string         `json:"title"`
 	Project      *string        `json:"project,omitempty"`
 	Decision     string         `json:"decision"`
@@ -215,6 +218,7 @@ func ValidateDecisionStatus(s DecisionStatus) error {
 // plaintext for unknown languages.
 type Snippet struct {
 	ID          string    `json:"id"`
+	PublicID    string    `json:"public_id"`
 	Title       string    `json:"title"`
 	Project     *string   `json:"project,omitempty"`
 	Language    string    `json:"language"`
@@ -231,6 +235,7 @@ type Snippet struct {
 // Summary is required; session_ref is free-text (e.g. "sp-2-4").
 type JournalEntry struct {
 	ID           string    `json:"id"`
+	PublicID     string    `json:"public_id"`
 	Project      *string   `json:"project,omitempty"`
 	SessionRef   string    `json:"session_ref"`
 	Summary      string    `json:"summary"`
@@ -259,6 +264,7 @@ func ParseSince(s string) (time.Time, error) {
 // required; SourceURL is an optional link (empty = none).
 type Solution struct {
 	ID               string    `json:"id"`
+	PublicID         string    `json:"public_id"`
 	Project          *string   `json:"project,omitempty"`
 	ErrorDescription string    `json:"error_description"`
 	Solution         string    `json:"solution"`

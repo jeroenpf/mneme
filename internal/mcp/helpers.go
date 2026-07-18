@@ -21,6 +21,7 @@ type okResult struct {
 // list_documents and search_documents — body stripped.
 type docSummary struct {
 	ID           string   `json:"id"`
+	PublicID     string   `json:"public_id"`
 	Title        string   `json:"title"`
 	Project      *string  `json:"project,omitempty"`
 	Type         string   `json:"type"`
@@ -34,6 +35,7 @@ type docSummary struct {
 func summarize(d *models.Document) docSummary {
 	return docSummary{
 		ID:           d.ID,
+		PublicID:     d.PublicID,
 		Title:        d.Title,
 		Project:      d.Project,
 		Type:         d.Type,

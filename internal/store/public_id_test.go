@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/jeroenpfeil/mneme/internal/ids"
+	"github.com/jeroenpfeil/mneme/internal/models"
 )
 
 // TestPublicIDColumnDefaultsToAValidID verifies migration 015: every
@@ -60,5 +61,67 @@ func TestPublicIDIsUniqueAcrossRows(t *testing.T) {
 	// A duplicate value must be rejected by the unique index.
 	if _, err := s.Pool().Exec(ctx, `INSERT INTO decisions (title, decision, public_id) VALUES ('C','D',$1)`, a); err == nil {
 		t.Errorf("inserting a duplicate public_id %q should violate the unique index", a)
+	}
+}
+
+// TestStoreThreadsPublicIDThroughCreateAndGet verifies the store reads the
+// DB-minted public_id back on create (into the model) and returns it on a
+// subsequent read, for both the slug-keyed (documents) and UUID-keyed tables.
+func TestStoreThreadsPublicIDThroughCreateAndGet(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	doc := &models.Document{ID: "veh", Title: "T", Type: "spec", Status: models.StatusTodo}
+	if err := s.CreateDocument(ctx, doc); err != nil {
+		t.Fatalf("CreateDocument: %v", err)
+	}
+	if !ids.ValidFor(ids.KindDocument, doc.PublicID) {
+		t.Errorf("CreateDocument left public_id = %q, want a valid doc id", doc.PublicID)
+	}
+	if got, err := s.GetDocument(ctx, "veh"); err != nil || got.PublicID != doc.PublicID {
+		t.Errorf("GetDocument public_id = %q (err %v), want %q", got.PublicID, err, doc.PublicID)
+	}
+
+	proj := &models.Project{Name: "Apollo", Slug: "apollo"}
+	if err := s.CreateProject(ctx, proj); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if !ids.ValidFor(ids.KindProject, proj.PublicID) {
+		t.Errorf("CreateProject public_id = %q, want a valid project id", proj.PublicID)
+	}
+
+	dec := &models.Decision{Title: "T", Decision: "D", Status: models.DecisionAccepted}
+	if err := s.CreateDecision(ctx, dec); err != nil {
+		t.Fatalf("CreateDecision: %v", err)
+	}
+	if !ids.ValidFor(ids.KindDecision, dec.PublicID) {
+		t.Errorf("CreateDecision public_id = %q, want a valid decision id", dec.PublicID)
+	}
+	if got, err := s.GetDecision(ctx, dec.ID); err != nil || got.PublicID != dec.PublicID {
+		t.Errorf("GetDecision public_id = %q (err %v), want %q", got.PublicID, err, dec.PublicID)
+	}
+
+	snip := &models.Snippet{Title: "T", Content: "C"}
+	if err := s.CreateSnippet(ctx, snip); err != nil {
+		t.Fatalf("CreateSnippet: %v", err)
+	}
+	if !ids.ValidFor(ids.KindSnippet, snip.PublicID) {
+		t.Errorf("CreateSnippet public_id = %q, want a valid snippet id", snip.PublicID)
+	}
+
+	jr := &models.JournalEntry{Summary: "S"}
+	if err := s.CreateJournalEntry(ctx, jr); err != nil {
+		t.Fatalf("CreateJournalEntry: %v", err)
+	}
+	if !ids.ValidFor(ids.KindJournal, jr.PublicID) {
+		t.Errorf("CreateJournalEntry public_id = %q, want a valid journal id", jr.PublicID)
+	}
+
+	sol := &models.Solution{ErrorDescription: "E", Solution: "S"}
+	if err := s.CreateSolution(ctx, sol); err != nil {
+		t.Fatalf("CreateSolution: %v", err)
+	}
+	if !ids.ValidFor(ids.KindSolution, sol.PublicID) {
+		t.Errorf("CreateSolution public_id = %q, want a valid solution id", sol.PublicID)
 	}
 }

@@ -96,14 +96,14 @@ func (s *PostgresStore) Pool() *pgxpool.Pool { return s.pool }
 // documentColumns is the SELECT list used by every Get/List/Search query.
 // Keep this in lockstep with scanDocument.
 const documentColumns = `
-	id, title, project, category, type, status,
+	id, public_id, title, project, category, type, status,
 	ticket, repo, tags, phase_current, phase_total,
 	meta, body, created_at, updated_at`
 
 func scanDocument(row pgx.Row) (*models.Document, error) {
 	d := &models.Document{}
 	err := row.Scan(
-		&d.ID, &d.Title, &d.Project, &d.Category, &d.Type, &d.Status,
+		&d.ID, &d.PublicID, &d.Title, &d.Project, &d.Category, &d.Type, &d.Status,
 		&d.Ticket, &d.Repo, &d.Tags, &d.PhaseCurrent, &d.PhaseTotal,
 		&d.Meta, &d.Body, &d.CreatedAt, &d.UpdatedAt,
 	)
@@ -135,13 +135,13 @@ func (s *PostgresStore) CreateDocument(ctx context.Context, doc *models.Document
 			$7, $8, $9, $10, $11,
 			$12, $13
 		)
-		RETURNING created_at, updated_at`
+		RETURNING public_id, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q,
 		doc.ID, doc.Title, doc.Project, doc.Category, doc.Type, doc.Status,
 		doc.Ticket, doc.Repo, ensureTags(doc.Tags), doc.PhaseCurrent, doc.PhaseTotal,
 		ensureJSONMap(doc.Meta), ensureJSONMap(doc.Body),
 	)
-	if err := row.Scan(&doc.CreatedAt, &doc.UpdatedAt); err != nil {
+	if err := row.Scan(&doc.PublicID, &doc.CreatedAt, &doc.UpdatedAt); err != nil {
 		return translateWriteErr("insert document", err)
 	}
 	return nil
@@ -283,9 +283,9 @@ func (s *PostgresStore) CreateProject(ctx context.Context, p *models.Project) er
 	const q = `
 		INSERT INTO projects (name, slug, description)
 		VALUES ($1, $2, $3)
-		RETURNING id, created_at`
+		RETURNING id, public_id, created_at`
 	row := s.pool.QueryRow(ctx, q, p.Name, p.Slug, p.Description)
-	if err := row.Scan(&p.ID, &p.CreatedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.PublicID, &p.CreatedAt); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
 			return ErrDuplicateProject
@@ -296,9 +296,9 @@ func (s *PostgresStore) CreateProject(ctx context.Context, p *models.Project) er
 }
 
 func (s *PostgresStore) GetProject(ctx context.Context, slug string) (*models.Project, error) {
-	const q = `SELECT id, name, slug, description, created_at FROM projects WHERE slug = $1`
+	const q = `SELECT id, public_id, name, slug, description, created_at FROM projects WHERE slug = $1`
 	p := &models.Project{}
-	err := s.pool.QueryRow(ctx, q, slug).Scan(&p.ID, &p.Name, &p.Slug, &p.Description, &p.CreatedAt)
+	err := s.pool.QueryRow(ctx, q, slug).Scan(&p.ID, &p.PublicID, &p.Name, &p.Slug, &p.Description, &p.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -429,7 +429,7 @@ func (s *PostgresStore) DeleteEnv(ctx context.Context, project, key string) erro
 
 func (s *PostgresStore) ListProjects(ctx context.Context) ([]*models.ProjectStats, error) {
 	const q = `
-		SELECT p.id, p.name, p.slug, p.description, p.created_at,
+		SELECT p.id, p.public_id, p.name, p.slug, p.description, p.created_at,
 		       COUNT(d.id) FILTER (WHERE d.status = 'todo')        AS c_todo,
 		       COUNT(d.id) FILTER (WHERE d.status = 'in-progress') AS c_in_progress,
 		       COUNT(d.id) FILTER (WHERE d.status = 'complete')    AS c_complete,
@@ -438,7 +438,7 @@ func (s *PostgresStore) ListProjects(ctx context.Context) ([]*models.ProjectStat
 		       COUNT(d.id)                                         AS c_total
 		FROM projects p
 		LEFT JOIN documents d ON d.project = p.slug
-		GROUP BY p.id, p.name, p.slug, p.description, p.created_at
+		GROUP BY p.id, p.public_id, p.name, p.slug, p.description, p.created_at
 		ORDER BY p.name`
 
 	rows, err := s.pool.Query(ctx, q)
@@ -451,7 +451,7 @@ func (s *PostgresStore) ListProjects(ctx context.Context) ([]*models.ProjectStat
 	for rows.Next() {
 		ps := &models.ProjectStats{}
 		if err := rows.Scan(
-			&ps.ID, &ps.Name, &ps.Slug, &ps.Description, &ps.CreatedAt,
+			&ps.ID, &ps.PublicID, &ps.Name, &ps.Slug, &ps.Description, &ps.CreatedAt,
 			&ps.Counts.Todo, &ps.Counts.InProgress, &ps.Counts.Complete,
 			&ps.Counts.Blocked, &ps.Counts.Archived, &ps.Counts.Total,
 		); err != nil {
@@ -495,13 +495,13 @@ func translateDecisionWriteErr(op string, err error) error {
 // decisionColumns is the SELECT list for every decision Get/List/Search.
 // Keep in lockstep with scanDecision.
 const decisionColumns = `
-	id, title, project, decision, rationale, alternatives,
+	id, public_id, title, project, decision, rationale, alternatives,
 	consequences, status, created_at, updated_at`
 
 func scanDecision(row pgx.Row) (*models.Decision, error) {
 	d := &models.Decision{}
 	err := row.Scan(
-		&d.ID, &d.Title, &d.Project, &d.Decision, &d.Rationale,
+		&d.ID, &d.PublicID, &d.Title, &d.Project, &d.Decision, &d.Rationale,
 		&d.Alternatives, &d.Consequences, &d.Status, &d.CreatedAt, &d.UpdatedAt,
 	)
 	return d, err
@@ -544,9 +544,9 @@ func (s *PostgresStore) CreateDecision(ctx context.Context, d *models.Decision) 
 	const q = `
 		INSERT INTO decisions (title, project, decision, rationale, alternatives, consequences, status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, created_at, updated_at`
+		RETURNING id, public_id, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q, d.Title, d.Project, d.Decision, d.Rationale, d.Alternatives, d.Consequences, d.Status)
-	if err := row.Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt); err != nil {
+	if err := row.Scan(&d.ID, &d.PublicID, &d.CreatedAt, &d.UpdatedAt); err != nil {
 		return translateDecisionWriteErr("create decision", err)
 	}
 	return nil
@@ -633,13 +633,13 @@ func translateSnippetWriteErr(op string, err error) error {
 // snippetColumns is the SELECT list for every snippet Get/List/Search.
 // Keep in lockstep with scanSnippet.
 const snippetColumns = `
-	id, title, project, language, content, tags, description,
+	id, public_id, title, project, language, content, tags, description,
 	created_at, updated_at`
 
 func scanSnippet(row pgx.Row) (*models.Snippet, error) {
 	sn := &models.Snippet{}
 	err := row.Scan(
-		&sn.ID, &sn.Title, &sn.Project, &sn.Language, &sn.Content,
+		&sn.ID, &sn.PublicID, &sn.Title, &sn.Project, &sn.Language, &sn.Content,
 		&sn.Tags, &sn.Description, &sn.CreatedAt, &sn.UpdatedAt,
 	)
 	return sn, err
@@ -685,9 +685,9 @@ func (s *PostgresStore) CreateSnippet(ctx context.Context, sn *models.Snippet) e
 	const q = `
 		INSERT INTO snippets (title, project, language, content, tags, description)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, created_at, updated_at`
+		RETURNING id, public_id, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q, sn.Title, sn.Project, sn.Language, sn.Content, ensureTags(sn.Tags), sn.Description)
-	if err := row.Scan(&sn.ID, &sn.CreatedAt, &sn.UpdatedAt); err != nil {
+	if err := row.Scan(&sn.ID, &sn.PublicID, &sn.CreatedAt, &sn.UpdatedAt); err != nil {
 		return translateSnippetWriteErr("create snippet", err)
 	}
 	return nil
@@ -775,13 +775,13 @@ func translateJournalWriteErr(op string, err error) error {
 // journalColumns is the SELECT list for every journal Get/List.
 // Keep in lockstep with scanJournalEntry.
 const journalColumns = `
-	id, project, session_ref, summary, accomplished, deferred,
+	id, public_id, project, session_ref, summary, accomplished, deferred,
 	created_at, updated_at`
 
 func scanJournalEntry(row pgx.Row) (*models.JournalEntry, error) {
 	e := &models.JournalEntry{}
 	err := row.Scan(
-		&e.ID, &e.Project, &e.SessionRef, &e.Summary,
+		&e.ID, &e.PublicID, &e.Project, &e.SessionRef, &e.Summary,
 		&e.Accomplished, &e.Deferred, &e.CreatedAt, &e.UpdatedAt,
 	)
 	return e, err
@@ -824,9 +824,9 @@ func (s *PostgresStore) CreateJournalEntry(ctx context.Context, e *models.Journa
 	const q = `
 		INSERT INTO journal_entries (project, session_ref, summary, accomplished, deferred)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, created_at, updated_at`
+		RETURNING id, public_id, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q, e.Project, e.SessionRef, e.Summary, ensureTags(e.Accomplished), ensureTags(e.Deferred))
-	if err := row.Scan(&e.ID, &e.CreatedAt, &e.UpdatedAt); err != nil {
+	if err := row.Scan(&e.ID, &e.PublicID, &e.CreatedAt, &e.UpdatedAt); err != nil {
 		return translateJournalWriteErr("create journal entry", err)
 	}
 	return nil
@@ -892,13 +892,13 @@ func translateSolutionWriteErr(op string, err error) error {
 // solutionColumns is the SELECT list for every solution Get/List/Search.
 // Keep in lockstep with scanSolution.
 const solutionColumns = `
-	id, project, error_description, solution, tags, source_url,
+	id, public_id, project, error_description, solution, tags, source_url,
 	created_at, updated_at`
 
 func scanSolution(row pgx.Row) (*models.Solution, error) {
 	sol := &models.Solution{}
 	err := row.Scan(
-		&sol.ID, &sol.Project, &sol.ErrorDescription, &sol.Solution,
+		&sol.ID, &sol.PublicID, &sol.Project, &sol.ErrorDescription, &sol.Solution,
 		&sol.Tags, &sol.SourceURL, &sol.CreatedAt, &sol.UpdatedAt,
 	)
 	return sol, err
@@ -941,9 +941,9 @@ func (s *PostgresStore) CreateSolution(ctx context.Context, sol *models.Solution
 	const q = `
 		INSERT INTO solutions (project, error_description, solution, tags, source_url)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, created_at, updated_at`
+		RETURNING id, public_id, created_at, updated_at`
 	row := s.pool.QueryRow(ctx, q, sol.Project, sol.ErrorDescription, sol.Solution, ensureTags(sol.Tags), sol.SourceURL)
-	if err := row.Scan(&sol.ID, &sol.CreatedAt, &sol.UpdatedAt); err != nil {
+	if err := row.Scan(&sol.ID, &sol.PublicID, &sol.CreatedAt, &sol.UpdatedAt); err != nil {
 		return translateSolutionWriteErr("create solution", err)
 	}
 	return nil
