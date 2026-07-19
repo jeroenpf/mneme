@@ -20,7 +20,7 @@ import (
 func TestEventsStream(t *testing.T) {
 	hub := live.NewHub()
 	cfg := &config.Config{CORSOrigins: []string{"*"}}
-	srv := httptest.NewServer(api.Router(cfg, nil, nil, nil, nil, hub))
+	srv := httptest.NewServer(api.Router(cfg, nil, nil, nil, nil, hub, nil))
 	t.Cleanup(srv.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -73,7 +73,7 @@ func TestEventsStream(t *testing.T) {
 func TestEventsStreamSendsInitialByte(t *testing.T) {
 	hub := live.NewHub()
 	cfg := &config.Config{CORSOrigins: []string{"*"}}
-	srv := httptest.NewServer(api.Router(cfg, nil, nil, nil, nil, hub))
+	srv := httptest.NewServer(api.Router(cfg, nil, nil, nil, nil, hub, nil))
 	t.Cleanup(srv.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

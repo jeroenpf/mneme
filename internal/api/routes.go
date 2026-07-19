@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/jeroenpfeil/mneme/internal/command"
 	"github.com/jeroenpfeil/mneme/internal/config"
 	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/live"
@@ -20,7 +21,7 @@ import (
 // useful in test setups that don't need them. client (may be nil) embeds the
 // /search query for hybrid ranking and flips /search/status enabled; nil ⇒
 // FTS-only, enabled=false.
-func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler, client embed.Client, hub *live.Hub) http.Handler {
+func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler, client embed.Client, hub *live.Hub, enq embed.Enqueuer) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
@@ -53,7 +54,14 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		health := &Health{Store: st}
 		r.Get("/health", health.Handler)
 
-		docs := &DocumentsHandler{Store: st}
+		// hub is a concrete *live.Hub; pass it as a Broadcaster only when non-nil
+		// so a nil hub becomes a true nil interface (→ NopBroadcaster), not a
+		// typed-nil that panics on Broadcast.
+		var bc live.Broadcaster
+		if hub != nil {
+			bc = hub
+		}
+		docs := &DocumentsHandler{Store: st, Writer: command.NewDocuments(st, enq, bc)}
 		projects := &ProjectsHandler{Store: st}
 		memory := &MemoryHandler{Store: st}
 		env := &EnvHandler{Store: st}

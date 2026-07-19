@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpfeil/mneme/internal/command"
 	"github.com/jeroenpfeil/mneme/internal/docmeta"
 	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
@@ -74,30 +75,24 @@ func (t *tools) pushDocument(ctx context.Context, _ *sdk.CallToolRequest, in pus
 	}
 	doc.ID = id
 
+	// A whole-document push has no single edited block, so the live event and
+	// audit record are document-level (empty BlockID → the affected id is the doc).
+	ev := live.Event{Type: "documents", ID: doc.ID, Op: "push_document"}
 	existing, err := t.store.GetDocument(ctx, id)
 	switch {
 	case err == nil:
 		// Preserve immutable fields from the existing row.
 		doc.CreatedAt = existing.CreatedAt
-		if err := t.store.UpdateDocument(ctx, doc, in.ExpectedRevision); err != nil {
+		if err := t.cmd.Update(ctx, doc, command.Write{Op: "push_document", Actor: "mcp", Event: ev, Expected: in.ExpectedRevision}); err != nil {
 			return nil, nil, translateStoreErr(err)
 		}
 	case errors.Is(err, store.ErrNotFound):
-		if err := t.store.CreateDocument(ctx, doc); err != nil {
+		if err := t.cmd.Create(ctx, doc, command.Write{Op: "push_document", Actor: "mcp", Event: ev}); err != nil {
 			return nil, nil, translateStoreErr(err)
 		}
 	default:
 		return nil, nil, translateStoreErr(err)
 	}
-	// Record the audit/history snapshot of the whole-document write (a push has
-	// no single edited block, so the affected id is the document itself).
-	if err := t.recordRevision(ctx, doc, "push_document", []string{doc.ID}); err != nil {
-		return nil, nil, err
-	}
-	t.enqueue("documents", doc.ID)
-	// enqueue skips the documents broadcast (P3); a whole-document push has
-	// no single edited block, so broadcast doc-level (empty BlockID).
-	t.broadcast(live.Event{Type: "documents", ID: doc.ID, Op: "push_document"})
 	res := writeResult(doc, in.ReturnDoc)
 	res.Created = created
 	return nil, res, nil

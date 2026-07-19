@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -51,6 +52,40 @@ func TestCreateAndGetDocument(t *testing.T) {
 	}
 	if len(fetched.Tags) != 2 {
 		t.Errorf("tags not roundtripped: %v", fetched.Tags)
+	}
+}
+
+// TestRESTWritePathRecordsHistory proves REST writes route through the shared
+// command service: a create and a patch each leave an attributed revision, so
+// the REST path no longer silently skips history (roadmap P6-t5/t6).
+func TestRESTWritePathRecordsHistory(t *testing.T) {
+	srv, st := newServer(t)
+	seedProject(t, "apollo")
+
+	resp := doJSON(t, http.MethodPost, srv.URL+"/api/v1/documents", map[string]any{
+		"meta": map[string]any{"title": "Rest Hist", "type": "plan", "project": "apollo"},
+		"body": map[string]any{"sections": []any{}},
+	})
+	requireStatus(t, resp, http.StatusCreated)
+	var created models.Document
+	decodeBody(t, resp, &created)
+
+	patch := doPatchIfMatch(t, srv.URL+"/api/v1/documents/"+created.ID, `{"status":"in-progress"}`, "")
+	requireStatus(t, patch, http.StatusOK)
+	patch.Body.Close()
+
+	revs, err := st.ListDocumentRevisions(context.Background(), created.ID, 0)
+	if err != nil {
+		t.Fatalf("ListDocumentRevisions: %v", err)
+	}
+	if len(revs) != 2 {
+		t.Fatalf("REST write history len = %d, want 2 (create + patch)", len(revs))
+	}
+	if revs[0].Op != "rest:update" || revs[1].Op != "rest:create" {
+		t.Errorf("history ops = %q, %q; want rest:update, rest:create", revs[0].Op, revs[1].Op)
+	}
+	if revs[0].Actor != "rest" {
+		t.Errorf("actor = %q, want rest", revs[0].Actor)
 	}
 }
 

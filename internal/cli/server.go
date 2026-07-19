@@ -96,7 +96,7 @@ func RunServer(ctx context.Context, cfg *config.Config) error {
 	mcpSrv := mcp.New(st, enq, hub, client)
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr(),
-		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client, hub),
+		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client, hub, enq),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -12,6 +12,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpfeil/mneme/internal/command"
 	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -81,7 +82,7 @@ func New(st store.Store, enq embed.Enqueuer, bc live.Broadcaster, client embed.C
 	}
 	s := &Server{
 		sdk:   sdk.NewServer(implementation, &sdk.ServerOptions{Instructions: instructions}),
-		tools: &tools{store: st, enq: enq, bc: bc, client: client},
+		tools: &tools{store: st, enq: enq, bc: bc, client: client, cmd: command.NewDocuments(st, enq, bc)},
 	}
 	s.tools.register(s.sdk)
 	return s
@@ -107,6 +108,7 @@ type tools struct {
 	enq    embed.Enqueuer
 	bc     live.Broadcaster
 	client embed.Client
+	cmd    *command.Documents // the single validated document write path
 }
 
 // addTool keeps the advertised output contract deliberately minimal. The

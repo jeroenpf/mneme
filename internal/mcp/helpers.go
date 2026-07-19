@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jeroenpfeil/mneme/internal/command"
 	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/ids"
 	"github.com/jeroenpfeil/mneme/internal/live"
@@ -104,51 +105,15 @@ func (t *tools) loadDoc(ctx context.Context, id string) (*models.Document, error
 	return doc, nil
 }
 
-// saveDoc persists an updated document and runs the once-per-write side
-// effects: it records an audit/history revision snapshot (op + affected id from
-// ev), enqueues the document for re-embedding, and broadcasts the live event ev.
-// Every section/task/phase/meta edit tool routes through here, so this is the
-// single choke point that keeps history, embeddings, and live in step with
-// document mutations.
+// saveDoc persists an edited document through the shared command service — the
+// single choke point that bumps the revision, records the audit/history
+// snapshot (op + affected id from ev), enqueues re-embedding, and broadcasts ev,
+// each exactly once. Every section/task/phase/meta edit tool routes through here.
 func (t *tools) saveDoc(ctx context.Context, doc *models.Document, ev live.Event) error {
-	if err := t.store.UpdateDocument(ctx, doc, nil); err != nil {
+	if err := t.cmd.Update(ctx, doc, command.Write{Op: ev.Op, Actor: "mcp", Event: ev}); err != nil {
 		return translateStoreErr(err)
 	}
-	if err := t.recordRevision(ctx, doc, ev.Op, eventTargets(ev, doc.ID)); err != nil {
-		return err
-	}
-	t.enq.Enqueue(embed.SourceRef{Type: "documents", ID: doc.ID})
-	t.bc.Broadcast(ev)
 	return nil
-}
-
-// recordRevision appends an append-only audit/history snapshot of the
-// just-written document (roadmap P6). Actor is "mcp" — the MCP surface.
-func (t *tools) recordRevision(ctx context.Context, doc *models.Document, op string, targetIDs []string) error {
-	rev := &models.DocumentRevision{
-		DocumentID: doc.ID,
-		Revision:   doc.Revision,
-		Op:         op,
-		Actor:      "mcp",
-		TargetIDs:  targetIDs,
-		Title:      doc.Title,
-		Status:     doc.Status,
-		Meta:       doc.Meta,
-		Body:       doc.Body,
-	}
-	if err := t.store.AppendDocumentRevision(ctx, rev); err != nil {
-		return fmt.Errorf("record revision: %w", err)
-	}
-	return nil
-}
-
-// eventTargets is the affected-id list for an audit record: the edited block
-// when the event names one, otherwise the whole document.
-func eventTargets(ev live.Event, docID string) []string {
-	if ev.BlockID != "" {
-		return []string{ev.BlockID}
-	}
-	return []string{docID}
 }
 
 // enqueue notifies the embedding worker that a source changed, and

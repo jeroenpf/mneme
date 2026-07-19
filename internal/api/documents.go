@@ -12,8 +12,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/jeroenpfeil/mneme/internal/command"
 	"github.com/jeroenpfeil/mneme/internal/docmeta"
 	"github.com/jeroenpfeil/mneme/internal/ids"
+	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/slug"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -28,6 +30,9 @@ const (
 // DocumentsHandler holds the dependencies the document endpoints need.
 type DocumentsHandler struct {
 	Store store.Store
+	// Writer is the shared command service — the single validated write path
+	// (revision bump, history snapshot, embedding enqueue, live broadcast).
+	Writer *command.Documents
 }
 
 // documentListResponse is the wire shape for GET /documents.
@@ -155,7 +160,11 @@ func (h *DocumentsHandler) createWithSlug(ctx context.Context, doc *models.Docum
 			candidate = fmt.Sprintf("%s-%d", base, i+1)
 		}
 		doc.ID = candidate
-		err := h.Store.CreateDocument(ctx, doc)
+		err := h.Writer.Create(ctx, doc, command.Write{
+			Op:    "rest:create",
+			Actor: "rest",
+			Event: live.Event{Type: "documents", ID: doc.ID, Op: "create_document"},
+		})
 		if err == nil {
 			return nil
 		}
@@ -259,7 +268,13 @@ func (h *DocumentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		doc.PhaseCurrent = req.PhaseCurrent
 	}
 
-	if err := h.Store.UpdateDocument(r.Context(), doc, parseIfMatch(r)); err != nil {
+	err = h.Writer.Update(r.Context(), doc, command.Write{
+		Op:       "rest:update",
+		Actor:    "rest",
+		Event:    live.Event{Type: "documents", ID: doc.ID, Op: "update_document"},
+		Expected: parseIfMatch(r),
+	})
+	if err != nil {
 		var conflict *store.RevisionConflictError
 		if errors.As(err, &conflict) {
 			w.Header().Set("ETag", etag(conflict.Current))
