@@ -33,6 +33,14 @@ func (c *voyageClient) Model() string { return c.model }
 // the documented example size). Larger sources are split.
 const maxBatch = 128
 
+// maxRetries caps the retry loop for a single batch; after this many failed
+// attempts embedBatch surfaces a terminal error for the worker to record.
+const maxRetries = 5
+
+// initialBackoff is the first retry delay (doubled each attempt). A package
+// var so tests can shrink it to keep retry cases instant.
+var initialBackoff = time.Second
+
 // Embed returns one vector per input text, order-preserving. inputType is
 // "document" for stored chunks and "query" for search queries. Splits into
 // ≤maxBatch requests and retries each on 429/5xx with backoff, so a low
@@ -57,7 +65,20 @@ func (c *voyageClient) embedBatch(ctx context.Context, texts []string, inputType
 	reqBody, _ := json.Marshal(map[string]any{
 		"input": texts, "model": c.model, "input_type": inputType, "output_dimension": embedDim,
 	})
-	backoff := time.Second
+	backoff := initialBackoff
+	// retry backs off and retries while attempts remain, else surfaces err.
+	retry := func(attempt int, err error) error {
+		if attempt >= maxRetries {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+		return nil
+	}
 	for attempt := 0; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(reqBody))
 		if err != nil {
@@ -68,20 +89,19 @@ func (c *voyageClient) embedBatch(ctx context.Context, texts []string, inputType
 
 		resp, err := c.http.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("voyage call: %w", err)
+			// Transient network error (DNS, refused, reset): retry with backoff.
+			if rerr := retry(attempt, fmt.Errorf("voyage call after %d retries: %w", attempt, err)); rerr != nil {
+				return nil, rerr
+			}
+			continue
 		}
 		// 429 (rate limit) and 5xx are retryable — back off and try again.
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			status := resp.StatusCode
 			resp.Body.Close()
-			if attempt >= 5 {
-				return nil, fmt.Errorf("voyage rate-limited after %d retries (status %d)", attempt, resp.StatusCode)
+			if rerr := retry(attempt, fmt.Errorf("voyage rate-limited after %d retries (status %d)", attempt, status)); rerr != nil {
+				return nil, rerr
 			}
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(backoff):
-			}
-			backoff *= 2
 			continue
 		}
 		defer resp.Body.Close()

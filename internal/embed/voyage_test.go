@@ -3,11 +3,51 @@ package embed
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 )
+
+// flakyTransport fails the first failN round-trips with a network-style error,
+// then delegates to next — used to exercise transient-failure retry.
+type flakyTransport struct {
+	failN int
+	n     int
+	next  http.RoundTripper
+}
+
+func (f *flakyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	f.n++
+	if f.n <= f.failN {
+		return nil, fmt.Errorf("dial tcp: connection refused")
+	}
+	return f.next.RoundTrip(req)
+}
+
+func TestVoyageRetriesOnNetworkError(t *testing.T) {
+	initialBackoff = time.Millisecond
+	t.Cleanup(func() { initialBackoff = time.Second })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []any{map[string]any{"embedding": []float32{0.1, 0.2}, "index": 0}},
+		})
+	}))
+	defer srv.Close()
+
+	c := &voyageClient{key: "k", model: "voyage-4-large", url: srv.URL,
+		http: &http.Client{Transport: &flakyTransport{failN: 2, next: http.DefaultTransport}}}
+	vecs, err := c.Embed(context.Background(), []string{"a"}, "document")
+	if err != nil {
+		t.Fatalf("Embed should retry past transient network errors: %v", err)
+	}
+	if len(vecs) != 1 {
+		t.Fatalf("expected one vector after retries, got %d", len(vecs))
+	}
+}
 
 func TestVoyageEmbed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
