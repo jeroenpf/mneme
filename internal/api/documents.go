@@ -179,7 +179,29 @@ func (h *DocumentsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
+	// Expose the revision as an ETag so a conditional PATCH (If-Match) can
+	// detect a concurrent edit (roadmap P6).
+	w.Header().Set("ETag", etag(doc.Revision))
 	writeJSON(w, http.StatusOK, doc)
+}
+
+// etag renders a document revision as a (weak-free) HTTP entity tag.
+func etag(revision int) string { return fmt.Sprintf("%q", strconv.Itoa(revision)) }
+
+// parseIfMatch extracts an expected revision from an If-Match header
+// (e.g. `"3"`). Returns nil when the header is absent or unparseable, so a
+// caller that doesn't send one keeps last-writer-wins semantics.
+func parseIfMatch(r *http.Request) *int {
+	raw := strings.TrimSpace(r.Header.Get("If-Match"))
+	if raw == "" || raw == "*" {
+		return nil
+	}
+	raw = strings.Trim(raw, `"`)
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return nil
+	}
+	return &n
 }
 
 // updateDocumentRequest is the wire shape for PATCH /documents/:id.
@@ -237,10 +259,17 @@ func (h *DocumentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		doc.PhaseCurrent = req.PhaseCurrent
 	}
 
-	if err := h.Store.UpdateDocument(r.Context(), doc); err != nil {
+	if err := h.Store.UpdateDocument(r.Context(), doc, parseIfMatch(r)); err != nil {
+		var conflict *store.RevisionConflictError
+		if errors.As(err, &conflict) {
+			w.Header().Set("ETag", etag(conflict.Current))
+			writeError(w, http.StatusPreconditionFailed, fmt.Sprintf("revision conflict: document is at revision %d, re-read before retrying", conflict.Current))
+			return
+		}
 		writeStoreError(w, err)
 		return
 	}
+	w.Header().Set("ETag", etag(doc.Revision))
 	writeJSON(w, http.StatusOK, doc)
 }
 

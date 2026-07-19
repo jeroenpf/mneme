@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jeroenpfeil/mneme/internal/dsn"
@@ -36,6 +37,28 @@ var ErrDuplicateID = errors.New("duplicate document id")
 // ErrDuplicateProject is returned when CreateProject hits a UNIQUE
 // violation on projects.slug — the project already exists.
 var ErrDuplicateProject = errors.New("duplicate project")
+
+// ErrRevisionConflict is the sentinel a RevisionConflictError matches under
+// errors.Is — an optimistic-concurrency check failed because the document was
+// modified since the caller's expected revision. Use errors.As to recover the
+// current revision for a useful conflict response.
+var ErrRevisionConflict = errors.New("revision conflict")
+
+// RevisionConflictError is returned by UpdateDocument when the caller supplied
+// an expected revision that no longer matches the stored one. It carries the
+// document id and the current revision so callers (REST 409 / MCP) can tell the
+// user what to re-read.
+type RevisionConflictError struct {
+	DocumentID string
+	Current    int
+}
+
+func (e *RevisionConflictError) Error() string {
+	return fmt.Sprintf("revision conflict on %s: current revision is %d", e.DocumentID, e.Current)
+}
+
+// Is lets errors.Is(err, ErrRevisionConflict) match a *RevisionConflictError.
+func (e *RevisionConflictError) Is(target error) bool { return target == ErrRevisionConflict }
 
 // MemoryFilter narrows ListMemory. A nil field is "no constraint".
 type MemoryFilter struct {
@@ -109,10 +132,14 @@ type Store interface {
 	GetDocumentByPublicID(ctx context.Context, publicID string) (*models.Document, error)
 
 	// UpdateDocument writes all mutable columns from doc (everything
-	// except id, created_at, search_vector). updated_at is managed by
-	// the trigger added in migration 004. Returns ErrNotFound when id
-	// has no row.
-	UpdateDocument(ctx context.Context, doc *models.Document) error
+	// except id, created_at, search_vector), atomically bumping the
+	// document's revision and scanning the new value back into doc.Revision.
+	// updated_at is managed by the trigger added in migration 004. When
+	// expected is non-nil, the write applies only if the stored revision
+	// equals *expected, otherwise it returns *RevisionConflictError
+	// (errors.Is ErrRevisionConflict) without modifying the row. Returns
+	// ErrNotFound when id has no row.
+	UpdateDocument(ctx context.Context, doc *models.Document, expected *int) error
 
 	// ArchiveDocument sets status='archived'. Returns ErrNotFound when
 	// id has no row.

@@ -31,6 +31,11 @@ type pushInput struct {
 	Meta      map[string]any `json:"meta" jsonschema:"document meta. Keys: id (required, stable slug), title (required), type (required; one of plan, report, spec, adr, brainstorm, journal), project (project slug; REQUIRED for type=plan so the plan surfaces in get_context_bundle — the project must already exist via create_project), status (one of todo, in-progress, complete, blocked, archived; default todo — this is the DOCUMENT lifecycle status, distinct from phase/task state which uses wip/done), category, ticket, repo, tags (array of strings), phase_current + phase_total (integers, plan progress). Unknown keys are stored verbatim."`
 	Body      map[string]any `json:"body" jsonschema:"document body as a block tree: {sections:[...]}. Every block needs a type; an id is optional — Mneme mints a stable one when you omit it, and every id (block and task) must be unique within the document (duplicates are rejected). The response's 'created' array lists any ids the server minted. Unknown or misnamed fields are REJECTED (not silently dropped), so use these exact field names. Block shapes: section {title, content?, children?[]} — content is markdown prose under the heading, children are nested blocks; text {content}; task-list {title?, tasks:[{id, title, content?, done}]}; subphase {num, title, session?, description?, tasks[], children?[]}; callout {variant, title?, content} where variant is one of info|warn|success|danger|note; code {lang, filename?, content} where content is the code and lang is e.g. go|ts|sql|bash; diagram {title?, content} where content is mermaid source; table {title?, cols[], rows[][]}; key-value {title?, data{}}. PROSE: content/title/description render inline markdown (emphasis, code spans, links, :icon:). Body prose — section/text/callout content and subphase description — MAY hold multiple paragraphs: separate them with a blank line. Titles and terse fields (task titles, key-value values) stay a single line. In every field, lists (- / * / 1.), # headings, and fenced code blocks DO NOT render and are REJECTED — use child blocks: task-list for a list, code for a code block, a nested section for a heading, key-value for labelled fields, table for tabular data. Exceptions: code.content and diagram.content keep their newlines verbatim."`
 	ReturnDoc bool           `json:"return_doc,omitempty" jsonschema:"when true, also return the full stored document; default false (a compact summary is returned)"`
+	// ExpectedRevision opts into optimistic concurrency on the update path:
+	// when set, the push applies only if the stored document's revision still
+	// equals it, else a revision-conflict error is returned. Omit for
+	// last-writer-wins (and always for a first create).
+	ExpectedRevision *int `json:"expected_revision,omitempty" jsonschema:"if set, update only when the stored document is still at this revision (optimistic concurrency); omit for last-writer-wins"`
 }
 
 func (t *tools) pushDocument(ctx context.Context, _ *sdk.CallToolRequest, in pushInput) (*sdk.CallToolResult, *docWriteResult, error) {
@@ -74,7 +79,7 @@ func (t *tools) pushDocument(ctx context.Context, _ *sdk.CallToolRequest, in pus
 	case err == nil:
 		// Preserve immutable fields from the existing row.
 		doc.CreatedAt = existing.CreatedAt
-		if err := t.store.UpdateDocument(ctx, doc); err != nil {
+		if err := t.store.UpdateDocument(ctx, doc, in.ExpectedRevision); err != nil {
 			return nil, nil, translateStoreErr(err)
 		}
 	case errors.Is(err, store.ErrNotFound):

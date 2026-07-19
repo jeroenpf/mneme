@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
@@ -51,6 +52,69 @@ func TestCreateAndGetDocument(t *testing.T) {
 	if len(fetched.Tags) != 2 {
 		t.Errorf("tags not roundtripped: %v", fetched.Tags)
 	}
+}
+
+func TestDocumentETagAndIfMatchConflict(t *testing.T) {
+	srv, _ := newServer(t)
+	seedProject(t, "apollo")
+
+	resp := doJSON(t, http.MethodPost, srv.URL+"/api/v1/documents", map[string]any{
+		"meta": map[string]any{"title": "Rev Doc", "type": "plan", "project": "apollo"},
+		"body": map[string]any{"sections": []any{}},
+	})
+	requireStatus(t, resp, http.StatusCreated)
+	var created models.Document
+	decodeBody(t, resp, &created)
+
+	// GET exposes the revision as an ETag.
+	resp = doJSON(t, http.MethodGet, srv.URL+"/api/v1/documents/"+created.ID, nil)
+	requireStatus(t, resp, http.StatusOK)
+	if got := resp.Header.Get("ETag"); got != `"1"` {
+		t.Fatalf("GET ETag = %q, want %q", got, `"1"`)
+	}
+	resp.Body.Close()
+
+	url := srv.URL + "/api/v1/documents/" + created.ID
+	patch := `{"status":"in-progress"}`
+
+	// Conditional PATCH with the matching revision succeeds and advances the ETag.
+	ok := doPatchIfMatch(t, url, patch, `"1"`)
+	requireStatus(t, ok, http.StatusOK)
+	if got := ok.Header.Get("ETag"); got != `"2"` {
+		t.Errorf("PATCH ETag = %q, want %q", got, `"2"`)
+	}
+	ok.Body.Close()
+
+	// A stale If-Match is rejected with 412 and the current ETag.
+	stale := doPatchIfMatch(t, url, patch, `"1"`)
+	requireStatus(t, stale, http.StatusPreconditionFailed)
+	if got := stale.Header.Get("ETag"); got != `"2"` {
+		t.Errorf("conflict ETag = %q, want current %q", got, `"2"`)
+	}
+	stale.Body.Close()
+
+	// No If-Match → last-writer-wins, still succeeds.
+	unconditional := doPatchIfMatch(t, url, patch, "")
+	requireStatus(t, unconditional, http.StatusOK)
+	unconditional.Body.Close()
+}
+
+// doPatchIfMatch issues a PATCH with an optional If-Match header.
+func doPatchIfMatch(t *testing.T, url, body, ifMatch string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("PATCH %s: %v", url, err)
+	}
+	return resp
 }
 
 func TestGetDocumentByPublicID(t *testing.T) {

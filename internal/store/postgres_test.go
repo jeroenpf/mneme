@@ -315,7 +315,7 @@ func TestUpdateDocument(t *testing.T) {
 	doc.Status = models.StatusInProgress
 	doc.Tags = []string{"go"}
 	doc.Body = map[string]any{"sections": []any{map[string]any{"id": "new"}}}
-	if err := s.UpdateDocument(ctx, doc); err != nil {
+	if err := s.UpdateDocument(ctx, doc, nil); err != nil {
 		t.Fatalf("UpdateDocument: %v", err)
 	}
 	if !doc.UpdatedAt.After(originalUpdatedAt) {
@@ -338,7 +338,7 @@ func TestUpdateDocument(t *testing.T) {
 func TestUpdateDocumentNotFound(t *testing.T) {
 	s := newStore(t)
 	doc := sampleDoc("ghost", "Ghost")
-	if err := s.UpdateDocument(context.Background(), doc); err != store.ErrNotFound {
+	if err := s.UpdateDocument(context.Background(), doc, nil); err != store.ErrNotFound {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }

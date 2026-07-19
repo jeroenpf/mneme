@@ -103,7 +103,7 @@ func TestWorkerEmbedsAndPrunes(t *testing.T) {
 
 	// Remove the section → re-process prunes the stale chunk.
 	doc.Body = map[string]any{"sections": []any{}}
-	if err := s.UpdateDocument(ctx, doc); err != nil {
+	if err := s.UpdateDocument(ctx, doc, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "d1"}); err != nil {

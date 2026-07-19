@@ -25,6 +25,9 @@ type Document struct {
 	Body         map[string]any `json:"body"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
+	// Revision is a monotonic counter bumped on every update (starts at 1),
+	// used for optimistic concurrency (expected_revision / ETag) and history.
+	Revision int `json:"revision"`
 }
 
 // Project mirrors the projects row.

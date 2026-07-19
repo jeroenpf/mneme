@@ -109,7 +109,7 @@ func (t *tools) loadDoc(ctx context.Context, id string) (*models.Document, error
 // phase/meta edit tool routes through here, so this is the single point
 // that keeps embeddings in step with document mutations.
 func (t *tools) saveDoc(ctx context.Context, doc *models.Document) error {
-	if err := t.store.UpdateDocument(ctx, doc); err != nil {
+	if err := t.store.UpdateDocument(ctx, doc, nil); err != nil {
 		return translateStoreErr(err)
 	}
 	t.enqueue("documents", doc.ID)

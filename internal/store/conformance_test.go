@@ -137,7 +137,7 @@ func TestConformanceDocumentCRUD(t *testing.T) {
 		got.Title = "Vehicle Listing API v2"
 		got.Status = models.StatusInProgress
 		got.Tags = []string{"go"}
-		if err := st.UpdateDocument(ctx, got); err != nil {
+		if err := st.UpdateDocument(ctx, got, nil); err != nil {
 			t.Fatalf("UpdateDocument: %v", err)
 		}
 		reloaded, err := st.GetDocument(ctx, "doc-001")
@@ -176,7 +176,7 @@ func TestConformanceDocumentErrors(t *testing.T) {
 		if _, err := st.GetDocument(ctx, "nope"); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("GetDocument(missing): got %v, want ErrNotFound", err)
 		}
-		if err := st.UpdateDocument(ctx, sampleDoc("ghost", "Ghost")); !errors.Is(err, store.ErrNotFound) {
+		if err := st.UpdateDocument(ctx, sampleDoc("ghost", "Ghost"), nil); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("UpdateDocument(missing): got %v, want ErrNotFound", err)
 		}
 		if err := st.ArchiveDocument(ctx, "ghost"); !errors.Is(err, store.ErrNotFound) {
@@ -196,6 +196,64 @@ func TestConformanceDocumentErrors(t *testing.T) {
 		}
 		if err := st.CreateDocument(ctx, sampleDoc("dup", "Second")); !errors.Is(err, store.ErrDuplicateID) {
 			t.Errorf("CreateDocument(dup id): got %v, want ErrDuplicateID", err)
+		}
+	})
+}
+
+func TestConformanceDocumentRevisions(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		doc := sampleDoc("rev-001", "Rev doc")
+		doc.Project = ptr("apollo")
+		if err := st.CreateDocument(ctx, doc); err != nil {
+			t.Fatalf("CreateDocument: %v", err)
+		}
+		if doc.Revision != 1 {
+			t.Fatalf("new document revision = %d, want 1", doc.Revision)
+		}
+
+		// Unconditional update bumps the revision.
+		doc.Title = "Rev doc v2"
+		if err := st.UpdateDocument(ctx, doc, nil); err != nil {
+			t.Fatalf("UpdateDocument(nil): %v", err)
+		}
+		if doc.Revision != 2 {
+			t.Errorf("revision after update = %d, want 2", doc.Revision)
+		}
+		got, _ := st.GetDocument(ctx, "rev-001")
+		if got.Revision != 2 {
+			t.Errorf("reloaded revision = %d, want 2", got.Revision)
+		}
+
+		// Conditional update with the correct expected revision succeeds.
+		got.Title = "Rev doc v3"
+		if err := st.UpdateDocument(ctx, got, ptr(2)); err != nil {
+			t.Fatalf("UpdateDocument(expected=2): %v", err)
+		}
+		if got.Revision != 3 {
+			t.Errorf("revision after conditional update = %d, want 3", got.Revision)
+		}
+
+		// A stale expected revision is rejected with a typed conflict carrying
+		// the current revision, and leaves the row untouched.
+		stale, _ := st.GetDocument(ctx, "rev-001")
+		stale.Title = "should not persist"
+		err := st.UpdateDocument(ctx, stale, ptr(2))
+		if !errors.Is(err, store.ErrRevisionConflict) {
+			t.Fatalf("stale update: got %v, want ErrRevisionConflict", err)
+		}
+		var conflict *store.RevisionConflictError
+		if !errors.As(err, &conflict) {
+			t.Fatalf("conflict error is not *RevisionConflictError: %T", err)
+		}
+		if conflict.Current != 3 || conflict.DocumentID != "rev-001" {
+			t.Errorf("conflict details = %+v, want current=3 id=rev-001", conflict)
+		}
+		reloaded, _ := st.GetDocument(ctx, "rev-001")
+		if reloaded.Title != "Rev doc v3" || reloaded.Revision != 3 {
+			t.Errorf("stale update must not persist: title=%q rev=%d", reloaded.Title, reloaded.Revision)
 		}
 	})
 }

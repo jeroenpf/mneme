@@ -99,14 +99,14 @@ func (s *PostgresStore) Pool() *pgxpool.Pool { return s.pool }
 const documentColumns = `
 	id, public_id, title, project, category, type, status,
 	ticket, repo, tags, phase_current, phase_total,
-	meta, body, created_at, updated_at`
+	meta, body, created_at, updated_at, revision`
 
 func scanDocument(row pgx.Row) (*models.Document, error) {
 	d := &models.Document{}
 	err := row.Scan(
 		&d.ID, &d.PublicID, &d.Title, &d.Project, &d.Category, &d.Type, &d.Status,
 		&d.Ticket, &d.Repo, &d.Tags, &d.PhaseCurrent, &d.PhaseTotal,
-		&d.Meta, &d.Body, &d.CreatedAt, &d.UpdatedAt,
+		&d.Meta, &d.Body, &d.CreatedAt, &d.UpdatedAt, &d.Revision,
 	)
 	return d, err
 }
@@ -136,13 +136,13 @@ func (s *PostgresStore) CreateDocument(ctx context.Context, doc *models.Document
 			$7, $8, $9, $10, $11,
 			$12, $13
 		)
-		RETURNING public_id, created_at, updated_at`
+		RETURNING public_id, created_at, updated_at, revision`
 	row := s.pool.QueryRow(ctx, q,
 		doc.ID, doc.Title, doc.Project, doc.Category, doc.Type, doc.Status,
 		doc.Ticket, doc.Repo, ensureTags(doc.Tags), doc.PhaseCurrent, doc.PhaseTotal,
 		ensureJSONMap(doc.Meta), ensureJSONMap(doc.Body),
 	)
-	if err := row.Scan(&doc.PublicID, &doc.CreatedAt, &doc.UpdatedAt); err != nil {
+	if err := row.Scan(&doc.PublicID, &doc.CreatedAt, &doc.UpdatedAt, &doc.Revision); err != nil {
 		return translateWriteErr("insert document", err)
 	}
 	return nil
@@ -172,26 +172,46 @@ func (s *PostgresStore) GetDocumentByPublicID(ctx context.Context, publicID stri
 	return doc, nil
 }
 
-func (s *PostgresStore) UpdateDocument(ctx context.Context, doc *models.Document) error {
+func (s *PostgresStore) UpdateDocument(ctx context.Context, doc *models.Document, expected *int) error {
 	const q = `
 		UPDATE documents SET
 			title = $2, project = $3, category = $4, type = $5, status = $6,
 			ticket = $7, repo = $8, tags = $9, phase_current = $10, phase_total = $11,
-			meta = $12, body = $13
-		WHERE id = $1
-		RETURNING updated_at`
+			meta = $12, body = $13, revision = revision + 1
+		WHERE id = $1 AND ($14::int IS NULL OR revision = $14)
+		RETURNING updated_at, revision`
 	row := s.pool.QueryRow(ctx, q,
 		doc.ID, doc.Title, doc.Project, doc.Category, doc.Type, doc.Status,
 		doc.Ticket, doc.Repo, ensureTags(doc.Tags), doc.PhaseCurrent, doc.PhaseTotal,
-		ensureJSONMap(doc.Meta), ensureJSONMap(doc.Body),
+		ensureJSONMap(doc.Meta), ensureJSONMap(doc.Body), expected,
 	)
-	if err := row.Scan(&doc.UpdatedAt); err != nil {
+	if err := row.Scan(&doc.UpdatedAt, &doc.Revision); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
+			return s.updateDocNoRow(ctx, doc.ID, expected)
 		}
 		return translateWriteErr("update document", err)
 	}
 	return nil
+}
+
+// updateDocNoRow disambiguates a zero-row UPDATE: no such id → ErrNotFound;
+// the id exists but its revision moved past expected → *RevisionConflictError
+// carrying the current revision so the caller can report what to re-read.
+func (s *PostgresStore) updateDocNoRow(ctx context.Context, id string, expected *int) error {
+	var current int
+	err := s.pool.QueryRow(ctx, `SELECT revision FROM documents WHERE id = $1`, id).Scan(&current)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("update document revision check: %w", err)
+	}
+	if expected != nil {
+		return &RevisionConflictError{DocumentID: id, Current: current}
+	}
+	// Row exists and no expected-revision guard was set, yet nothing updated —
+	// should not happen; surface a generic not-found rather than lie about success.
+	return ErrNotFound
 }
 
 func (s *PostgresStore) ArchiveDocument(ctx context.Context, id string) error {

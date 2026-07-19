@@ -32,7 +32,7 @@ func scanSQLiteDocument(row rowScanner) (*models.Document, error) {
 	err := row.Scan(
 		&d.ID, &d.PublicID, &d.Title, &d.Project, &d.Category, &d.Type, &d.Status,
 		&d.Ticket, &d.Repo, &tags, &d.PhaseCurrent, &d.PhaseTotal, &meta, &body,
-		&d.CreatedAt, &d.UpdatedAt,
+		&d.CreatedAt, &d.UpdatedAt, &d.Revision,
 	)
 	if err != nil {
 		return d, err
@@ -67,12 +67,12 @@ func (s *SQLiteStore) CreateDocument(ctx context.Context, doc *models.Document) 
 			id, public_id, title, project, category, type, status,
 			ticket, repo, tags, phase_current, phase_total, meta, body
 		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-		RETURNING created_at, updated_at`
+		RETURNING created_at, updated_at, revision`
 	err = s.db.QueryRowContext(ctx, q,
 		doc.ID, pub, doc.Title, doc.Project, doc.Category, doc.Type, doc.Status,
 		doc.Ticket, doc.Repo, jsonArray(doc.Tags), doc.PhaseCurrent, doc.PhaseTotal,
 		meta, body,
-	).Scan(&doc.CreatedAt, &doc.UpdatedAt)
+	).Scan(&doc.CreatedAt, &doc.UpdatedAt, &doc.Revision)
 	if err != nil {
 		return translateSQLiteDocErr("insert document", err)
 	}
@@ -104,7 +104,7 @@ func (s *SQLiteStore) GetDocumentByPublicID(ctx context.Context, publicID string
 	return doc, nil
 }
 
-func (s *SQLiteStore) UpdateDocument(ctx context.Context, doc *models.Document) error {
+func (s *SQLiteStore) UpdateDocument(ctx context.Context, doc *models.Document, expected *int) error {
 	meta, err := jsonObject(doc.Meta)
 	if err != nil {
 		return err
@@ -115,26 +115,45 @@ func (s *SQLiteStore) UpdateDocument(ctx context.Context, doc *models.Document) 
 	}
 	// updated_at is set explicitly so RETURNING reflects the new value (SQLite
 	// RETURNING sees pre-trigger row state); the set_updated_at trigger's guard
-	// then no-ops because NEW.updated_at != OLD.updated_at.
+	// then no-ops because NEW.updated_at != OLD.updated_at. revision is bumped
+	// in the same statement, guarded by the optional expected-revision check.
 	const q = `
 		UPDATE documents SET
 			title = ?, project = ?, category = ?, type = ?, status = ?,
 			ticket = ?, repo = ?, tags = ?, phase_current = ?, phase_total = ?,
-			meta = ?, body = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
-		WHERE id = ?
-		RETURNING updated_at`
+			meta = ?, body = ?, revision = revision + 1,
+			updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+		WHERE id = ? AND (? IS NULL OR revision = ?)
+		RETURNING updated_at, revision`
 	err = s.db.QueryRowContext(ctx, q,
 		doc.Title, doc.Project, doc.Category, doc.Type, doc.Status,
 		doc.Ticket, doc.Repo, jsonArray(doc.Tags), doc.PhaseCurrent, doc.PhaseTotal,
-		meta, body, doc.ID,
-	).Scan(&doc.UpdatedAt)
+		meta, body, doc.ID, expected, expected,
+	).Scan(&doc.UpdatedAt, &doc.Revision)
 	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
+		return s.updateDocNoRow(ctx, doc.ID, expected)
 	}
 	if err != nil {
 		return translateSQLiteDocErr("update document", err)
 	}
 	return nil
+}
+
+// updateDocNoRow disambiguates a zero-row UPDATE: no such id → ErrNotFound;
+// the id exists but its revision moved past expected → *RevisionConflictError.
+func (s *SQLiteStore) updateDocNoRow(ctx context.Context, id string, expected *int) error {
+	var current int
+	err := s.db.QueryRowContext(ctx, `SELECT revision FROM documents WHERE id = ?`, id).Scan(&current)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("update document revision check: %w", err)
+	}
+	if expected != nil {
+		return &RevisionConflictError{DocumentID: id, Current: current}
+	}
+	return ErrNotFound
 }
 
 func (s *SQLiteStore) ArchiveDocument(ctx context.Context, id string) error {

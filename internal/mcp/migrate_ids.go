@@ -45,7 +45,7 @@ func MigrateDocIDs(ctx context.Context, st store.Store, apply bool) (*MigrateSum
 		}
 		sum.Backfilled[doc.ID] = len(created)
 		if apply {
-			if err := st.UpdateDocument(ctx, doc); err != nil {
+			if err := st.UpdateDocument(ctx, doc, nil); err != nil {
 				return nil, fmt.Errorf("persist %s: %w", doc.ID, err)
 			}
 		}
