@@ -2,6 +2,7 @@ package migrations_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -16,9 +17,74 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+	_ "modernc.org/sqlite"
 
 	"github.com/jeroenpfeil/mneme/internal/migrations"
 )
+
+// TestSQLiteMigrationsApplyToFreshDB runs the SQLite migration set against a
+// fresh temp file and asserts the full schema materialized: every base table,
+// one FTS5 virtual table per searchable type, and the updated_at + FTS-sync
+// triggers (plan p2-t6). This is the schema regression guard for the SQLite
+// backend.
+func TestSQLiteMigrationsApplyToFreshDB(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "mneme.db")
+	if err := migrations.Up("sqlite:" + dbPath); err != nil {
+		t.Fatalf("Up(sqlite): %v", err)
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	wantObjects := map[string]string{
+		// base tables
+		"projects":        "table",
+		"documents":       "table",
+		"decisions":       "table",
+		"snippets":        "table",
+		"journal_entries": "table",
+		"solutions":       "table",
+		"memories":        "table",
+		"env_entries":     "table",
+		"embeddings":      "table",
+		"embed_failures":  "table",
+		// FTS5 virtual tables (one per searchable type)
+		"documents_fts": "table",
+		"decisions_fts": "table",
+		"snippets_fts":  "table",
+		"solutions_fts": "table",
+		"journal_fts":   "table",
+		"memories_fts":  "table",
+		// updated_at triggers (mirror the Postgres set_updated_at triggers)
+		"documents_set_updated_at":       "trigger",
+		"decisions_set_updated_at":       "trigger",
+		"snippets_set_updated_at":        "trigger",
+		"journal_entries_set_updated_at": "trigger",
+		"solutions_set_updated_at":       "trigger",
+		// representative FTS sync triggers
+		"documents_fts_ai": "trigger",
+		"documents_fts_ad": "trigger",
+		"documents_fts_au": "trigger",
+	}
+	for name, typ := range wantObjects {
+		var got string
+		err := db.QueryRow(
+			`SELECT type FROM sqlite_master WHERE name = ?`, name).Scan(&got)
+		if err == sql.ErrNoRows {
+			t.Errorf("schema object %q (%s) missing", name, typ)
+			continue
+		}
+		if err != nil {
+			t.Fatalf("query sqlite_master for %q: %v", name, err)
+		}
+		if got != typ {
+			t.Errorf("object %q: got type %q, want %q", name, got, typ)
+		}
+	}
+}
 
 // TestUpAcceptsSQLiteDSN checks migrations.Up dispatches on the DSN scheme and
 // does not choke on a sqlite: DSN. In P1 the SQLite migration set is empty, so
@@ -59,7 +125,7 @@ func TestPublicIDsMigrationRollsBackAndForward(t *testing.T) {
 		t.Fatalf("connection string: %v", err)
 	}
 
-	sub, err := fs.Sub(migrations.FS, "sql")
+	sub, err := fs.Sub(migrations.FS, "sql/postgres")
 	if err != nil {
 		t.Fatalf("sub fs: %v", err)
 	}

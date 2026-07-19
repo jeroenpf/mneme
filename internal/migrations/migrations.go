@@ -8,41 +8,39 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/sqlite" // pure-Go modernc driver
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
 	dsnpkg "github.com/jeroenpfeil/mneme/internal/dsn"
 )
 
-//go:embed sql/*.sql
+//go:embed sql/postgres/*.sql sql/sqlite/*.sql
 var FS embed.FS
 
 // Up applies all pending migrations against dsn using the embedded SQL files,
-// dispatching on the DSN scheme (postgres vs sqlite). Safe to call on every
-// startup; no-ops when the database is already at head.
+// dispatching on the DSN scheme: postgres:// uses the pgx5 driver and the
+// sql/postgres set; sqlite: / file: / *.db uses the pure-Go sqlite driver and
+// the sql/sqlite set. Safe to call on every startup; no-ops when the database
+// is already at head.
 func Up(dsn string) error {
 	if dsnpkg.IsSQLite(dsn) {
-		return upSQLite(dsn)
+		return up("sql/sqlite", "sqlite://"+dsnpkg.SQLiteFilePath(dsn))
 	}
-	return upPostgres(dsn)
+	return up("sql/postgres", "pgx5://"+stripScheme(dsn))
 }
 
-// upSQLite applies the SQLite migration set. In P1 the set is empty (the SQLite
-// schema is authored in P2's migrations split), so this is a no-op that still
-// accepts the DSN so the self-contained binary boots against a fresh file.
-func upSQLite(dsn string) error {
-	return nil
-}
-
-func upPostgres(dsn string) error {
-	sub, err := fs.Sub(FS, "sql")
+// up runs the migration set under subdir against the driver URL, treating
+// "already at head" as success.
+func up(subdir, dbURL string) error {
+	sub, err := fs.Sub(FS, subdir)
 	if err != nil {
-		return fmt.Errorf("sub fs: %w", err)
+		return fmt.Errorf("sub fs %q: %w", subdir, err)
 	}
 	src, err := iofs.New(sub, ".")
 	if err != nil {
 		return fmt.Errorf("iofs source: %w", err)
 	}
-	m, err := migrate.NewWithSourceInstance("iofs", src, "pgx5://"+stripScheme(dsn))
+	m, err := migrate.NewWithSourceInstance("iofs", src, dbURL)
 	if err != nil {
 		return fmt.Errorf("new migrate: %w", err)
 	}

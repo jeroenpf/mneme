@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS env_entries;
+DROP TABLE IF EXISTS memories;
+DROP TABLE IF EXISTS solutions;
+DROP TABLE IF EXISTS journal_entries;
+DROP TABLE IF EXISTS snippets;
+DROP TABLE IF EXISTS decisions;
+DROP TABLE IF EXISTS documents;
+DROP TABLE IF EXISTS projects;
