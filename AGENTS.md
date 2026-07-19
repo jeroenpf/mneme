@@ -27,7 +27,7 @@ A top-level `Makefile` wraps the dev loop. Common targets:
 - `make setup-host` — one-time per machine (needs `sudo`): installs the mkcert CA + leaf cert into `.certs/` and writes the `mneme.dev → 127.0.0.1` `/etc/hosts` entry. `make verify-host` is a non-destructive scorecard (cert, hosts entry, `https://mneme.dev:8443/health`).
 - `make dev` — full stack: postgres + Go (live-reload via air, TLS on `127.0.0.1:8443`) + Vite on `:5273`. Vite proxies `/api` and `/health` to `https://mneme.dev:8443`; it exports `NODE_EXTRA_CA_CERTS` so Node trusts the mkcert CA.
 - `make test` — `go test ./...` + Vue/vitest.
-- `make build` — builds the SPA into `web/dist/`, copies into `internal/web/dist/` for `//go:embed`, then builds the Go binary at `cmd/server/server`.
+- `make build` — builds the SPA into `web/dist/`, copies into `internal/web/dist/` for `//go:embed`, then builds the `mneme` binary at the repo root (`go build -o mneme ./cmd/mneme`).
 - `make logs` / `make psql` — backend log tail / psql shell inside the container.
 - `make seed` — load dev sample data (`scripts/dev-seed.sql`) into postgres; idempotent.
 - `make down` / `make reset` — stop containers / drop the postgres volume (the latter requires `RESET=yes`).

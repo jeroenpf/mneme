@@ -75,7 +75,7 @@ https://mneme.dev:8443
 | `make dev` | Full dev stack (postgres + Go via air + Vite). |
 | `make up` / `make down` | Start / stop the backend containers (volumes preserved). |
 | `make test` | Go tests (`go test ./...`) + Vue tests (vitest). Needs Docker — the Go suite uses testcontainers. |
-| `make build` | Build the SPA, copy it into `internal/web/dist/` for `//go:embed`, then build the Go binary at `cmd/server/server`. |
+| `make build` | Build the SPA, copy it into `internal/web/dist/` for `//go:embed`, then build the `mneme` binary at the repo root. |
 | `make logs` | Tail the backend logs (app + postgres). |
 | `make psql` | Open a `psql` shell inside the postgres container. |
 | `make seed` | Load dev sample data (`scripts/dev-seed.sql`); idempotent. |
@@ -90,7 +90,8 @@ https://mneme.dev:8443
 
 ## Layout
 
-- `cmd/server/` — entrypoint (wiring & lifecycle only).
+- `cmd/mneme/` — the `mneme` CLI entrypoint (thin: signal wiring & process exit only).
+- `internal/cli/` — the cobra command tree (`server`, `init`, `doctor`, …) and the server lifecycle.
 - `internal/` — the app: `store` (raw SQL over pgx/v5, no ORM), `api` (go-chi REST),
   `mcp` (the MCP tool surface), `bundle` (the session-start context bundle), `migrations`,
   `models`, `embed` (Voyage embeddings for hybrid search).

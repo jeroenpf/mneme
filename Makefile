@@ -45,12 +45,12 @@ test: ## Run Go and Vue tests
 	go test $(GO_PKGS)
 	cd $(WEB) && npm test
 
-build: ## Build the Vue app, copy it into internal/web/dist for embedding, then build the Go binary
+build: ## Build the Vue app, copy it into internal/web/dist for embedding, then build the `mneme` binary
 	cd $(WEB) && npm install --silent && npm run build
 	rm -rf internal/web/dist
 	cp -r $(WEB)/dist internal/web/dist
 	touch internal/web/dist/.gitkeep
-	go build -o cmd/server/server ./cmd/server
+	go build -o mneme ./cmd/mneme
 
 tidy: ## Refresh dependency manifests on both sides
 	go mod tidy
