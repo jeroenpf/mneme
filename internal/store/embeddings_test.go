@@ -174,3 +174,26 @@ func TestDeleteOrphanEmbeddings(t *testing.T) {
 		t.Fatalf("orphan decision vector not swept: %+v", got)
 	}
 }
+
+func TestHasStaleModelEmbeddings(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{
+		{SourceType: "documents", SourceID: "d1", ChunkID: "overview", ChunkText: "a",
+			Embedding: fakeVec(0.1), SourceTitle: "D", Model: "voyage-3"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same model → not stale; a newer model → stale.
+	if stale, err := s.HasStaleModelEmbeddings(ctx, "documents", "d1", "voyage-3"); err != nil || stale {
+		t.Fatalf("same model should not be stale: stale=%v err=%v", stale, err)
+	}
+	if stale, err := s.HasStaleModelEmbeddings(ctx, "documents", "d1", "voyage-4"); err != nil || !stale {
+		t.Fatalf("changed model should be stale: stale=%v err=%v", stale, err)
+	}
+	// A source with no vectors at all is not stale.
+	if stale, err := s.HasStaleModelEmbeddings(ctx, "documents", "absent", "voyage-4"); err != nil || stale {
+		t.Fatalf("absent source should not be stale: stale=%v err=%v", stale, err)
+	}
+}

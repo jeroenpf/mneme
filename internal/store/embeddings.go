@@ -146,6 +146,20 @@ func (s *PostgresStore) EmbeddingCoverage(ctx context.Context) ([]TypeCoverage, 
 	return out, nil
 }
 
+// HasStaleModelEmbeddings reports whether a source has any stored vector on a
+// model other than model — the signal that a model switch has left the source
+// mixing vector spaces and must be fully re-embedded.
+func (s *PostgresStore) HasStaleModelEmbeddings(ctx context.Context, sourceType, sourceID, model string) (bool, error) {
+	var stale bool
+	if err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM embeddings
+		   WHERE source_type=$1 AND source_id=$2 AND model <> $3)`,
+		sourceType, sourceID, model).Scan(&stale); err != nil {
+		return false, fmt.Errorf("stale-model check: %w", err)
+	}
+	return stale, nil
+}
+
 // DeleteOrphanEmbeddings sweeps vectors whose source_id no longer resolves to
 // a live row of that type, across every embeddable type, and returns the total
 // number of rows removed. Reconciliation only enqueues live sources, so a

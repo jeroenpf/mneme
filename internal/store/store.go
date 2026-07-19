@@ -240,6 +240,9 @@ type Store interface {
 	// DeleteOrphanEmbeddings sweeps vectors whose source_id no longer
 	// resolves to a live source row, returning the count removed.
 	DeleteOrphanEmbeddings(ctx context.Context) (int64, error)
+	// HasStaleModelEmbeddings reports whether a source has any vector on a
+	// model other than the given one (i.e. a model switch needs a re-embed).
+	HasStaleModelEmbeddings(ctx context.Context, sourceType, sourceID, model string) (bool, error)
 	// EmbeddingsFor returns chunk_id→chunk_text for a source.
 	EmbeddingsFor(ctx context.Context, sourceType, sourceID string) (map[string]string, error)
 	// SourceRefs enumerates every embeddable source.

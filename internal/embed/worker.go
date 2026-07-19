@@ -101,8 +101,17 @@ func (w *Worker) ReconcileAll(ctx context.Context) error {
 	return nil
 }
 
-// Process embeds a single source: chunk → diff → embed changed → upsert →
-// prune stale chunks. Exported for direct testing.
+// Process embeds a single source, enforcing the replacement contract: a
+// source's stored vectors always reflect its current chunk set under the
+// current model.
+//
+//   - Delete: a source with no live row has all its vectors purged.
+//   - Rewrite: added/changed chunks are re-embedded, removed chunks pruned,
+//     unchanged chunks kept.
+//   - Model change: if any stored vector is on a different model, the whole
+//     source is re-embedded so vector spaces never mix.
+//
+// Exported for direct testing.
 func (w *Worker) Process(ctx context.Context, ref SourceRef) error {
 	src, title, project, err := w.load(ctx, ref)
 	if err != nil {
@@ -119,10 +128,16 @@ func (w *Worker) Process(ctx context.Context, ref SourceRef) error {
 	if err != nil {
 		return err
 	}
+	// A model switch leaves stale-model vectors that must all be replaced,
+	// so re-embed the full chunk set even where the text is unchanged.
+	staleModel, err := w.store.HasStaleModelEmbeddings(ctx, ref.Type, ref.ID, w.client.Model())
+	if err != nil {
+		return err
+	}
 
 	var toEmbed []Chunk
 	for _, c := range chunks {
-		if existing[c.ID] != c.Text {
+		if staleModel || existing[c.ID] != c.Text {
 			toEmbed = append(toEmbed, c)
 		}
 	}

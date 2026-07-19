@@ -8,10 +8,19 @@ import (
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
 
-// fakeClient returns a deterministic 1024-dim vector per input.
-type fakeClient struct{ calls int }
+// fakeClient returns a deterministic 1024-dim vector per input. model
+// defaults to "fake" so existing tests need not set it.
+type fakeClient struct {
+	calls int
+	model string
+}
 
-func (f *fakeClient) Model() string { return "fake" }
+func (f *fakeClient) Model() string {
+	if f.model == "" {
+		return "fake"
+	}
+	return f.model
+}
 func (f *fakeClient) Embed(_ context.Context, texts []string, _ string) ([][]float32, error) {
 	f.calls += len(texts)
 	out := make([][]float32, len(texts))
@@ -129,5 +138,47 @@ func TestReconcileAllSweepsOrphans(t *testing.T) {
 	}
 	if got, _ := s.EmbeddingsFor(ctx, "documents", "ghost"); len(got) != 0 {
 		t.Fatalf("ReconcileAll did not sweep orphan vector: %+v", got)
+	}
+}
+
+// A source's stored vectors must all reflect the current embedding model.
+// Switching models must re-embed the source even when its chunk text is
+// unchanged, replacing the stale-model vectors.
+func TestProcessReembedsOnModelChange(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx := context.Background()
+	seedProject(t, s, "apollo")
+	doc := &models.Document{
+		ID: "m1", Title: "Model bump", Project: ptrs("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "overview", "title": "O", "content": "coordinator"},
+		}},
+	}
+	if err := s.CreateDocument(ctx, doc); err != nil {
+		t.Fatal(err)
+	}
+	ref := embed.SourceRef{Type: "documents", ID: "m1"}
+
+	if err := embed.NewWorker(s, &fakeClient{model: "v1"}, 8, 0).Process(ctx, ref); err != nil {
+		t.Fatalf("Process v1: %v", err)
+	}
+
+	// Same text, new model: must re-embed and replace the stored vector.
+	fc2 := &fakeClient{model: "v2"}
+	if err := embed.NewWorker(s, fc2, 8, 0).Process(ctx, ref); err != nil {
+		t.Fatalf("Process v2: %v", err)
+	}
+	if fc2.calls == 0 {
+		t.Fatal("model change should force re-embed of unchanged-text chunks")
+	}
+	var model string
+	if err := s.Pool().QueryRow(ctx,
+		`SELECT model FROM embeddings WHERE source_type='documents' AND source_id=$1 AND chunk_id='overview'`,
+		"m1").Scan(&model); err != nil {
+		t.Fatal(err)
+	}
+	if model != "v2" {
+		t.Fatalf("stored vector not replaced under new model: got %q, want v2", model)
 	}
 }
