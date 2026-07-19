@@ -24,8 +24,8 @@ type SourceRef struct {
 //   - Stale      — live sources holding at least one vector on an older model.
 //   - Missing    — live sources with no vector at all (Total-Embedded).
 //   - Orphaned   — vectors whose source_id no longer resolves to a live row.
-//   - Failed     — sources whose last embed attempt failed terminally; nil
-//     until P3-t5 adds failure tracking (nil ≠ zero: "not tracked yet").
+//   - Failed     — live sources whose last embed attempt failed terminally
+//     (from embed_failures); 0 when none are currently failing.
 type TypeStatus struct {
 	Type       string `json:"type"`
 	Total      int    `json:"total"`
@@ -34,7 +34,7 @@ type TypeStatus struct {
 	Missing    int    `json:"missing"`
 	Stale      int    `json:"stale"`
 	Orphaned   int    `json:"orphaned"`
-	Failed     *int   `json:"failed"`
+	Failed     int    `json:"failed"`
 }
 
 // sourceTables maps a SearchTypes value to its table, for enumeration and
@@ -161,8 +161,11 @@ func (s *PostgresStore) EmbeddingStatus(ctx context.Context, model string) ([]Ty
 			                    WHERE e.source_type=$1 AND e.source_id=t.id::text AND e.model<>$2)) AS stale,
 			  (SELECT count(DISTINCT e.source_id) FROM embeddings e
 			     WHERE e.source_type=$1
-			       AND NOT EXISTS (SELECT 1 FROM %[1]s t WHERE t.id::text=e.source_id)) AS orphaned`,
-			st.table), st.typ, model).Scan(&ts.Total, &ts.Embedded, &ts.Stale, &ts.Orphaned); err != nil {
+			       AND NOT EXISTS (SELECT 1 FROM %[1]s t WHERE t.id::text=e.source_id)) AS orphaned,
+			  (SELECT count(*) FROM embed_failures f
+			     JOIN %[1]s t ON t.id::text = f.source_id
+			    WHERE f.source_type=$1) AS failed`,
+			st.table), st.typ, model).Scan(&ts.Total, &ts.Embedded, &ts.Stale, &ts.Orphaned, &ts.Failed); err != nil {
 			return nil, fmt.Errorf("embedding status %s: %w", st.typ, err)
 		}
 		ts.Reconciled = ts.Embedded - ts.Stale
@@ -204,6 +207,55 @@ func (s *PostgresStore) DeleteOrphanEmbeddings(ctx context.Context) (int64, erro
 		deleted += tag.RowsAffected()
 	}
 	return deleted, nil
+}
+
+// RecordEmbedFailure upserts a terminal embed failure for a source, keeping
+// the latest error and accruing the attempt count and last_failed_at.
+func (s *PostgresStore) RecordEmbedFailure(ctx context.Context, sourceType, sourceID, errMsg string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO embed_failures (source_type, source_id, error)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (source_type, source_id) DO UPDATE
+		SET error = EXCLUDED.error,
+		    attempts = embed_failures.attempts + 1,
+		    last_failed_at = now()`,
+		sourceType, sourceID, errMsg)
+	if err != nil {
+		return fmt.Errorf("record embed failure: %w", err)
+	}
+	return nil
+}
+
+// ClearEmbedFailure removes any recorded failure for a source (called after a
+// successful embed or a purge). Absent rows are a no-op.
+func (s *PostgresStore) ClearEmbedFailure(ctx context.Context, sourceType, sourceID string) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM embed_failures WHERE source_type=$1 AND source_id=$2`, sourceType, sourceID)
+	if err != nil {
+		return fmt.Errorf("clear embed failure: %w", err)
+	}
+	return nil
+}
+
+// FailedSourceRefs lists every source with a recorded terminal failure, so a
+// manual retry can re-enqueue them. Includes failures for since-deleted
+// sources — re-processing self-cleans them (the purge path clears the row).
+func (s *PostgresStore) FailedSourceRefs(ctx context.Context) ([]SourceRef, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT source_type, source_id FROM embed_failures ORDER BY last_failed_at`)
+	if err != nil {
+		return nil, fmt.Errorf("failed source refs: %w", err)
+	}
+	defer rows.Close()
+	out := []SourceRef{}
+	for rows.Next() {
+		var r SourceRef
+		if err := rows.Scan(&r.Type, &r.ID); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 func joinUnion(parts []string) string {

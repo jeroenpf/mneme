@@ -82,8 +82,25 @@ func (w *Worker) Run(ctx context.Context) {
 			}
 			continue
 		}
-		if _, err := w.Process(ctx, ref); err != nil {
-			slog.Error("embed failed", "type", ref.Type, "id", ref.ID, "err", err)
+		w.processOnce(ctx, ref)
+	}
+}
+
+// processOnce runs Process and records the terminal-failure bookkeeping: a
+// real error is recorded (for the failed bucket and manual retry), while a
+// success — including a purge of a deleted source — clears any prior failure.
+// Context cancellation (shutdown) is not a failure and is skipped.
+func (w *Worker) processOnce(ctx context.Context, ref SourceRef) {
+	_, err := w.Process(ctx, ref)
+	switch {
+	case err != nil && ctx.Err() == nil:
+		slog.Error("embed failed", "type", ref.Type, "id", ref.ID, "err", err)
+		if rerr := w.store.RecordEmbedFailure(ctx, ref.Type, ref.ID, err.Error()); rerr != nil {
+			slog.Error("record embed failure", "type", ref.Type, "id", ref.ID, "err", rerr)
+		}
+	case err == nil:
+		if cerr := w.store.ClearEmbedFailure(ctx, ref.Type, ref.ID); cerr != nil {
+			slog.Error("clear embed failure", "type", ref.Type, "id", ref.ID, "err", cerr)
 		}
 	}
 }

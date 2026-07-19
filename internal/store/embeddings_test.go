@@ -213,8 +213,60 @@ func TestEmbeddingStatusBuckets(t *testing.T) {
 		d.Missing != 1 || d.Stale != 1 || d.Orphaned != 1 {
 		t.Fatalf("documents status wrong: %+v", d)
 	}
-	if d.Failed != nil {
-		t.Fatalf("failed should be nil until P3-t5 tracks it, got %d", *d.Failed)
+	if d.Failed != 0 {
+		t.Fatalf("no failures recorded, failed should be 0, got %d", d.Failed)
+	}
+}
+
+// Terminal embed failures are recorded per source, feed the live "failed"
+// bucket, and are listed for manual retry. A failure for a deleted source is
+// still retryable but must not inflate the live bucket.
+func TestEmbedFailureTracking(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.CreateDocument(ctx, sampleDoc("d1", "Live")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.RecordEmbedFailure(ctx, "documents", "d1", "boom"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordEmbedFailure(ctx, "documents", "d1", "boom again"); err != nil {
+		t.Fatal(err)
+	}
+	// A failure for a source with no live row (already deleted).
+	if err := s.RecordEmbedFailure(ctx, "documents", "ghost", "gone"); err != nil {
+		t.Fatal(err)
+	}
+
+	refs, err := s.FailedSourceRefs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 2 {
+		t.Fatalf("both failed refs should be retryable, got %+v", refs)
+	}
+
+	byType := func() map[string]store.TypeStatus {
+		sts, err := s.EmbeddingStatus(ctx, "m")
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := map[string]store.TypeStatus{}
+		for _, x := range sts {
+			m[x.Type] = x
+		}
+		return m
+	}
+	if got := byType()["documents"].Failed; got != 1 {
+		t.Fatalf("failed bucket should count only the live failed source, got %d", got)
+	}
+
+	if err := s.ClearEmbedFailure(ctx, "documents", "d1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := byType()["documents"].Failed; got != 0 {
+		t.Fatalf("cleared failure should drop the bucket to 0, got %d", got)
 	}
 }
 

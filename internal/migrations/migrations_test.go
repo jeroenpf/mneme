@@ -20,9 +20,9 @@ import (
 )
 
 // TestPublicIDsMigrationRollsBackAndForward exercises migration 015's down
-// and up files: after a full Up the public_id column exists; stepping the
-// latest migration down drops it; stepping back up restores it. Proves the
-// rollback is clean and the migration is re-appliable.
+// and up files: after a full Up the public_id column exists; migrating down
+// to 014 drops it; migrating back up to 015 restores it. Targets version 015
+// explicitly so it stays correct as later migrations are added.
 func TestPublicIDsMigrationRollsBackAndForward(t *testing.T) {
 	ctx := context.Background()
 	container, err := tcpostgres.Run(ctx,
@@ -67,15 +67,17 @@ func TestPublicIDsMigrationRollsBackAndForward(t *testing.T) {
 		t.Fatal("after up: documents.public_id should exist")
 	}
 
-	if err := m.Steps(-1); err != nil {
-		t.Fatalf("step down 015: %v", err)
+	// Roll back to 014 (undoing every migration after it, incl. 015), so
+	// public_id is dropped regardless of how many migrations follow 015.
+	if err := m.Migrate(14); err != nil {
+		t.Fatalf("migrate down to 014: %v", err)
 	}
 	if columnExists(t, dsn, "documents", "public_id") {
 		t.Fatal("after rollback: documents.public_id should be gone")
 	}
 
-	if err := m.Steps(1); err != nil {
-		t.Fatalf("step up 015: %v", err)
+	if err := m.Migrate(15); err != nil {
+		t.Fatalf("migrate up to 015: %v", err)
 	}
 	if !columnExists(t, dsn, "solutions", "public_id") {
 		t.Fatal("after re-apply: solutions.public_id should exist again")

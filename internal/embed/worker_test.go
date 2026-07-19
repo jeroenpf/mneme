@@ -2,12 +2,46 @@ package embed_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpfeil/mneme/internal/store"
 )
+
+// failClient always errors, to exercise terminal-failure recording.
+type failClient struct{}
+
+func (failClient) Model() string { return "fake" }
+func (failClient) Embed(context.Context, []string, string) ([][]float32, error) {
+	return nil, errors.New("embed boom")
+}
+
+func hasRef(refs []store.SourceRef, id string) bool {
+	for _, r := range refs {
+		if r.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func mkSectionDoc(t *testing.T, s interface {
+	CreateDocument(context.Context, *models.Document) error
+}, id string) {
+	t.Helper()
+	if err := s.CreateDocument(context.Background(), &models.Document{
+		ID: id, Title: id, Project: ptrs("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "overview", "title": "O", "content": "coordinator"},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // fakeClient returns a deterministic 1024-dim vector per input. model
 // defaults to "fake" so existing tests need not set it.
@@ -117,6 +151,59 @@ func TestWorkerPurgesEmbeddingsForDeletedSource(t *testing.T) {
 	got, _ := s.EmbeddingsFor(ctx, "documents", "gone")
 	if len(got) != 0 {
 		t.Fatalf("deleted source left orphaned embeddings: %+v", got)
+	}
+}
+
+// A source whose embed errors must be recorded as a terminal failure (for
+// visibility + manual retry); a later successful embed clears it.
+func TestWorkerRecordsFailureOnEmbedError(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	seedProject(t, s, "apollo")
+	mkSectionDoc(t, s, "f1")
+
+	w := embed.NewWorker(s, failClient{}, 8, 0)
+	go w.Run(ctx)
+	w.Enqueue(embed.SourceRef{Type: "documents", ID: "f1"})
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		refs, _ := s.FailedSourceRefs(ctx)
+		if hasRef(refs, "f1") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("embed error was not recorded as a terminal failure")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestWorkerClearsFailureOnSuccess(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	seedProject(t, s, "apollo")
+	mkSectionDoc(t, s, "f2")
+	if err := s.RecordEmbedFailure(ctx, "documents", "f2", "old boom"); err != nil {
+		t.Fatal(err)
+	}
+
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0) // succeeds
+	go w.Run(ctx)
+	w.Enqueue(embed.SourceRef{Type: "documents", ID: "f2"})
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		refs, _ := s.FailedSourceRefs(ctx)
+		if !hasRef(refs, "f2") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("successful embed did not clear the recorded failure")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 

@@ -30,7 +30,7 @@ func TestSearchStatus(t *testing.T) {
 			Missing    int    `json:"missing"`
 			Stale      int    `json:"stale"`
 			Orphaned   int    `json:"orphaned"`
-			Failed     *int   `json:"failed"`
+			Failed     int    `json:"failed"`
 		} `json:"items"`
 	}
 	decodeBody(t, resp, &body)
@@ -41,8 +41,8 @@ func TestSearchStatus(t *testing.T) {
 			if it.Total < 1 || it.Missing < 1 || it.Embedded != 0 {
 				t.Fatalf("decisions buckets wrong: %+v", body.Items[i])
 			}
-			if it.Failed != nil {
-				t.Fatalf("failed should be null until P3-t5, got %d", *it.Failed)
+			if it.Failed != 0 {
+				t.Fatalf("no failures recorded, failed should be 0, got %d", it.Failed)
 			}
 			dec = &body.Items[i].Total
 		}

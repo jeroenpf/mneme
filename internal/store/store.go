@@ -248,8 +248,16 @@ type Store interface {
 	// SourceRefs enumerates every embeddable source.
 	SourceRefs(ctx context.Context) ([]SourceRef, error)
 	// EmbeddingStatus reports per-type reconciliation buckets (reconciled,
-	// missing, stale, orphaned) against the current embedding model.
+	// missing, stale, orphaned, failed) against the current embedding model.
 	EmbeddingStatus(ctx context.Context, model string) ([]TypeStatus, error)
+
+	// RecordEmbedFailure upserts a terminal embed failure for a source
+	// (latest error, incremented attempt count).
+	RecordEmbedFailure(ctx context.Context, sourceType, sourceID, errMsg string) error
+	// ClearEmbedFailure removes a source's recorded failure (no-op if absent).
+	ClearEmbedFailure(ctx context.Context, sourceType, sourceID string) error
+	// FailedSourceRefs lists sources with a recorded failure, for manual retry.
+	FailedSourceRefs(ctx context.Context) ([]SourceRef, error)
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

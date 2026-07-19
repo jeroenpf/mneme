@@ -70,7 +70,7 @@ func newEmbedStore(t *testing.T) *store.PostgresStore {
 	t.Cleanup(pool.Close)
 
 	if _, err := pool.Exec(ctx,
-		`TRUNCATE documents, projects, embeddings RESTART IDENTITY CASCADE`); err != nil {
+		`TRUNCATE documents, projects, embeddings, embed_failures RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return store.NewWithPool(pool)
