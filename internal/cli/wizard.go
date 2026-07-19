@@ -2,6 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"strconv"
+
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/jeroenpfeil/mneme/internal/config"
 )
@@ -74,4 +79,154 @@ func orDefault(v, def string) string {
 		return def
 	}
 	return v
+}
+
+// serverURL is the address a browser (or Claude Code) uses to reach the server
+// for the chosen settings — the friendly line the summary prints.
+func serverURL(s config.Settings) string {
+	if s.Net.TLSCert != "" {
+		return "https://mneme.dev:" + s.Net.Port
+	}
+	return "http://localhost:" + s.Net.Port
+}
+
+// initTheme is the wizard's lipgloss-based huh theme: the base theme with
+// Mneme's accent applied so the form reads as part of the product.
+func initTheme() *huh.Theme {
+	t := huh.ThemeBase()
+	accent := lipgloss.Color("#2f5d80") // the app's theme-color
+	t.Focused.Title = t.Focused.Title.Foreground(accent).Bold(true)
+	t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(accent)
+	t.Focused.Base = t.Focused.Base.BorderForeground(accent)
+	return t
+}
+
+// newInitForm builds the interactive setup form bound to the fields of a.
+// Conditional groups keep irrelevant questions hidden (the SQLite path only
+// when SQLite is chosen, the Voyage key only when embeddings are enabled). The
+// RPM is collected as text and parsed in collectAnswers. The form is a thin
+// shell over buildSettings — no logic lives here.
+func newInitForm(a *wizardAnswers, rpmText *string) *huh.Form {
+	// huh hides at the group level, so each conditional question is its own
+	// group gated by a HideFunc reading the answers filled in so far.
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Storage backend").
+				Description("SQLite is self-contained; Postgres is for an existing server.").
+				Options(
+					huh.NewOption("SQLite file (recommended)", "sqlite"),
+					huh.NewOption("PostgreSQL", "postgres"),
+				).
+				Value(&a.Backend),
+		).Title("Data"),
+
+		huh.NewGroup(
+			huh.NewInput().
+				Title("SQLite database path").
+				Placeholder(config.DefaultSQLitePath()).
+				Description("Leave blank for the default ~/.mneme/mneme.db.").
+				Value(&a.SQLitePath),
+		).WithHideFunc(func() bool { return a.Backend != "sqlite" }),
+
+		huh.NewGroup(
+			huh.NewInput().
+				Title("PostgreSQL DSN").
+				Placeholder("postgres://user:pass@host:5432/mneme?sslmode=disable").
+				Value(&a.PostgresDSN),
+		).WithHideFunc(func() bool { return a.Backend != "postgres" }),
+
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Enable semantic search (Voyage embeddings)?").
+				Description("No keeps everything local (lexical/FTS only). Yes sends text to Voyage.").
+				Value(&a.Embeddings),
+		).Title("Embeddings"),
+
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Voyage API key").
+				EchoMode(huh.EchoModePassword).
+				Value(&a.VoyageKey),
+			huh.NewInput().
+				Title("Voyage requests/min (0 = no proactive throttle)").
+				Placeholder("0").
+				Value(rpmText),
+		).WithHideFunc(func() bool { return !a.Embeddings }),
+
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Networking").
+				Description("localhost is zero-setup plain HTTP; mneme.dev adds trusted HTTPS.").
+				Options(
+					huh.NewOption("localhost + plain HTTP (recommended)", "localhost"),
+					huh.NewOption("mneme.dev + HTTPS (runs mkcert + /etc/hosts)", "mneme.dev"),
+				).
+				Value(&a.NetMode),
+			huh.NewInput().
+				Title("Port").
+				Description("Leave blank for the per-mode default (8080 / 8443).").
+				Value(&a.Port),
+		).Title("Networking"),
+	)
+}
+
+// collectAnswers runs the init form over the given IO and returns the resolved
+// answers. Passing a non-TTY reader (e.g. in tests) runs the form in accessible
+// mode, which reads plain lines — one per visible field.
+func collectAnswers(in io.Reader, out io.Writer, accessible bool) (wizardAnswers, error) {
+	var a wizardAnswers
+	var rpmText string
+	form := newInitForm(&a, &rpmText).
+		WithTheme(initTheme()).
+		WithInput(in).
+		WithOutput(out).
+		WithAccessible(accessible)
+	if err := form.Run(); err != nil {
+		return a, err
+	}
+	if rpmText != "" {
+		n, err := strconv.Atoi(rpmText)
+		if err != nil {
+			return a, fmt.Errorf("invalid requests/min %q: %w", rpmText, err)
+		}
+		a.VoyageRPM = n
+	}
+	return a, nil
+}
+
+// writeInit is the deterministic tail of the wizard: validate answers into
+// Settings, write settings.toml (0600), and print a friendly summary. It is the
+// flow's testable core — no TTY, only the file write.
+func writeInit(a wizardAnswers, path string, out io.Writer) (config.Settings, error) {
+	s, err := buildSettings(a)
+	if err != nil {
+		return s, err
+	}
+	if err := config.WriteSettings(path, &s); err != nil {
+		return s, err
+	}
+	fmt.Fprint(out, renderSummary(s, path))
+	return s, nil
+}
+
+// renderSummary is the post-write recap: where the config went, the effective
+// storage/search/network choices, and the URL to reach the server. The Voyage
+// key is never echoed.
+func renderSummary(s config.Settings, path string) string {
+	search := "lexical only (FTS, fully local)"
+	if s.Embeddings.VoyageAPIKey != "" {
+		search = "semantic (Voyage " + s.Embeddings.VoyageModel + ")"
+	}
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#2f5d80"))
+	return fmt.Sprintf(`
+%s
+
+  config    %s
+  storage   %s
+  search    %s
+  address   %s
+
+Start it with:  mneme server
+`, title.Render("Mneme is configured."), path, s.Data.DSN, search, serverURL(s))
 }
