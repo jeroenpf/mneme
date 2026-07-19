@@ -74,6 +74,12 @@ func seedSearchCorpus(t *testing.T, s *store.PostgresStore) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SetMemory(ctx, &models.Memory{
+		Scope: models.ScopeProject, Project: ptr("apollo"),
+		Key: "zigbee-note", Value: "zigbee mesh coordinator facts",
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSearchSpansAllTypes(t *testing.T) {
@@ -431,6 +437,60 @@ func TestSearchDocumentExcerptFallsBackToTitle(t *testing.T) {
 	}
 	if strings.Contains(hit.Excerpt, "{") || hit.Excerpt == "" {
 		t.Errorf("fallback excerpt should be clean title text, got %q", hit.Excerpt)
+	}
+}
+
+// Memory is part of unified retrieval (FTS), but env is intentionally kept out
+// — env is looked up exactly by key, never fuzzily searched.
+func TestSearchIncludesMemoryNotEnv(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	if err := s.SetMemory(ctx, &models.Memory{
+		Scope: models.ScopeProject, Project: ptr("apollo"),
+		Key: "deploy-target", Value: "runs on the zigbee gateway host",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// An env entry carrying the same term must never surface in search.
+	if err := s.SetEnv(ctx, &models.EnvEntry{
+		Project: "apollo", Key: "ZIGBEE_HOST", Value: "zigbee.local",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := s.Search(ctx, "zigbee", store.SearchFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var memHit *models.SearchHit
+	for _, h := range hits {
+		if h.Type == "env" {
+			t.Errorf("env leaked into unified search: %+v", h)
+		}
+		if h.Type == "memory" {
+			memHit = h
+		}
+	}
+	if memHit == nil {
+		t.Fatalf("expected a memory hit for zigbee, got %+v", hits)
+	}
+	if !strings.Contains(memHit.Title, "deploy-target") {
+		t.Errorf("memory hit title = %q, want the key", memHit.Title)
+	}
+	if !strings.Contains(memHit.Excerpt, "zigbee") {
+		t.Errorf("memory hit excerpt = %q, want the value with the term", memHit.Excerpt)
+	}
+}
+
+// "memory" is a valid search type; "env" is not.
+func TestSearchMemoryTypeValidEnvTypeInvalid(t *testing.T) {
+	s := newStore(t)
+	if _, err := s.Search(context.Background(), "x", store.SearchFilter{Types: []string{"memory"}}); err != nil {
+		t.Errorf("memory should be a valid search type: %v", err)
+	}
+	if _, err := s.Search(context.Background(), "x", store.SearchFilter{Types: []string{"env"}}); !errors.Is(err, store.ErrInvalidSearchType) {
+		t.Errorf("env must not be a searchable type, got %v", err)
 	}
 }
 

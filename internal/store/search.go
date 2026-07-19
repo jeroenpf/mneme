@@ -16,8 +16,10 @@ import (
 // outside SearchTypes.
 var ErrInvalidSearchType = errors.New("invalid search type")
 
-// SearchTypes is the canonical set of searchable content types.
-var SearchTypes = []string{"documents", "decisions", "snippets", "solutions", "journal"}
+// SearchTypes is the canonical set of searchable content types. Memory is
+// included; env is deliberately excluded — env is looked up exactly by key,
+// never fuzzily searched (road-p4-t5).
+var SearchTypes = []string{"documents", "decisions", "snippets", "solutions", "journal", "memory"}
 
 const defaultSearchLimit = 20
 
@@ -45,6 +47,7 @@ var searchBranches = map[string]searchBranch{
 	"snippets":  {"snippets", "snippets", "title", "coalesce(nullif(description,''), content)"},
 	"solutions": {"solutions", "solutions", "error_description", "solution"},
 	"journal":   {"journal", "journal_entries", "summary", "summary"},
+	"memory":    {"memory", "memories", "key", "value"},
 }
 
 func validateSearchTypes(types []string) ([]string, error) {
