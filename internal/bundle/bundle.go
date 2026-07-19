@@ -7,6 +7,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
+	"unicode"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -154,7 +157,7 @@ func (a *Assembler) AssembleWithOptions(ctx context.Context, project string, are
 	if err != nil {
 		return nil, fmt.Errorf("bundle: env: %w", err)
 	}
-	plan, nextTasks, err := a.activePlan(ctx, project)
+	plan, nextTasks, planTags, err := a.activePlan(ctx, project)
 	if err != nil {
 		return nil, err
 	}
@@ -166,14 +169,24 @@ func (a *Assembler) AssembleWithOptions(ctx context.Context, project string, are
 	if err != nil {
 		return nil, err
 	}
-	snippets, err := a.relevantSnippets(ctx, project)
-	if err != nil {
-		return nil, err
-	}
 	journal, err := a.recentJournal(ctx, project)
 	if err != nil {
 		return nil, err
 	}
+	deferred := deferredFrom(journal)
+	allSnippets, err := a.projectSnippets(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+
+	// Select knowledge relevant to the session's focus (area + recent work)
+	// rather than the first N by store order.
+	planTitle := ""
+	if plan != nil {
+		planTitle = plan.Title
+	}
+	terms := relevanceTerms(area, planTitle, planTags, nextTasks, journal, deferred)
+	snippets := selectRelevantSnippets(allSnippets, terms, maxSnippets)
 
 	b := &Bundle{
 		Project:    project,
@@ -183,7 +196,7 @@ func (a *Assembler) AssembleWithOptions(ctx context.Context, project string, are
 		ActivePlan: plan,
 		NextTasks:  nextTasks,
 		Blockers:   blockers,
-		Deferred:   deferredFrom(journal),
+		Deferred:   deferred,
 		Decisions:  decisions,
 		Snippets:   snippets,
 		Journal:    journal,
@@ -265,11 +278,11 @@ func (a *Assembler) assembleMemory(ctx context.Context, project string, area *st
 	return mergeMemory(groups...), nil
 }
 
-// activePlan returns the in-progress plan's status line plus the next
-// incomplete tasks lifted from its body — the "what to do next" the compiler
-// exists to surface. Returns (nil, nil, nil) when the project has no
-// in-progress plan.
-func (a *Assembler) activePlan(ctx context.Context, project string) (*PlanSummary, []NextTask, error) {
+// activePlan returns the in-progress plan's status line, the next incomplete
+// tasks lifted from its body — the "what to do next" the compiler exists to
+// surface — and the plan's tags (a relevance signal for knowledge selection).
+// Returns (nil, nil, nil, nil) when the project has no in-progress plan.
+func (a *Assembler) activePlan(ctx context.Context, project string) (*PlanSummary, []NextTask, []string, error) {
 	plans, err := a.store.ListDocuments(ctx, store.Filter{
 		Project: &project,
 		Type:    ptr(models.TypePlan),
@@ -277,10 +290,10 @@ func (a *Assembler) activePlan(ctx context.Context, project string) (*PlanSummar
 		Limit:   1,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("bundle: active plan: %w", err)
+		return nil, nil, nil, fmt.Errorf("bundle: active plan: %w", err)
 	}
 	if len(plans) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	d := plans[0]
 	sum := &PlanSummary{
@@ -291,7 +304,7 @@ func (a *Assembler) activePlan(ctx context.Context, project string) (*PlanSummar
 		PhaseCurrent: d.PhaseCurrent,
 		PhaseTotal:   d.PhaseTotal,
 	}
-	return sum, firstN(incompleteTasks(d.Body), maxNextTasks), nil
+	return sum, firstN(incompleteTasks(d.Body), maxNextTasks), d.Tags, nil
 }
 
 // wipPhase returns the title of the phase currently in progress, read from
@@ -392,7 +405,10 @@ func (a *Assembler) recentDecisions(ctx context.Context, project string) ([]*mod
 	return firstN(out, maxDecisions), nil
 }
 
-func (a *Assembler) relevantSnippets(ctx context.Context, project string) ([]*models.Snippet, error) {
+// projectSnippets returns every project-or-global snippet, uncapped and in
+// store (recency) order. Relevance ranking and the maxSnippets cap are applied
+// afterward by selectRelevantSnippets, once the session's focus terms are known.
+func (a *Assembler) projectSnippets(ctx context.Context, project string) ([]*models.Snippet, error) {
 	all, err := a.store.ListSnippets(ctx, store.SnippetFilter{})
 	if err != nil {
 		return nil, fmt.Errorf("bundle: snippets: %w", err)
@@ -403,7 +419,91 @@ func (a *Assembler) relevantSnippets(ctx context.Context, project string) ([]*mo
 			out = append(out, s)
 		}
 	}
-	return firstN(out, maxSnippets), nil
+	return out, nil
+}
+
+// relevanceTerms builds the lowercased token set describing the session's
+// current focus — the project area plus recent work (active-plan title and
+// tags, next-task titles/phases, journal summaries, and deferred items).
+// Knowledge selection ranks against this set so the bundle surfaces snippets
+// tied to what is actually in flight.
+func relevanceTerms(area *string, planTitle string, planTags []string, tasks []NextTask, journal []*models.JournalEntry, deferred []string) map[string]bool {
+	terms := map[string]bool{}
+	add := func(s string) {
+		for _, tok := range tokenize(s) {
+			terms[tok] = true
+		}
+	}
+	if area != nil {
+		add(*area)
+	}
+	add(planTitle)
+	for _, t := range planTags {
+		add(t)
+	}
+	for _, t := range tasks {
+		add(t.Title)
+		add(t.Phase)
+	}
+	for _, j := range journal {
+		add(j.Summary)
+	}
+	for _, d := range deferred {
+		add(d)
+	}
+	return terms
+}
+
+// tokenize splits s into lowercased alphanumeric tokens of length >= 3, so
+// relevance keys on content words rather than short connective glue.
+func tokenize(s string) []string {
+	var out []string
+	for _, f := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		if len([]rune(f)) >= 3 {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// selectRelevantSnippets ranks snippets by overlap with the focus terms (tag
+// matches weighted above title/description word matches) and returns the top
+// max, stable in original recency order on ties. Empty terms preserve order.
+func selectRelevantSnippets(snips []*models.Snippet, terms map[string]bool, max int) []*models.Snippet {
+	ranked := make([]*models.Snippet, len(snips))
+	copy(ranked, snips)
+	scores := make(map[*models.Snippet]int, len(snips))
+	for _, s := range snips {
+		scores[s] = snippetScore(s, terms)
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		return scores[ranked[i]] > scores[ranked[j]]
+	})
+	return firstN(ranked, max)
+}
+
+// snippetScore rewards overlap with the focus terms: +2 per matching tag,
+// +1 per matching title/description word. Zero when there are no terms.
+func snippetScore(s *models.Snippet, terms map[string]bool) int {
+	if len(terms) == 0 {
+		return 0
+	}
+	score := 0
+	for _, tag := range s.Tags {
+		for _, tok := range tokenize(tag) {
+			if terms[tok] {
+				score += 2
+			}
+		}
+	}
+	for _, tok := range append(tokenize(s.Title), tokenize(s.Description)...) {
+		if terms[tok] {
+			score++
+		}
+	}
+	return score
 }
 
 func (a *Assembler) recentJournal(ctx context.Context, project string) ([]*models.JournalEntry, error) {

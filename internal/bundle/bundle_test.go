@@ -382,6 +382,66 @@ func TestAssembleTightBudgetTruncatesByPriority(t *testing.T) {
 	}
 }
 
+func TestAssembleSelectsRelevantSnippetsByAreaAndRecentWork(t *testing.T) {
+	// 10 filler snippets (fills maxSnippets) followed by 2 that match the
+	// active plan / area terms. First-N-by-order would drop the relevant ones;
+	// relevance selection must surface them.
+	var snips []*models.Snippet
+	for i := range maxSnippets {
+		snips = append(snips, &models.Snippet{Title: "filler " + string(rune('a'+i)), Project: strptr("mneme"), Description: "unrelated boilerplate helper"})
+	}
+	snips = append(snips,
+		&models.Snippet{Title: "vector cosine", Project: strptr("mneme"), Tags: []string{"search"}, Description: "brute-force cosine similarity for search ranking"},
+		&models.Snippet{Title: "fts5 ranking", Project: strptr("mneme"), Tags: []string{"search"}, Description: "bm25 lexical search scoring"},
+	)
+
+	plan := &models.Document{
+		ID: "impl", Title: "Retrieval quality", Project: strptr("mneme"),
+		Type: models.TypePlan, Status: models.StatusInProgress,
+		Tags: []string{"search", "embeddings"},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "subphase", "id": "sp-1", "title": "Search", "tasks": []any{
+				map[string]any{"id": "t-1", "title": "tune fusion", "done": false},
+			}},
+		}},
+	}
+	f := &fakeStore{
+		projects:  map[string]*models.Project{"mneme": {Slug: "mneme"}},
+		documents: []*models.Document{plan},
+		snippets:  snips,
+	}
+	b, err := New(f).Assemble(context.Background(), "mneme", strptr("search"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.Snippets) != maxSnippets {
+		t.Fatalf("snippets should cap at %d, got %d", maxSnippets, len(b.Snippets))
+	}
+	if b.Snippets[0].Title != "vector cosine" || b.Snippets[1].Title != "fts5 ranking" {
+		t.Errorf("relevant snippets should rank first, got %q, %q", b.Snippets[0].Title, b.Snippets[1].Title)
+	}
+	// Both relevant snippets survive the cap despite appearing last in store order.
+	var titles []string
+	for _, s := range b.Snippets {
+		titles = append(titles, s.Title)
+	}
+	joined := strings.Join(titles, ",")
+	if !strings.Contains(joined, "vector cosine") || !strings.Contains(joined, "fts5 ranking") {
+		t.Errorf("relevant snippets dropped by the cap: %s", joined)
+	}
+}
+
+func TestSelectRelevantSnippetsKeepsOrderWithoutSignal(t *testing.T) {
+	// With no relevance terms (all scores 0), selection preserves store order.
+	snips := []*models.Snippet{
+		{Title: "first"}, {Title: "second"}, {Title: "third"},
+	}
+	got := selectRelevantSnippets(snips, map[string]bool{}, 10)
+	if len(got) != 3 || got[0].Title != "first" || got[2].Title != "third" {
+		t.Errorf("stable order not preserved without signal: %+v", got)
+	}
+}
+
 func TestRenderMarkdownNoneSections(t *testing.T) {
 	b := &Bundle{Project: "mneme", Memory: map[string]string{}}
 	md := renderMarkdown(b)
