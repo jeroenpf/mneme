@@ -2,7 +2,7 @@ FROM golang:1.25-alpine
 
 WORKDIR /app
 RUN apk add --no-cache git wget && \
-    go install github.com/air-verse/air@latest
+    go install github.com/air-verse/air@v1.66.0
 
 ENV CGO_ENABLED=0
 
