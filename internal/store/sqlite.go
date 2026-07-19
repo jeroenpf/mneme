@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,10 +13,8 @@ import (
 	"github.com/jeroenpfeil/mneme/internal/dsn"
 )
 
-// errNotImplemented marks SQLiteStore methods still stubbed while the backend is
-// built out phase by phase (plan-sqlite-backend P3/P5). It should never surface
-// once the port is complete.
-var errNotImplemented = errors.New("sqlite backend: method not implemented yet")
+// SQLiteStore implements the full Store contract.
+var _ Store = (*SQLiteStore)(nil)
 
 // SQLiteStore is the pure-Go Store implementation backing the self-contained
 // binary. It wraps a database/sql handle over modernc.org/sqlite; there is no

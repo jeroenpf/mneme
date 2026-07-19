@@ -560,6 +560,191 @@ func vecOf(n int, val float32) []float32 {
 	return v
 }
 
+// unitVec builds an n-dimensional basis vector: 1 at idx, 0 elsewhere. Two
+// distinct basis vectors are orthogonal (cosine 0); a vector with itself is 1.
+func unitVec(n, idx int) []float32 {
+	v := make([]float32, n)
+	v[idx] = 1
+	return v
+}
+
+// hasHit reports whether a SearchHit of the given type and id is present.
+func hasHit(hits []*models.SearchHit, typ, id string) bool {
+	for _, h := range hits {
+		if h.Type == typ && h.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func TestConformanceUnifiedSearch(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo", "zephyr")
+
+		d1 := sampleDoc("srch-1", "PostgreSQL indexing guide")
+		d1.Project = ptr("apollo")
+		d2 := sampleDoc("srch-2", "Sourdough bread recipe")
+		d2.Project = ptr("zephyr")
+		for _, d := range []*models.Document{d1, d2} {
+			if err := st.CreateDocument(ctx, d); err != nil {
+				t.Fatalf("create %s: %v", d.ID, err)
+			}
+		}
+		dec := &models.Decision{Title: "Adopt pgvector", Decision: "use pgvector for embeddings", Status: models.DecisionAccepted, Project: ptr("apollo")}
+		if err := st.CreateDecision(ctx, dec); err != nil {
+			t.Fatalf("create decision: %v", err)
+		}
+
+		// A distinctive term surfaces the matching document, not the other.
+		hits, err := st.Search(ctx, "PostgreSQL", store.SearchFilter{})
+		if err != nil {
+			t.Fatalf("Search: %v", err)
+		}
+		if !hasHit(hits, "documents", "srch-1") {
+			t.Errorf(`Search("PostgreSQL") missing srch-1: %+v`, hits)
+		}
+		if hasHit(hits, "documents", "srch-2") {
+			t.Errorf(`Search("PostgreSQL") should not surface srch-2`)
+		}
+
+		// Cross-type: a decision surfaces for its own term.
+		hits, _ = st.Search(ctx, "pgvector", store.SearchFilter{})
+		if !hasHit(hits, "decisions", dec.ID) {
+			t.Errorf(`Search("pgvector") missing decision hit: %+v`, hits)
+		}
+
+		// Project filter honored (scope includes globals; srch-2 is zephyr-only).
+		hits, _ = st.Search(ctx, "bread", store.SearchFilter{Project: ptr("apollo")})
+		if hasHit(hits, "documents", "srch-2") {
+			t.Errorf(`Search("bread", apollo) should exclude zephyr's srch-2`)
+		}
+		hits, _ = st.Search(ctx, "bread", store.SearchFilter{Project: ptr("zephyr")})
+		if !hasHit(hits, "documents", "srch-2") {
+			t.Errorf(`Search("bread", zephyr) missing srch-2: %+v`, hits)
+		}
+
+		// Type filter restricts to the requested types.
+		hits, _ = st.Search(ctx, "PostgreSQL", store.SearchFilter{Types: []string{"decisions"}})
+		if hasHit(hits, "documents", "srch-1") {
+			t.Errorf("type filter should exclude documents")
+		}
+
+		// Degenerate queries never error and return no FTS hits.
+		for _, q := range []string{"", "  ", "-", `"`, "((()))", "-only"} {
+			if _, err := st.Search(ctx, q, store.SearchFilter{}); err != nil {
+				t.Errorf("Search(%q) errored: %v", q, err)
+			}
+		}
+	})
+}
+
+func TestConformanceTypeScopedSearch(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		d := sampleDoc("ts-1", "Kubernetes networking deep dive")
+		d.Project = ptr("apollo")
+		if err := st.CreateDocument(ctx, d); err != nil {
+			t.Fatalf("create doc: %v", err)
+		}
+		docs, err := st.SearchDocuments(ctx, "Kubernetes", store.Filter{})
+		if err != nil {
+			t.Fatalf("SearchDocuments: %v", err)
+		}
+		if len(docs) != 1 || docs[0].ID != "ts-1" {
+			t.Errorf("SearchDocuments(Kubernetes): %+v", docs)
+		}
+		if none, _ := st.SearchDocuments(ctx, "nonexistentxyz", store.Filter{}); len(none) != 0 {
+			t.Errorf("SearchDocuments(absent): got %d", len(none))
+		}
+		// Filter honored: wrong type filter excludes the doc.
+		spec := models.TypeSpec
+		if filtered, _ := st.SearchDocuments(ctx, "Kubernetes", store.Filter{Type: &spec}); len(filtered) != 0 {
+			t.Errorf("SearchDocuments type filter: got %d", len(filtered))
+		}
+
+		dec := &models.Decision{Title: "Use gRPC", Decision: "adopt grpc transport", Status: models.DecisionAccepted}
+		if err := st.CreateDecision(ctx, dec); err != nil {
+			t.Fatalf("create decision: %v", err)
+		}
+		if decs, _ := st.SearchDecisions(ctx, "gRPC", store.DecisionFilter{}); len(decs) != 1 {
+			t.Errorf("SearchDecisions(gRPC): got %d", len(decs))
+		}
+
+		sn := &models.Snippet{Title: "debounce helper", Content: "setTimeout wrapper", Language: "js"}
+		if err := st.CreateSnippet(ctx, sn); err != nil {
+			t.Fatalf("create snippet: %v", err)
+		}
+		if sns, _ := st.SearchSnippets(ctx, "debounce", store.SnippetFilter{}); len(sns) != 1 {
+			t.Errorf("SearchSnippets(debounce): got %d", len(sns))
+		}
+
+		sol := &models.Solution{ErrorDescription: "CORS request blocked", Solution: "add Access-Control header"}
+		if err := st.CreateSolution(ctx, sol); err != nil {
+			t.Fatalf("create solution: %v", err)
+		}
+		if sols, _ := st.SearchSolutions(ctx, "CORS", store.SolutionFilter{}); len(sols) != 1 {
+			t.Errorf("SearchSolutions(CORS): got %d", len(sols))
+		}
+
+		// Degenerate queries never error.
+		for _, q := range []string{"", "-", `"`} {
+			if _, err := st.SearchDocuments(ctx, q, store.Filter{}); err != nil {
+				t.Errorf("SearchDocuments(%q) errored: %v", q, err)
+			}
+		}
+	})
+}
+
+func TestConformanceVectorFloor(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+		st.SetSearchMaxDist(0.5) // drop vector hits with cosine distance >= 0.5
+
+		d := sampleDoc("vec-1", "Vector doc")
+		d.Project = ptr("apollo")
+		if err := st.CreateDocument(ctx, d); err != nil {
+			t.Fatalf("create doc: %v", err)
+		}
+		base := unitVec(1024, 0)
+		if err := st.UpsertEmbeddings(ctx, []models.Embedding{{
+			SourceType: "documents", SourceID: "vec-1", ChunkID: "c1",
+			ChunkText: "the vector doc chunk", Embedding: base, Project: ptr("apollo"),
+			SourceTitle: "Vector doc", Model: "voyage-4-large",
+		}}); err != nil {
+			t.Fatalf("UpsertEmbeddings: %v", err)
+		}
+
+		// An FTS term that matches nothing isolates the vector channel.
+		const noMatch = "zzunmatchable"
+
+		// Query vector aligned with the stored one → similarity ~1, passes floor.
+		near, err := st.Search(ctx, noMatch, store.SearchFilter{Vector: base})
+		if err != nil {
+			t.Fatalf("Search(near): %v", err)
+		}
+		if !hasHit(near, "documents", "vec-1") {
+			t.Fatalf("aligned vector should surface vec-1: %+v", near)
+		}
+		for _, h := range near {
+			if h.ID == "vec-1" && (h.Similarity == nil || *h.Similarity < 0.9) {
+				t.Errorf("vec-1 similarity: got %v, want ~1", h.Similarity)
+			}
+		}
+
+		// Orthogonal query vector → similarity ~0, distance ~1 ≥ floor → dropped.
+		orth := unitVec(1024, 1)
+		far, _ := st.Search(ctx, noMatch, store.SearchFilter{Vector: orth})
+		if hasHit(far, "documents", "vec-1") {
+			t.Errorf("orthogonal vector should be dropped by the floor: %+v", far)
+		}
+	})
+}
+
 func TestConformanceEmbeddings(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, st store.Store) {
 		ctx := context.Background()
