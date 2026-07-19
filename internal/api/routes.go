@@ -32,6 +32,12 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+	// Origin validation (the MCP MUST for local HTTP transport): reject any
+	// browser request whose Origin is not allow-listed, on /mcp and every other
+	// route. No-Origin requests (native MCP clients, curl, healthchecks, page
+	// navigations) pass. This is stronger than CORS, which only withholds
+	// response headers rather than refusing the request.
+	r.Use(OriginGuard(cfg.CORSOrigins))
 
 	// SSE lives OUTSIDE the request-timeout group: the stream is
 	// deliberately long-lived and a 30s Timeout would sever it.

@@ -17,7 +17,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "25432:5432"
+      # Loopback only — Postgres is reachable from this machine, never the LAN.
+      # The app connects over the internal compose network (postgres:5432), so
+      # this host mapping is just for local tools (and psql goes via exec).
+      - "127.0.0.1:25432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mneme -d mneme"]
       interval: 5s
@@ -34,6 +37,9 @@ services:
         condition: service_healthy
     environment:
       MNEME_DSN: postgres://mneme:mneme@postgres:5432/mneme?sslmode=disable
+      # Bind all interfaces INSIDE the container so Docker's 127.0.0.1:8443
+      # host mapping can reach it — the portable binary defaults to loopback.
+      MNEME_HOST: 0.0.0.0
       MNEME_PORT: "8080"
       MNEME_ENV: development
       MNEME_CORS_ORIGINS: http://localhost:5273,https://mneme.dev:8443

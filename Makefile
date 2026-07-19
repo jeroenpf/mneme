@@ -7,7 +7,7 @@ WEB     := web
 GO_PKGS := ./...
 
 .DEFAULT_GOAL := help
-.PHONY: help dev start up down logs psql seed test build tidy clean reset setup-host verify-host
+.PHONY: help dev start up down logs psql seed test build build-portable tidy clean reset setup-host verify-host
 
 help: ## Show this list
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -45,12 +45,22 @@ test: ## Run Go and Vue tests
 	go test $(GO_PKGS)
 	cd $(WEB) && npm test
 
-build: ## Build the Vue app, copy it into internal/web/dist for embedding, then build the Go binary
+build: ## Build the Vue app, copy it into internal/web/dist for embedding, then build the `mneme` binary
 	cd $(WEB) && npm install --silent && npm run build
 	rm -rf internal/web/dist
 	cp -r $(WEB)/dist internal/web/dist
 	touch internal/web/dist/.gitkeep
-	go build -o cmd/server/server ./cmd/server
+	go build -o mneme ./cmd/mneme
+
+build-portable: ## Build the self-contained static binary: CGO_ENABLED=0, SPA embedded, stripped → single file `./mneme`
+	cd $(WEB) && npm install --silent && npm run build
+	rm -rf internal/web/dist
+	cp -r $(WEB)/dist internal/web/dist
+	touch internal/web/dist/.gitkeep
+	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o mneme ./cmd/mneme
+	@echo ""
+	@echo "  built ./mneme — pure-Go (CGO_ENABLED=0), SPA embedded, no external runtime deps"
+	@echo "  run it with:  ./mneme init   (or ./mneme server)"
 
 tidy: ## Refresh dependency manifests on both sides
 	go mod tidy

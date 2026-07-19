@@ -2,8 +2,11 @@ root = "."
 tmp_dir = ".tmp"
 
 [build]
-  cmd = "go build -o ./.tmp/server ./cmd/server"
-  bin = "./.tmp/server"
+  cmd = "go build -o ./.tmp/mneme ./cmd/mneme"
+  # Run the `server` subcommand: a bare `mneme` would just print help, so air
+  # must invoke the service explicitly.
+  bin = "./.tmp/mneme server"
+  full_bin = "./.tmp/mneme server"
   include_ext = ["go", "sql"]
   exclude_dir = [".tmp", "web", ".git", ".architecture"]
   delay = 500

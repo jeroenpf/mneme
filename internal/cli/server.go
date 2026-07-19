@@ -1,14 +1,13 @@
-package main
+package cli
 
 import (
 	"context"
 	"errors"
 	"log/slog"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/jeroenpfeil/mneme/internal/api"
 	"github.com/jeroenpfeil/mneme/internal/config"
@@ -20,25 +19,37 @@ import (
 	"github.com/jeroenpfeil/mneme/internal/web"
 )
 
-func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	slog.SetDefault(logger)
-
-	if err := run(); err != nil {
-		logger.Error("server exited with error", "err", err)
-		os.Exit(1)
+// newServerCmd builds `mneme server` — the long-running service. It is the
+// operational default: everything the old `cmd/server` binary did lives here.
+// Flags (--dsn, --port) sit at the top of the config precedence chain, ahead of
+// MNEME_* env vars, settings.toml, and the built-in defaults.
+func newServerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "server",
+		Short: "Run the Mneme service (HTTP API, MCP endpoint, embedded UI)",
+		Long: "Start the Mneme server: it applies migrations, serves the REST API,\n" +
+			"the MCP endpoint at /mcp, and the embedded web UI, then blocks until\n" +
+			"interrupted (Ctrl-C / SIGTERM), draining connections on shutdown.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := config.LoadWithFlags(cmd.Flags())
+			if err != nil {
+				return err
+			}
+			return RunServer(cmd.Context(), cfg)
+		},
 	}
+	cmd.Flags().String("dsn", "", "storage DSN (sqlite:// file or postgres:// URL); overrides config/env")
+	cmd.Flags().String("port", "", "TCP port to listen on; overrides config/env")
+	return cmd
 }
 
-func run() error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
+// RunServer boots the full service from a resolved config and blocks until ctx
+// is cancelled (an interrupt signal) or the listener fails. It owns store open,
+// migrations, the embedding worker, and graceful HTTP shutdown — the lifecycle
+// formerly in cmd/server/main.go's run(). Config resolution (env/file/flags)
+// happens in the caller so this stays a pure lifecycle function.
+func RunServer(ctx context.Context, cfg *config.Config) error {
 	st, err := store.New(ctx, cfg.DSN)
 	if err != nil {
 		return err
@@ -84,7 +95,7 @@ func run() error {
 	hub := live.NewHub()
 	mcpSrv := mcp.New(st, enq, hub, client)
 	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
+		Addr:              cfg.ListenAddr(),
 		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client, hub),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -92,7 +103,7 @@ func run() error {
 	errCh := make(chan error, 1)
 	go func() {
 		useTLS := cfg.TLSEnabled()
-		slog.Info("listening", "port", cfg.Port, "env", cfg.Env, "tls", useTLS)
+		slog.Info("listening", "addr", cfg.ListenAddr(), "env", cfg.Env, "tls", useTLS)
 		var err error
 		if useTLS {
 			err = srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
