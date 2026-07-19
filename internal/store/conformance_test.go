@@ -1,0 +1,734 @@
+package store_test
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/jeroenpfeil/mneme/internal/migrations"
+	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpfeil/mneme/internal/store"
+)
+
+// The conformance suite runs the Store interface contract against every backend
+// so both Postgres and SQLite are held to identical behaviour (plan p3-t1). It
+// asserts feature parity — not identical ranking, which the search parity tests
+// (P5) cover separately. Postgres reuses the shared container (TRUNCATE-isolated
+// per subtest); SQLite gets a fresh temp file per subtest.
+
+// storeBackend names a Store implementation and how to build a clean one.
+type storeBackend struct {
+	name string
+	make func(t *testing.T) store.Store
+}
+
+// conformanceBackends is the set every conformance test runs against.
+func conformanceBackends() []storeBackend {
+	return []storeBackend{
+		{"postgres", newPostgresConformanceStore},
+		{"sqlite", newSQLiteConformanceStore},
+	}
+}
+
+// newPostgresConformanceStore reuses the package-shared container, truncating
+// every table so the subtest starts clean.
+func newPostgresConformanceStore(t *testing.T) store.Store {
+	t.Helper()
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, testDSN)
+	if err != nil {
+		t.Fatalf("open pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if _, err := pool.Exec(ctx,
+		`TRUNCATE documents, projects, decisions, snippets, journal_entries,
+		         solutions, memories, env_entries, embeddings, embed_failures
+		 RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	return store.NewWithPool(pool)
+}
+
+// newSQLiteConformanceStore migrates a fresh temp .db and opens it.
+func newSQLiteConformanceStore(t *testing.T) store.Store {
+	t.Helper()
+	dsn := "sqlite:" + filepath.Join(t.TempDir(), "mneme.db")
+	if err := migrations.Up(dsn); err != nil {
+		t.Fatalf("migrate sqlite: %v", err)
+	}
+	st, err := store.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(st.Close)
+	return st
+}
+
+// forEachBackend runs fn as a subtest against every backend with a clean store.
+func forEachBackend(t *testing.T, fn func(t *testing.T, st store.Store)) {
+	t.Helper()
+	for _, b := range conformanceBackends() {
+		t.Run(b.name, func(t *testing.T) { fn(t, b.make(t)) })
+	}
+}
+
+// seedProjectsIfc creates projects through the Store interface so seeding works
+// on both backends (the Postgres tests' seedProjects reaches into the pool).
+func seedProjectsIfc(t *testing.T, st store.Store, slugs ...string) {
+	t.Helper()
+	ctx := context.Background()
+	for _, slug := range slugs {
+		if err := st.CreateProject(ctx, &models.Project{Name: slug, Slug: slug}); err != nil {
+			t.Fatalf("seed project %q: %v", slug, err)
+		}
+	}
+}
+
+func TestConformanceDocumentCRUD(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		doc := sampleDoc("doc-001", "Vehicle Listing API")
+		doc.Project = ptr("apollo")
+		doc.Ticket = ptr("C1-142")
+		if err := st.CreateDocument(ctx, doc); err != nil {
+			t.Fatalf("CreateDocument: %v", err)
+		}
+		if doc.CreatedAt.IsZero() || doc.UpdatedAt.IsZero() {
+			t.Fatal("Create did not populate CreatedAt/UpdatedAt")
+		}
+		if !strings.HasPrefix(doc.PublicID, "doc_") {
+			t.Errorf("public_id: got %q, want doc_ prefix", doc.PublicID)
+		}
+
+		got, err := st.GetDocument(ctx, "doc-001")
+		if err != nil {
+			t.Fatalf("GetDocument: %v", err)
+		}
+		if got.Title != "Vehicle Listing API" {
+			t.Errorf("title: got %q", got.Title)
+		}
+		if got.Project == nil || *got.Project != "apollo" {
+			t.Errorf("project: got %v", got.Project)
+		}
+		if got.Ticket == nil || *got.Ticket != "C1-142" {
+			t.Errorf("ticket: got %v", got.Ticket)
+		}
+		if len(got.Tags) != 2 || got.Tags[0] != "go" {
+			t.Errorf("tags: got %v", got.Tags)
+		}
+		if got.Meta["phases"] == nil {
+			t.Errorf("meta.phases not roundtripped: %+v", got.Meta)
+		}
+		if got.Body["sections"] == nil {
+			t.Errorf("body.sections not roundtripped: %+v", got.Body)
+		}
+
+		// Update mutates fields and advances updated_at. A short pause makes
+		// the strict After() assertion deterministic on SQLite, whose strftime
+		// timestamps are millisecond-precision (Postgres is microsecond).
+		time.Sleep(2 * time.Millisecond)
+		got.Title = "Vehicle Listing API v2"
+		got.Status = models.StatusInProgress
+		got.Tags = []string{"go"}
+		if err := st.UpdateDocument(ctx, got); err != nil {
+			t.Fatalf("UpdateDocument: %v", err)
+		}
+		reloaded, err := st.GetDocument(ctx, "doc-001")
+		if err != nil {
+			t.Fatalf("GetDocument after update: %v", err)
+		}
+		if reloaded.Title != "Vehicle Listing API v2" {
+			t.Errorf("updated title: got %q", reloaded.Title)
+		}
+		if reloaded.Status != models.StatusInProgress {
+			t.Errorf("updated status: got %q", reloaded.Status)
+		}
+		if len(reloaded.Tags) != 1 {
+			t.Errorf("updated tags: got %v", reloaded.Tags)
+		}
+		if !reloaded.UpdatedAt.After(reloaded.CreatedAt) {
+			t.Errorf("updated_at %v should be after created_at %v", reloaded.UpdatedAt, reloaded.CreatedAt)
+		}
+
+		// Archive.
+		if err := st.ArchiveDocument(ctx, "doc-001"); err != nil {
+			t.Fatalf("ArchiveDocument: %v", err)
+		}
+		archived, _ := st.GetDocument(ctx, "doc-001")
+		if archived.Status != models.StatusArchived {
+			t.Errorf("archived status: got %q", archived.Status)
+		}
+	})
+}
+
+func TestConformanceDocumentErrors(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+
+		// Missing → ErrNotFound.
+		if _, err := st.GetDocument(ctx, "nope"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("GetDocument(missing): got %v, want ErrNotFound", err)
+		}
+		if err := st.UpdateDocument(ctx, sampleDoc("ghost", "Ghost")); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("UpdateDocument(missing): got %v, want ErrNotFound", err)
+		}
+		if err := st.ArchiveDocument(ctx, "ghost"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("ArchiveDocument(missing): got %v, want ErrNotFound", err)
+		}
+
+		// Unknown project → ErrInvalidProject.
+		bad := sampleDoc("doc-x", "X")
+		bad.Project = ptr("ghost-project")
+		if err := st.CreateDocument(ctx, bad); !errors.Is(err, store.ErrInvalidProject) {
+			t.Errorf("CreateDocument(unknown project): got %v, want ErrInvalidProject", err)
+		}
+
+		// Duplicate id → ErrDuplicateID.
+		if err := st.CreateDocument(ctx, sampleDoc("dup", "First")); err != nil {
+			t.Fatalf("CreateDocument: %v", err)
+		}
+		if err := st.CreateDocument(ctx, sampleDoc("dup", "Second")); !errors.Is(err, store.ErrDuplicateID) {
+			t.Errorf("CreateDocument(dup id): got %v, want ErrDuplicateID", err)
+		}
+	})
+}
+
+func TestConformanceListDocuments(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo", "zephyr")
+
+		a := sampleDoc("d-a", "Alpha")
+		a.Project = ptr("apollo")
+		a.Status = models.StatusTodo
+		b := sampleDoc("d-b", "Beta")
+		b.Project = ptr("zephyr")
+		b.Status = models.StatusComplete
+		b.Type = models.TypeSpec
+		for _, d := range []*models.Document{a, b} {
+			if err := st.CreateDocument(ctx, d); err != nil {
+				t.Fatalf("create %s: %v", d.ID, err)
+			}
+		}
+
+		all, err := st.ListDocuments(ctx, store.Filter{})
+		if err != nil {
+			t.Fatalf("ListDocuments: %v", err)
+		}
+		if len(all) != 2 {
+			t.Fatalf("ListDocuments: got %d, want 2", len(all))
+		}
+
+		apollo := ptr("apollo")
+		got, err := st.ListDocuments(ctx, store.Filter{Project: apollo})
+		if err != nil {
+			t.Fatalf("ListDocuments(project): %v", err)
+		}
+		if len(got) != 1 || got[0].ID != "d-a" {
+			t.Errorf("project filter: got %v", got)
+		}
+
+		spec := models.TypeSpec
+		got, err = st.ListDocuments(ctx, store.Filter{Type: &spec})
+		if err != nil {
+			t.Fatalf("ListDocuments(type): %v", err)
+		}
+		if len(got) != 1 || got[0].ID != "d-b" {
+			t.Errorf("type filter: got %v", got)
+		}
+	})
+}
+
+func TestConformanceDecisions(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		d := &models.Decision{
+			Title: "Use RRF for fusion", Project: ptr("apollo"),
+			Decision: "Fuse FTS and vector via reciprocal rank",
+			Rationale: "Rank-only fusion is dialect-free", Status: models.DecisionAccepted,
+		}
+		if err := st.CreateDecision(ctx, d); err != nil {
+			t.Fatalf("CreateDecision: %v", err)
+		}
+		if d.ID == "" || !strings.HasPrefix(d.PublicID, "dec_") || d.CreatedAt.IsZero() {
+			t.Errorf("Create did not populate id/public_id/created_at: %+v", d)
+		}
+
+		got, err := st.GetDecision(ctx, d.ID)
+		if err != nil {
+			t.Fatalf("GetDecision: %v", err)
+		}
+		if got.Title != "Use RRF for fusion" || got.Rationale != "Rank-only fusion is dialect-free" {
+			t.Errorf("roundtrip: %+v", got)
+		}
+
+		// Global decision (nil project).
+		g := &models.Decision{Title: "Global", Decision: "x", Status: models.DecisionProposed}
+		if err := st.CreateDecision(ctx, g); err != nil {
+			t.Fatalf("CreateDecision(global): %v", err)
+		}
+		if got, _ := st.GetDecision(ctx, g.ID); got.Project != nil {
+			t.Errorf("global project should be nil, got %v", got.Project)
+		}
+
+		// Update.
+		got.Status = models.DecisionDeprecated
+		got.Consequences = "superseded"
+		if err := st.UpdateDecision(ctx, got); err != nil {
+			t.Fatalf("UpdateDecision: %v", err)
+		}
+		if re, _ := st.GetDecision(ctx, d.ID); re.Status != models.DecisionDeprecated || re.Consequences != "superseded" {
+			t.Errorf("update not persisted: %+v", re)
+		}
+
+		// List: filter by status.
+		acc := models.DecisionDeprecated
+		list, err := st.ListDecisions(ctx, store.DecisionFilter{Status: &acc})
+		if err != nil {
+			t.Fatalf("ListDecisions: %v", err)
+		}
+		if len(list) != 1 || list[0].ID != d.ID {
+			t.Errorf("status filter: got %d results", len(list))
+		}
+
+		// Errors.
+		if err := st.CreateDecision(ctx, &models.Decision{Title: "x", Decision: "y", Project: ptr("ghost"), Status: models.DecisionAccepted}); !errors.Is(err, store.ErrInvalidProject) {
+			t.Errorf("unknown project: got %v", err)
+		}
+		// A syntactically valid but absent id: Postgres decisions.id is a UUID,
+		// so a malformed value would raise a parse error rather than ErrNotFound.
+		const missingID = "00000000-0000-0000-0000-000000000000"
+		if err := st.UpdateDecision(ctx, &models.Decision{ID: missingID, Title: "x", Decision: "y", Status: models.DecisionAccepted}); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("update missing: got %v", err)
+		}
+		if _, err := st.GetDecision(ctx, missingID); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("get missing: got %v", err)
+		}
+	})
+}
+
+func TestConformanceSnippets(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		sn := &models.Snippet{
+			Title: "pgx pool", Project: ptr("apollo"), Language: "go",
+			Content: "pgxpool.New(ctx, dsn)", Tags: []string{"db", "go"},
+			Description: "open a pool",
+		}
+		if err := st.CreateSnippet(ctx, sn); err != nil {
+			t.Fatalf("CreateSnippet: %v", err)
+		}
+		if sn.ID == "" || !strings.HasPrefix(sn.PublicID, "snip_") {
+			t.Errorf("Create did not populate id/public_id: %+v", sn)
+		}
+		got, err := st.GetSnippet(ctx, sn.ID)
+		if err != nil {
+			t.Fatalf("GetSnippet: %v", err)
+		}
+		if got.Content != "pgxpool.New(ctx, dsn)" || len(got.Tags) != 2 {
+			t.Errorf("roundtrip: %+v", got)
+		}
+
+		got.Language = "golang"
+		got.Tags = []string{"db"}
+		if err := st.UpdateSnippet(ctx, got); err != nil {
+			t.Fatalf("UpdateSnippet: %v", err)
+		}
+		if re, _ := st.GetSnippet(ctx, sn.ID); re.Language != "golang" || len(re.Tags) != 1 {
+			t.Errorf("update not persisted: %+v", re)
+		}
+
+		// Tags filter (ALL tags must match).
+		list, err := st.ListSnippets(ctx, store.SnippetFilter{Tags: []string{"db"}})
+		if err != nil {
+			t.Fatalf("ListSnippets: %v", err)
+		}
+		if len(list) != 1 {
+			t.Errorf("tags filter: got %d", len(list))
+		}
+		none, _ := st.ListSnippets(ctx, store.SnippetFilter{Tags: []string{"missing"}})
+		if len(none) != 0 {
+			t.Errorf("tags filter (absent): got %d", len(none))
+		}
+
+		if err := st.CreateSnippet(ctx, &models.Snippet{Title: "x", Content: "y", Project: ptr("ghost")}); !errors.Is(err, store.ErrInvalidProject) {
+			t.Errorf("unknown project: got %v", err)
+		}
+	})
+}
+
+func TestConformanceJournal(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		e := &models.JournalEntry{
+			Project: ptr("apollo"), SessionRef: "s4-t3", Summary: "CRUD parity",
+			Accomplished: []string{"documents", "projects"}, Deferred: []string{"search"},
+		}
+		if err := st.CreateJournalEntry(ctx, e); err != nil {
+			t.Fatalf("CreateJournalEntry: %v", err)
+		}
+		if e.ID == "" || !strings.HasPrefix(e.PublicID, "jrnl_") {
+			t.Errorf("Create did not populate id/public_id: %+v", e)
+		}
+		got, err := st.GetJournalEntry(ctx, e.ID)
+		if err != nil {
+			t.Fatalf("GetJournalEntry: %v", err)
+		}
+		if got.Summary != "CRUD parity" || len(got.Accomplished) != 2 || len(got.Deferred) != 1 {
+			t.Errorf("roundtrip: %+v", got)
+		}
+
+		got.Summary = "CRUD parity done"
+		got.Deferred = []string{}
+		if err := st.UpdateJournalEntry(ctx, got); err != nil {
+			t.Fatalf("UpdateJournalEntry: %v", err)
+		}
+		if re, _ := st.GetJournalEntry(ctx, e.ID); re.Summary != "CRUD parity done" || len(re.Deferred) != 0 {
+			t.Errorf("update not persisted: %+v", re)
+		}
+
+		list, err := st.ListJournalEntries(ctx, store.JournalFilter{Project: ptr("apollo")})
+		if err != nil {
+			t.Fatalf("ListJournalEntries: %v", err)
+		}
+		if len(list) != 1 {
+			t.Errorf("project filter: got %d", len(list))
+		}
+	})
+}
+
+func TestConformanceSolutions(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		sol := &models.Solution{
+			Project: ptr("apollo"), ErrorDescription: "mDNS stalls resolution",
+			Solution: "use mneme.dev not .local", Tags: []string{"dns"},
+			SourceURL: "https://example.test",
+		}
+		if err := st.CreateSolution(ctx, sol); err != nil {
+			t.Fatalf("CreateSolution: %v", err)
+		}
+		if sol.ID == "" || !strings.HasPrefix(sol.PublicID, "sol_") {
+			t.Errorf("Create did not populate id/public_id: %+v", sol)
+		}
+		got, err := st.GetSolution(ctx, sol.ID)
+		if err != nil {
+			t.Fatalf("GetSolution: %v", err)
+		}
+		if got.Solution != "use mneme.dev not .local" || got.SourceURL != "https://example.test" {
+			t.Errorf("roundtrip: %+v", got)
+		}
+
+		got.Solution = "add /etc/hosts entry"
+		if err := st.UpdateSolution(ctx, got); err != nil {
+			t.Fatalf("UpdateSolution: %v", err)
+		}
+		if re, _ := st.GetSolution(ctx, sol.ID); re.Solution != "add /etc/hosts entry" {
+			t.Errorf("update not persisted: %+v", re)
+		}
+
+		list, err := st.ListSolutions(ctx, store.SolutionFilter{Tags: []string{"dns"}})
+		if err != nil {
+			t.Fatalf("ListSolutions: %v", err)
+		}
+		if len(list) != 1 {
+			t.Errorf("tags filter: got %d", len(list))
+		}
+	})
+}
+
+func TestConformanceMemory(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		// Insert then upsert (same identity) updates value, not a new row.
+		m := &models.Memory{Scope: models.ScopeGlobal, Key: "editor", Value: "vim"}
+		if err := st.SetMemory(ctx, m); err != nil {
+			t.Fatalf("SetMemory: %v", err)
+		}
+		if m.ID == "" || m.UpdatedAt.IsZero() {
+			t.Errorf("SetMemory did not populate id/updated_at: %+v", m)
+		}
+		firstID := m.ID
+		m2 := &models.Memory{Scope: models.ScopeGlobal, Key: "editor", Value: "emacs"}
+		if err := st.SetMemory(ctx, m2); err != nil {
+			t.Fatalf("SetMemory(upsert): %v", err)
+		}
+		if m2.ID != firstID {
+			t.Errorf("upsert should reuse row id: got %q want %q", m2.ID, firstID)
+		}
+
+		// Project-scoped entry.
+		pm := &models.Memory{Scope: models.ScopeProject, Project: ptr("apollo"), Key: "stack", Value: "go"}
+		if err := st.SetMemory(ctx, pm); err != nil {
+			t.Fatalf("SetMemory(project): %v", err)
+		}
+
+		all, err := st.ListMemory(ctx, store.MemoryFilter{})
+		if err != nil {
+			t.Fatalf("ListMemory: %v", err)
+		}
+		if len(all) != 2 {
+			t.Fatalf("ListMemory: got %d want 2", len(all))
+		}
+		globalScope := models.ScopeGlobal
+		globals, _ := st.ListMemory(ctx, store.MemoryFilter{Scope: &globalScope})
+		if len(globals) != 1 || globals[0].Value != "emacs" {
+			t.Errorf("scope filter: %+v", globals)
+		}
+
+		// Delete the global entry.
+		if err := st.DeleteMemory(ctx, models.ScopeGlobal, nil, nil, "editor"); err != nil {
+			t.Fatalf("DeleteMemory: %v", err)
+		}
+		if err := st.DeleteMemory(ctx, models.ScopeGlobal, nil, nil, "editor"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("DeleteMemory(again): got %v want ErrNotFound", err)
+		}
+
+		// Unknown project → ErrInvalidProject.
+		if err := st.SetMemory(ctx, &models.Memory{Scope: models.ScopeProject, Project: ptr("ghost"), Key: "k", Value: "v"}); !errors.Is(err, store.ErrInvalidProject) {
+			t.Errorf("unknown project: got %v", err)
+		}
+	})
+}
+
+func TestConformanceEnv(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		e := &models.EnvEntry{Project: "apollo", Key: "PORT", Value: "8443", Description: ptr("tls port")}
+		if err := st.SetEnv(ctx, e); err != nil {
+			t.Fatalf("SetEnv: %v", err)
+		}
+		if e.ID == "" || e.UpdatedAt.IsZero() {
+			t.Errorf("SetEnv did not populate id/updated_at: %+v", e)
+		}
+		firstID := e.ID
+
+		// Upsert replaces value AND description, reusing the row.
+		e2 := &models.EnvEntry{Project: "apollo", Key: "PORT", Value: "9443"}
+		if err := st.SetEnv(ctx, e2); err != nil {
+			t.Fatalf("SetEnv(upsert): %v", err)
+		}
+		if e2.ID != firstID {
+			t.Errorf("upsert should reuse row id")
+		}
+		list, err := st.ListEnv(ctx, "apollo")
+		if err != nil {
+			t.Fatalf("ListEnv: %v", err)
+		}
+		if len(list) != 1 || list[0].Value != "9443" || list[0].Description != nil {
+			t.Errorf("upsert result: %+v", list)
+		}
+
+		if err := st.DeleteEnv(ctx, "apollo", "PORT"); err != nil {
+			t.Fatalf("DeleteEnv: %v", err)
+		}
+		if err := st.DeleteEnv(ctx, "apollo", "PORT"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("DeleteEnv(again): got %v want ErrNotFound", err)
+		}
+
+		if err := st.SetEnv(ctx, &models.EnvEntry{Project: "ghost", Key: "K", Value: "V"}); !errors.Is(err, store.ErrInvalidProject) {
+			t.Errorf("unknown project: got %v", err)
+		}
+	})
+}
+
+// vecOf builds an n-dimensional vector filled with val, for embedding tests.
+func vecOf(n int, val float32) []float32 {
+	v := make([]float32, n)
+	for i := range v {
+		v[i] = val
+	}
+	return v
+}
+
+func TestConformanceEmbeddings(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+		doc := sampleDoc("doc-emb", "Embeddable")
+		doc.Project = ptr("apollo")
+		if err := st.CreateDocument(ctx, doc); err != nil {
+			t.Fatalf("CreateDocument: %v", err)
+		}
+
+		mk := func(chunk, text string, fill float32) models.Embedding {
+			return models.Embedding{
+				SourceType: "documents", SourceID: "doc-emb", ChunkID: chunk,
+				ChunkText: text, Embedding: vecOf(1024, fill), Project: ptr("apollo"),
+				SourceTitle: "Embeddable", Model: "voyage-4-large",
+			}
+		}
+
+		if err := st.UpsertEmbeddings(ctx, []models.Embedding{mk("c1", "first chunk", 0.1), mk("c2", "second chunk", 0.2)}); err != nil {
+			t.Fatalf("UpsertEmbeddings: %v", err)
+		}
+		got, err := st.EmbeddingsFor(ctx, "documents", "doc-emb")
+		if err != nil {
+			t.Fatalf("EmbeddingsFor: %v", err)
+		}
+		if len(got) != 2 || got["c1"] != "first chunk" || got["c2"] != "second chunk" {
+			t.Fatalf("EmbeddingsFor: %v", got)
+		}
+
+		// Upsert conflict updates the existing chunk (still two rows).
+		if err := st.UpsertEmbeddings(ctx, []models.Embedding{mk("c1", "updated first", 0.15)}); err != nil {
+			t.Fatalf("UpsertEmbeddings(update): %v", err)
+		}
+		got, _ = st.EmbeddingsFor(ctx, "documents", "doc-emb")
+		if len(got) != 2 || got["c1"] != "updated first" {
+			t.Fatalf("after conflict upsert: %v", got)
+		}
+
+		// DeleteEmbeddingsExcept keeps only c1.
+		if err := st.DeleteEmbeddingsExcept(ctx, "documents", "doc-emb", []string{"c1"}); err != nil {
+			t.Fatalf("DeleteEmbeddingsExcept: %v", err)
+		}
+		got, _ = st.EmbeddingsFor(ctx, "documents", "doc-emb")
+		if len(got) != 1 || got["c1"] == "" {
+			t.Fatalf("after prune: %v", got)
+		}
+
+		// SourceRefs enumerates live sources (includes our document).
+		refs, err := st.SourceRefs(ctx)
+		if err != nil {
+			t.Fatalf("SourceRefs: %v", err)
+		}
+		found := false
+		for _, r := range refs {
+			if r.Type == "documents" && r.ID == "doc-emb" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("SourceRefs missing documents/doc-emb: %v", refs)
+		}
+
+		// HasStaleModelEmbeddings: matches current model → false; other → true.
+		if stale, _ := st.HasStaleModelEmbeddings(ctx, "documents", "doc-emb", "voyage-4-large"); stale {
+			t.Errorf("HasStaleModel(current): got true")
+		}
+		if stale, _ := st.HasStaleModelEmbeddings(ctx, "documents", "doc-emb", "other-model"); !stale {
+			t.Errorf("HasStaleModel(other): got false")
+		}
+
+		// EmbeddingStatus documents bucket: 1 live source, embedded, reconciled.
+		status, err := st.EmbeddingStatus(ctx, "voyage-4-large")
+		if err != nil {
+			t.Fatalf("EmbeddingStatus: %v", err)
+		}
+		var docs *store.TypeStatus
+		for i := range status {
+			if status[i].Type == "documents" {
+				docs = &status[i]
+			}
+		}
+		if docs == nil || docs.Total != 1 || docs.Embedded != 1 || docs.Reconciled != 1 || docs.Missing != 0 {
+			t.Errorf("documents status: %+v", docs)
+		}
+
+		// DeleteOrphanEmbeddings removes vectors whose source no longer exists.
+		if err := st.UpsertEmbeddings(ctx, []models.Embedding{{
+			SourceType: "documents", SourceID: "ghost-doc", ChunkID: "g1",
+			ChunkText: "orphan", Embedding: vecOf(1024, 0.9), SourceTitle: "ghost", Model: "voyage-4-large",
+		}}); err != nil {
+			t.Fatalf("UpsertEmbeddings(orphan): %v", err)
+		}
+		n, err := st.DeleteOrphanEmbeddings(ctx)
+		if err != nil {
+			t.Fatalf("DeleteOrphanEmbeddings: %v", err)
+		}
+		if n != 1 {
+			t.Errorf("DeleteOrphanEmbeddings: removed %d, want 1", n)
+		}
+
+		// Failure tracking: record, list, clear.
+		if err := st.RecordEmbedFailure(ctx, "documents", "doc-emb", "boom"); err != nil {
+			t.Fatalf("RecordEmbedFailure: %v", err)
+		}
+		if err := st.RecordEmbedFailure(ctx, "documents", "doc-emb", "boom again"); err != nil {
+			t.Fatalf("RecordEmbedFailure(2): %v", err)
+		}
+		failed, err := st.FailedSourceRefs(ctx)
+		if err != nil {
+			t.Fatalf("FailedSourceRefs: %v", err)
+		}
+		if len(failed) != 1 || failed[0].ID != "doc-emb" {
+			t.Errorf("FailedSourceRefs: %v", failed)
+		}
+		if err := st.ClearEmbedFailure(ctx, "documents", "doc-emb"); err != nil {
+			t.Fatalf("ClearEmbedFailure: %v", err)
+		}
+		if failed, _ := st.FailedSourceRefs(ctx); len(failed) != 0 {
+			t.Errorf("after clear: %v", failed)
+		}
+	})
+}
+
+func TestConformanceProjects(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+
+		p := &models.Project{Name: "Apollo", Slug: "apollo", Description: ptr("the moon program")}
+		if err := st.CreateProject(ctx, p); err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+		if p.ID == "" || !strings.HasPrefix(p.PublicID, "prj_") || p.CreatedAt.IsZero() {
+			t.Errorf("CreateProject did not populate id/public_id/created_at: %+v", p)
+		}
+
+		got, err := st.GetProject(ctx, "apollo")
+		if err != nil {
+			t.Fatalf("GetProject: %v", err)
+		}
+		if got.Name != "Apollo" || got.Description == nil || *got.Description != "the moon program" {
+			t.Errorf("GetProject roundtrip: %+v", got)
+		}
+
+		// Duplicate slug → ErrDuplicateProject.
+		if err := st.CreateProject(ctx, &models.Project{Name: "Apollo2", Slug: "apollo"}); !errors.Is(err, store.ErrDuplicateProject) {
+			t.Errorf("CreateProject(dup slug): got %v, want ErrDuplicateProject", err)
+		}
+
+		// Missing → ErrNotFound.
+		if _, err := st.GetProject(ctx, "ghost"); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("GetProject(missing): got %v, want ErrNotFound", err)
+		}
+
+		// ListProjects reports per-status counts.
+		d := sampleDoc("pd-1", "Doc")
+		d.Project = ptr("apollo")
+		d.Status = models.StatusInProgress
+		if err := st.CreateDocument(ctx, d); err != nil {
+			t.Fatalf("create doc: %v", err)
+		}
+		stats, err := st.ListProjects(ctx)
+		if err != nil {
+			t.Fatalf("ListProjects: %v", err)
+		}
+		if len(stats) != 1 {
+			t.Fatalf("ListProjects: got %d, want 1", len(stats))
+		}
+		if stats[0].Counts.Total != 1 || stats[0].Counts.InProgress != 1 {
+			t.Errorf("counts: %+v", stats[0].Counts)
+		}
+	})
+}
