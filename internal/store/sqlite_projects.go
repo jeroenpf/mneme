@@ -44,6 +44,20 @@ func (s *SQLiteStore) GetProject(ctx context.Context, slug string) (*models.Proj
 	return p, nil
 }
 
+func (s *SQLiteStore) GetProjectByPublicID(ctx context.Context, publicID string) (*models.Project, error) {
+	const q = `SELECT id, public_id, name, slug, description, created_at FROM projects WHERE public_id = ?`
+	p := &models.Project{}
+	err := s.db.QueryRowContext(ctx, q, publicID).Scan(
+		&p.ID, &p.PublicID, &p.Name, &p.Slug, &p.Description, &p.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get project by public id: %w", err)
+	}
+	return p, nil
+}
+
 func (s *SQLiteStore) ListProjects(ctx context.Context) ([]*models.ProjectStats, error) {
 	// COUNT(...) FILTER mirrors the Postgres query; LEFT JOIN + COUNT(d.id)
 	// yields 0 for projects with no documents (NULLs are not counted).

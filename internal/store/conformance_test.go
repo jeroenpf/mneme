@@ -253,7 +253,7 @@ func TestConformanceDecisions(t *testing.T) {
 
 		d := &models.Decision{
 			Title: "Use RRF for fusion", Project: ptr("apollo"),
-			Decision: "Fuse FTS and vector via reciprocal rank",
+			Decision:  "Fuse FTS and vector via reciprocal rank",
 			Rationale: "Rank-only fusion is dialect-free", Status: models.DecisionAccepted,
 		}
 		if err := st.CreateDecision(ctx, d); err != nil {
@@ -547,6 +547,81 @@ func TestConformanceEnv(t *testing.T) {
 
 		if err := st.SetEnv(ctx, &models.EnvEntry{Project: "ghost", Key: "K", Value: "V"}); !errors.Is(err, store.ErrInvalidProject) {
 			t.Errorf("unknown project: got %v", err)
+		}
+	})
+}
+
+// TestConformanceGetByPublicID exercises the by-public-id lookups every backend
+// must provide so resolve_reference can turn a pasted mneme:// id into an
+// entity. Each type resolves its own generated public id back to the same row,
+// and a well-formed but absent id yields ErrNotFound.
+func TestConformanceGetByPublicID(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		doc := sampleDoc("pid-doc", "By-id Doc")
+		doc.Project = ptr("apollo")
+		if err := st.CreateDocument(ctx, doc); err != nil {
+			t.Fatalf("CreateDocument: %v", err)
+		}
+		if got, err := st.GetDocumentByPublicID(ctx, doc.PublicID); err != nil || got.ID != "pid-doc" {
+			t.Errorf("GetDocumentByPublicID(%q): got %+v err %v", doc.PublicID, got, err)
+		}
+
+		dec := &models.Decision{Title: "D", Decision: "x", Status: models.DecisionAccepted, Project: ptr("apollo")}
+		if err := st.CreateDecision(ctx, dec); err != nil {
+			t.Fatalf("CreateDecision: %v", err)
+		}
+		if got, err := st.GetDecisionByPublicID(ctx, dec.PublicID); err != nil || got.ID != dec.ID {
+			t.Errorf("GetDecisionByPublicID(%q): got %+v err %v", dec.PublicID, got, err)
+		}
+
+		sn := &models.Snippet{Title: "S", Content: "code", Language: "go", Project: ptr("apollo")}
+		if err := st.CreateSnippet(ctx, sn); err != nil {
+			t.Fatalf("CreateSnippet: %v", err)
+		}
+		if got, err := st.GetSnippetByPublicID(ctx, sn.PublicID); err != nil || got.ID != sn.ID {
+			t.Errorf("GetSnippetByPublicID(%q): got %+v err %v", sn.PublicID, got, err)
+		}
+
+		je := &models.JournalEntry{Project: ptr("apollo"), Summary: "did stuff"}
+		if err := st.CreateJournalEntry(ctx, je); err != nil {
+			t.Fatalf("CreateJournalEntry: %v", err)
+		}
+		if got, err := st.GetJournalEntryByPublicID(ctx, je.PublicID); err != nil || got.ID != je.ID {
+			t.Errorf("GetJournalEntryByPublicID(%q): got %+v err %v", je.PublicID, got, err)
+		}
+
+		sol := &models.Solution{ErrorDescription: "boom", Solution: "fix", Project: ptr("apollo")}
+		if err := st.CreateSolution(ctx, sol); err != nil {
+			t.Fatalf("CreateSolution: %v", err)
+		}
+		if got, err := st.GetSolutionByPublicID(ctx, sol.PublicID); err != nil || got.ID != sol.ID {
+			t.Errorf("GetSolutionByPublicID(%q): got %+v err %v", sol.PublicID, got, err)
+		}
+
+		prj, err := st.GetProject(ctx, "apollo")
+		if err != nil {
+			t.Fatalf("GetProject: %v", err)
+		}
+		if got, err := st.GetProjectByPublicID(ctx, prj.PublicID); err != nil || got.Slug != "apollo" {
+			t.Errorf("GetProjectByPublicID(%q): got %+v err %v", prj.PublicID, got, err)
+		}
+
+		// Well-formed but absent public ids resolve to ErrNotFound.
+		missing := map[string]func(string) error{
+			"doc_000000000000":  func(id string) error { _, e := st.GetDocumentByPublicID(ctx, id); return e },
+			"dec_000000000000":  func(id string) error { _, e := st.GetDecisionByPublicID(ctx, id); return e },
+			"snip_000000000000": func(id string) error { _, e := st.GetSnippetByPublicID(ctx, id); return e },
+			"jrnl_000000000000": func(id string) error { _, e := st.GetJournalEntryByPublicID(ctx, id); return e },
+			"sol_000000000000":  func(id string) error { _, e := st.GetSolutionByPublicID(ctx, id); return e },
+			"prj_000000000000":  func(id string) error { _, e := st.GetProjectByPublicID(ctx, id); return e },
+		}
+		for id, lookup := range missing {
+			if err := lookup(id); !errors.Is(err, store.ErrNotFound) {
+				t.Errorf("lookup(%q) absent: got %v, want ErrNotFound", id, err)
+			}
 		}
 	})
 }

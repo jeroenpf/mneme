@@ -103,6 +103,11 @@ type Store interface {
 	// GetDocument returns ErrNotFound when id has no row.
 	GetDocument(ctx context.Context, id string) (*models.Document, error)
 
+	// GetDocumentByPublicID returns the document whose doc_… public id
+	// matches, or ErrNotFound. resolve_reference uses it to turn a pasted
+	// reference into a document (and to reach its blocks and tasks).
+	GetDocumentByPublicID(ctx context.Context, publicID string) (*models.Document, error)
+
 	// UpdateDocument writes all mutable columns from doc (everything
 	// except id, created_at, search_vector). updated_at is managed by
 	// the trigger added in migration 004. Returns ErrNotFound when id
@@ -131,6 +136,10 @@ type Store interface {
 
 	// GetProject returns the project with the given slug, or ErrNotFound.
 	GetProject(ctx context.Context, slug string) (*models.Project, error)
+
+	// GetProjectByPublicID returns the project whose prj_… public id matches,
+	// or ErrNotFound.
+	GetProjectByPublicID(ctx context.Context, publicID string) (*models.Project, error)
 
 	// ListMemory returns raw (un-merged) memory entries matching the
 	// filter, ordered by (scope, project, area, key). The hierarchy
@@ -167,6 +176,10 @@ type Store interface {
 	// GetDecision returns ErrNotFound when id has no row.
 	GetDecision(ctx context.Context, id string) (*models.Decision, error)
 
+	// GetDecisionByPublicID returns the decision whose dec_… public id
+	// matches, or ErrNotFound.
+	GetDecisionByPublicID(ctx context.Context, publicID string) (*models.Decision, error)
+
 	// UpdateDecision writes all mutable columns by id (updated_at is
 	// trigger-managed). Returns ErrNotFound when id has no row and
 	// ErrInvalidProject on an unknown project slug.
@@ -187,6 +200,10 @@ type Store interface {
 
 	// GetSnippet returns ErrNotFound when id has no row.
 	GetSnippet(ctx context.Context, id string) (*models.Snippet, error)
+
+	// GetSnippetByPublicID returns the snippet whose snip_… public id
+	// matches, or ErrNotFound.
+	GetSnippetByPublicID(ctx context.Context, publicID string) (*models.Snippet, error)
 
 	// UpdateSnippet writes all mutable columns by id (updated_at is
 	// trigger-managed). Returns ErrNotFound when id has no row and
@@ -209,6 +226,10 @@ type Store interface {
 	// GetJournalEntry returns ErrNotFound when id has no row.
 	GetJournalEntry(ctx context.Context, id string) (*models.JournalEntry, error)
 
+	// GetJournalEntryByPublicID returns the entry whose jrnl_… public id
+	// matches, or ErrNotFound.
+	GetJournalEntryByPublicID(ctx context.Context, publicID string) (*models.JournalEntry, error)
+
 	// UpdateJournalEntry writes all mutable columns by id (updated_at is
 	// trigger-managed). Returns ErrNotFound when id has no row and
 	// ErrInvalidProject on an unknown project slug.
@@ -225,6 +246,10 @@ type Store interface {
 
 	// GetSolution returns ErrNotFound when id has no row.
 	GetSolution(ctx context.Context, id string) (*models.Solution, error)
+
+	// GetSolutionByPublicID returns the solution whose sol_… public id
+	// matches, or ErrNotFound.
+	GetSolutionByPublicID(ctx context.Context, publicID string) (*models.Solution, error)
 
 	// UpdateSolution writes all mutable columns by id (updated_at is
 	// trigger-managed). Returns ErrNotFound when id has no row and

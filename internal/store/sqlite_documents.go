@@ -92,6 +92,18 @@ func (s *SQLiteStore) GetDocument(ctx context.Context, id string) (*models.Docum
 	return doc, nil
 }
 
+func (s *SQLiteStore) GetDocumentByPublicID(ctx context.Context, publicID string) (*models.Document, error) {
+	q := `SELECT ` + documentColumns + ` FROM documents WHERE public_id = ?`
+	doc, err := scanSQLiteDocument(s.db.QueryRowContext(ctx, q, publicID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get document by public id: %w", err)
+	}
+	return doc, nil
+}
+
 func (s *SQLiteStore) UpdateDocument(ctx context.Context, doc *models.Document) error {
 	meta, err := jsonObject(doc.Meta)
 	if err != nil {

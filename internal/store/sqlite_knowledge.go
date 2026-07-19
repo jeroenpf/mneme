@@ -67,6 +67,18 @@ func (s *SQLiteStore) GetDecision(ctx context.Context, id string) (*models.Decis
 	return d, nil
 }
 
+func (s *SQLiteStore) GetDecisionByPublicID(ctx context.Context, publicID string) (*models.Decision, error) {
+	q := `SELECT ` + decisionColumns + ` FROM decisions WHERE public_id = ?`
+	d, err := scanSQLiteDecision(s.db.QueryRowContext(ctx, q, publicID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get decision by public id: %w", err)
+	}
+	return d, nil
+}
+
 func (s *SQLiteStore) UpdateDecision(ctx context.Context, d *models.Decision) error {
 	const q = `
 		UPDATE decisions
@@ -157,6 +169,18 @@ func (s *SQLiteStore) GetSnippet(ctx context.Context, id string) (*models.Snippe
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get snippet: %w", err)
+	}
+	return sn, nil
+}
+
+func (s *SQLiteStore) GetSnippetByPublicID(ctx context.Context, publicID string) (*models.Snippet, error) {
+	q := `SELECT ` + snippetColumns + ` FROM snippets WHERE public_id = ?`
+	sn, err := scanSQLiteSnippet(s.db.QueryRowContext(ctx, q, publicID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get snippet by public id: %w", err)
 	}
 	return sn, nil
 }
@@ -261,6 +285,18 @@ func (s *SQLiteStore) GetJournalEntry(ctx context.Context, id string) (*models.J
 	return e, nil
 }
 
+func (s *SQLiteStore) GetJournalEntryByPublicID(ctx context.Context, publicID string) (*models.JournalEntry, error) {
+	q := `SELECT ` + journalColumns + ` FROM journal_entries WHERE public_id = ?`
+	e, err := scanSQLiteJournal(s.db.QueryRowContext(ctx, q, publicID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get journal entry by public id: %w", err)
+	}
+	return e, nil
+}
+
 func (s *SQLiteStore) UpdateJournalEntry(ctx context.Context, e *models.JournalEntry) error {
 	const q = `
 		UPDATE journal_entries
@@ -354,6 +390,18 @@ func (s *SQLiteStore) GetSolution(ctx context.Context, id string) (*models.Solut
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get solution: %w", err)
+	}
+	return sol, nil
+}
+
+func (s *SQLiteStore) GetSolutionByPublicID(ctx context.Context, publicID string) (*models.Solution, error) {
+	q := `SELECT ` + solutionColumns + ` FROM solutions WHERE public_id = ?`
+	sol, err := scanSQLiteSolution(s.db.QueryRowContext(ctx, q, publicID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get solution by public id: %w", err)
 	}
 	return sol, nil
 }

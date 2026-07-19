@@ -160,6 +160,18 @@ func (s *PostgresStore) GetDocument(ctx context.Context, id string) (*models.Doc
 	return doc, nil
 }
 
+func (s *PostgresStore) GetDocumentByPublicID(ctx context.Context, publicID string) (*models.Document, error) {
+	q := `SELECT ` + documentColumns + ` FROM documents WHERE public_id = $1`
+	doc, err := scanDocument(s.pool.QueryRow(ctx, q, publicID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get document by public id: %w", err)
+	}
+	return doc, nil
+}
+
 func (s *PostgresStore) UpdateDocument(ctx context.Context, doc *models.Document) error {
 	const q = `
 		UPDATE documents SET
@@ -305,6 +317,19 @@ func (s *PostgresStore) GetProject(ctx context.Context, slug string) (*models.Pr
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("get project: %w", err)
+	}
+	return p, nil
+}
+
+func (s *PostgresStore) GetProjectByPublicID(ctx context.Context, publicID string) (*models.Project, error) {
+	const q = `SELECT id, public_id, name, slug, description, created_at FROM projects WHERE public_id = $1`
+	p := &models.Project{}
+	err := s.pool.QueryRow(ctx, q, publicID).Scan(&p.ID, &p.PublicID, &p.Name, &p.Slug, &p.Description, &p.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get project by public id: %w", err)
 	}
 	return p, nil
 }
@@ -565,6 +590,18 @@ func (s *PostgresStore) GetDecision(ctx context.Context, id string) (*models.Dec
 	return d, nil
 }
 
+func (s *PostgresStore) GetDecisionByPublicID(ctx context.Context, publicID string) (*models.Decision, error) {
+	q := `SELECT ` + decisionColumns + ` FROM decisions WHERE public_id = $1`
+	d, err := scanDecision(s.pool.QueryRow(ctx, q, publicID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get decision by public id: %w", err)
+	}
+	return d, nil
+}
+
 func (s *PostgresStore) UpdateDecision(ctx context.Context, d *models.Decision) error {
 	const q = `
 		UPDATE decisions
@@ -702,6 +739,18 @@ func (s *PostgresStore) GetSnippet(ctx context.Context, id string) (*models.Snip
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("get snippet: %w", err)
+	}
+	return sn, nil
+}
+
+func (s *PostgresStore) GetSnippetByPublicID(ctx context.Context, publicID string) (*models.Snippet, error) {
+	q := `SELECT ` + snippetColumns + ` FROM snippets WHERE public_id = $1`
+	sn, err := scanSnippet(s.pool.QueryRow(ctx, q, publicID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get snippet by public id: %w", err)
 	}
 	return sn, nil
 }
@@ -845,6 +894,18 @@ func (s *PostgresStore) GetJournalEntry(ctx context.Context, id string) (*models
 	return e, nil
 }
 
+func (s *PostgresStore) GetJournalEntryByPublicID(ctx context.Context, publicID string) (*models.JournalEntry, error) {
+	q := `SELECT ` + journalColumns + ` FROM journal_entries WHERE public_id = $1`
+	e, err := scanJournalEntry(s.pool.QueryRow(ctx, q, publicID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get journal entry by public id: %w", err)
+	}
+	return e, nil
+}
+
 func (s *PostgresStore) UpdateJournalEntry(ctx context.Context, e *models.JournalEntry) error {
 	const q = `
 		UPDATE journal_entries
@@ -958,6 +1019,18 @@ func (s *PostgresStore) GetSolution(ctx context.Context, id string) (*models.Sol
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("get solution: %w", err)
+	}
+	return sol, nil
+}
+
+func (s *PostgresStore) GetSolutionByPublicID(ctx context.Context, publicID string) (*models.Solution, error) {
+	q := `SELECT ` + solutionColumns + ` FROM solutions WHERE public_id = $1`
+	sol, err := scanSolution(s.pool.QueryRow(ctx, q, publicID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get solution by public id: %w", err)
 	}
 	return sol, nil
 }
