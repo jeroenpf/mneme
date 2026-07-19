@@ -58,6 +58,9 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		bundleH := &BundleHandler{Store: st}
 		searchH := &SearchHandler{Store: st, Client: client}
 		statusH := &SearchStatusHandler{Store: st, Enabled: client != nil}
+		if client != nil {
+			statusH.Model = client.Model()
+		}
 
 		r.Route("/api/v1", func(r chi.Router) {
 			r.Get("/documents", docs.List)

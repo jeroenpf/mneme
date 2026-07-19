@@ -339,7 +339,7 @@ func TestSearchExcludesDeletedSourceVectors(t *testing.T) {
 	if has(after, "doomed") {
 		t.Fatalf("deleted source surfaced in vector search: %+v", after)
 	}
-	cov, err := s.EmbeddingCoverage(ctx)
+	cov, err := s.EmbeddingStatus(ctx, "fake")
 	if err != nil {
 		t.Fatal(err)
 	}

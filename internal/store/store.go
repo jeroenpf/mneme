@@ -247,8 +247,9 @@ type Store interface {
 	EmbeddingsFor(ctx context.Context, sourceType, sourceID string) (map[string]string, error)
 	// SourceRefs enumerates every embeddable source.
 	SourceRefs(ctx context.Context) ([]SourceRef, error)
-	// EmbeddingCoverage reports embedded/total sources per type.
-	EmbeddingCoverage(ctx context.Context) ([]TypeCoverage, error)
+	// EmbeddingStatus reports per-type reconciliation buckets (reconciled,
+	// missing, stale, orphaned) against the current embedding model.
+	EmbeddingStatus(ctx context.Context, model string) ([]TypeStatus, error)
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

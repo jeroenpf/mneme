@@ -16,11 +16,25 @@ type SourceRef struct {
 	ID   string
 }
 
-// TypeCoverage reports how many sources of a type have at least one embedding.
-type TypeCoverage struct {
-	Type     string `json:"type"`
-	Embedded int    `json:"embedded"`
-	Total    int    `json:"total"`
+// TypeStatus reports, per source type, how its live sources and stored
+// vectors divide into reconciliation buckets:
+//
+//   - Embedded   — live sources with at least one vector (Reconciled+Stale).
+//   - Reconciled — live sources whose vectors are all on the current model.
+//   - Stale      — live sources holding at least one vector on an older model.
+//   - Missing    — live sources with no vector at all (Total-Embedded).
+//   - Orphaned   — vectors whose source_id no longer resolves to a live row.
+//   - Failed     — sources whose last embed attempt failed terminally; nil
+//     until P3-t5 adds failure tracking (nil ≠ zero: "not tracked yet").
+type TypeStatus struct {
+	Type       string `json:"type"`
+	Total      int    `json:"total"`
+	Embedded   int    `json:"embedded"`
+	Reconciled int    `json:"reconciled"`
+	Missing    int    `json:"missing"`
+	Stale      int    `json:"stale"`
+	Orphaned   int    `json:"orphaned"`
+	Failed     *int   `json:"failed"`
 }
 
 // sourceTables maps a SearchTypes value to its table, for enumeration and
@@ -125,23 +139,35 @@ func (s *PostgresStore) SourceRefs(ctx context.Context) ([]SourceRef, error) {
 	return out, rows.Err()
 }
 
-// EmbeddingCoverage returns, per type, how many sources have at least one
-// embedding vs the total number of sources.
-func (s *PostgresStore) EmbeddingCoverage(ctx context.Context) ([]TypeCoverage, error) {
-	out := make([]TypeCoverage, 0, len(sourceTables))
+// EmbeddingStatus reports per-type reconciliation buckets against the current
+// embedding model. Reconciled and Missing are derived from the queried Total,
+// Embedded, and Stale counts (see TypeStatus). Failed is left nil — terminal
+// failure tracking arrives in P3-t5.
+func (s *PostgresStore) EmbeddingStatus(ctx context.Context, model string) ([]TypeStatus, error) {
+	out := make([]TypeStatus, 0, len(sourceTables))
 	for _, st := range sourceTables {
-		var total, embedded int
-		if err := s.pool.QueryRow(ctx, fmt.Sprintf(`SELECT count(*) FROM %s`, st.table)).Scan(&total); err != nil {
-			return nil, fmt.Errorf("coverage total %s: %w", st.typ, err)
+		var ts TypeStatus
+		ts.Type = st.typ
+		// One row: total live sources, live sources with any vector, live
+		// sources with an outdated-model vector, and orphaned source_ids.
+		if err := s.pool.QueryRow(ctx, fmt.Sprintf(`
+			SELECT
+			  (SELECT count(*) FROM %[1]s) AS total,
+			  (SELECT count(*) FROM %[1]s t
+			     WHERE EXISTS (SELECT 1 FROM embeddings e
+			                    WHERE e.source_type=$1 AND e.source_id=t.id::text)) AS embedded,
+			  (SELECT count(*) FROM %[1]s t
+			     WHERE EXISTS (SELECT 1 FROM embeddings e
+			                    WHERE e.source_type=$1 AND e.source_id=t.id::text AND e.model<>$2)) AS stale,
+			  (SELECT count(DISTINCT e.source_id) FROM embeddings e
+			     WHERE e.source_type=$1
+			       AND NOT EXISTS (SELECT 1 FROM %[1]s t WHERE t.id::text=e.source_id)) AS orphaned`,
+			st.table), st.typ, model).Scan(&ts.Total, &ts.Embedded, &ts.Stale, &ts.Orphaned); err != nil {
+			return nil, fmt.Errorf("embedding status %s: %w", st.typ, err)
 		}
-		if err := s.pool.QueryRow(ctx, fmt.Sprintf(
-			`SELECT count(DISTINCT e.source_id)
-			   FROM embeddings e
-			   JOIN %s t ON t.id::text = e.source_id
-			  WHERE e.source_type=$1`, st.table), st.typ).Scan(&embedded); err != nil {
-			return nil, fmt.Errorf("coverage embedded %s: %w", st.typ, err)
-		}
-		out = append(out, TypeCoverage{Type: st.typ, Embedded: embedded, Total: total})
+		ts.Reconciled = ts.Embedded - ts.Stale
+		ts.Missing = ts.Total - ts.Embedded
+		out = append(out, ts)
 	}
 	return out, nil
 }

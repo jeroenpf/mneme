@@ -89,23 +89,22 @@ func TestSourceRefsAndCoverage(t *testing.T) {
 		t.Fatalf("SourceRefs missing the decision: %+v", refs)
 	}
 
-	cov, err := s.EmbeddingCoverage(ctx)
+	cov, err := s.EmbeddingStatus(ctx, "m")
 	if err != nil {
 		t.Fatal(err)
 	}
-	byType := map[string]store.TypeCoverage{}
+	byType := map[string]store.TypeStatus{}
 	for _, c := range cov {
 		byType[c.Type] = c
 	}
-	if byType["decisions"].Total < 1 || byType["decisions"].Embedded != 0 {
-		t.Fatalf("coverage wrong for decisions: %+v", byType["decisions"])
+	if byType["decisions"].Total < 1 || byType["decisions"].Embedded != 0 || byType["decisions"].Missing < 1 {
+		t.Fatalf("status wrong for decisions: %+v", byType["decisions"])
 	}
 }
 
-// Coverage must count only embeddings whose source_id still resolves to a
-// live source row; embeddings orphaned by a deleted source must not inflate
-// the embedded count.
-func TestEmbeddingCoverageExcludesOrphans(t *testing.T) {
+// Status must count only embeddings whose source_id still resolves to a live
+// source row: an orphan must not inflate Embedded, but must surface as Orphaned.
+func TestEmbeddingStatusExcludesOrphans(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
@@ -122,16 +121,17 @@ func TestEmbeddingCoverageExcludesOrphans(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cov, err := s.EmbeddingCoverage(ctx)
+	cov, err := s.EmbeddingStatus(ctx, "m")
 	if err != nil {
 		t.Fatal(err)
 	}
-	byType := map[string]store.TypeCoverage{}
+	byType := map[string]store.TypeStatus{}
 	for _, c := range cov {
 		byType[c.Type] = c
 	}
-	if got := byType["documents"]; got.Total != 1 || got.Embedded != 1 {
-		t.Fatalf("coverage should count only the live source, got %+v", got)
+	if got := byType["documents"]; got.Total != 1 || got.Embedded != 1 ||
+		got.Reconciled != 1 || got.Orphaned != 1 {
+		t.Fatalf("status should count only the live source and flag the orphan, got %+v", got)
 	}
 }
 
@@ -172,6 +172,49 @@ func TestDeleteOrphanEmbeddings(t *testing.T) {
 	}
 	if got, _ := s.EmbeddingsFor(ctx, "decisions", "11111111-1111-1111-1111-111111111111"); len(got) != 0 {
 		t.Fatalf("orphan decision vector not swept: %+v", got)
+	}
+}
+
+// EmbeddingStatus splits each type's live sources into reconciled (embedded on
+// the current model), stale (embedded but on an outdated model), and missing
+// (no vector), and counts orphaned vectors (source gone) separately. Failed is
+// nil until P3-t5 tracks terminal failures.
+func TestEmbeddingStatusBuckets(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	const cur = "voyage-cur"
+	for _, id := range []string{"recon", "stale1", "miss"} {
+		if err := s.CreateDocument(ctx, sampleDoc(id, id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{
+		{SourceType: "documents", SourceID: "recon", ChunkID: "full", ChunkText: "a",
+			Embedding: fakeVec(0.1), SourceTitle: "recon", Model: cur},
+		{SourceType: "documents", SourceID: "stale1", ChunkID: "full", ChunkText: "b",
+			Embedding: fakeVec(0.2), SourceTitle: "stale1", Model: "voyage-old"},
+		// Orphan: no such document.
+		{SourceType: "documents", SourceID: "ghost", ChunkID: "full", ChunkText: "c",
+			Embedding: fakeVec(0.3), SourceTitle: "ghost", Model: cur},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := s.EmbeddingStatus(ctx, cur)
+	if err != nil {
+		t.Fatalf("EmbeddingStatus: %v", err)
+	}
+	byType := map[string]store.TypeStatus{}
+	for _, x := range st {
+		byType[x.Type] = x
+	}
+	d := byType["documents"]
+	if d.Total != 3 || d.Embedded != 2 || d.Reconciled != 1 ||
+		d.Missing != 1 || d.Stale != 1 || d.Orphaned != 1 {
+		t.Fatalf("documents status wrong: %+v", d)
+	}
+	if d.Failed != nil {
+		t.Fatalf("failed should be nil until P3-t5 tracks it, got %d", *d.Failed)
 	}
 }
 

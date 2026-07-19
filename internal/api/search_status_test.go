@@ -23,17 +23,31 @@ func TestSearchStatus(t *testing.T) {
 	var body struct {
 		Enabled bool `json:"enabled"`
 		Items   []struct {
-			Type     string `json:"type"`
-			Embedded int    `json:"embedded"`
-			Total    int    `json:"total"`
+			Type       string `json:"type"`
+			Total      int    `json:"total"`
+			Embedded   int    `json:"embedded"`
+			Reconciled int    `json:"reconciled"`
+			Missing    int    `json:"missing"`
+			Stale      int    `json:"stale"`
+			Orphaned   int    `json:"orphaned"`
+			Failed     *int   `json:"failed"`
 		} `json:"items"`
 	}
 	decodeBody(t, resp, &body)
-	byType := map[string]int{}
-	for _, it := range body.Items {
-		byType[it.Type] = it.Total
+	var dec *int
+	for i, it := range body.Items {
+		if it.Type == "decisions" {
+			// The seeded decision has no embedding → it's a missing source.
+			if it.Total < 1 || it.Missing < 1 || it.Embedded != 0 {
+				t.Fatalf("decisions buckets wrong: %+v", body.Items[i])
+			}
+			if it.Failed != nil {
+				t.Fatalf("failed should be null until P3-t5, got %d", *it.Failed)
+			}
+			dec = &body.Items[i].Total
+		}
 	}
-	if byType["decisions"] < 1 {
-		t.Fatalf("expected decisions total >= 1, got %+v", body.Items)
+	if dec == nil {
+		t.Fatalf("expected a decisions status item, got %+v", body.Items)
 	}
 }
