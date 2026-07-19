@@ -1,6 +1,8 @@
 package embed
 
 import (
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
@@ -63,6 +65,23 @@ func walkChunks(blocks []any, title, project string, out *[]Chunk) {
 				*out = append(*out, Chunk{ID: id, Text: join(title, project, text)})
 			}
 		}
+		// Task entries (subphase.tasks, task-list.tasks) are their own chunks
+		// keyed by task id — the addressable unit for "what's next" retrieval.
+		if tasks, ok := m["tasks"].([]any); ok {
+			for _, tr := range tasks {
+				tm, ok := tr.(map[string]any)
+				if !ok {
+					continue
+				}
+				tid, _ := tm["id"].(string)
+				if tid == "" {
+					continue
+				}
+				if text := taskText(tm); text != "" {
+					*out = append(*out, Chunk{ID: tid, Text: join(title, project, text)})
+				}
+			}
+		}
 		if kids, ok := m["children"].([]any); ok {
 			walkChunks(kids, title, project, out)
 		}
@@ -70,13 +89,107 @@ func walkChunks(blocks []any, title, project string, out *[]Chunk) {
 }
 
 // blockText renders a single block's own salient text, excluding nested
-// children (which are chunked separately). A generic title+content covers the
-// prose block types; the structured types (code, table, key-value, diagram,
-// subphase, callout) and task entries get richer extraction in road-p4-t2.
+// children (which are chunked separately). Structured types flatten their
+// distinctive fields; the prose types fall back to title+content.
 func blockText(typ string, m map[string]any) string {
-	title, _ := m["title"].(string)
-	content, _ := m["content"].(string)
-	return join(strings.TrimSpace(title), strings.TrimSpace(content))
+	switch typ {
+	case "subphase":
+		return join(numStr(m["num"]), str(m, "title"), str(m, "description"))
+	case "callout":
+		return join(str(m, "variant"), str(m, "title"), str(m, "content"))
+	case "code":
+		return join(str(m, "filename"), str(m, "lang"), str(m, "content"))
+	case "table":
+		return join(str(m, "title"), tableText(m))
+	case "key-value":
+		return join(str(m, "title"), keyValueText(m))
+	default:
+		// section, text, diagram, task-list, and any other prose block.
+		return join(str(m, "title"), str(m, "content"))
+	}
+}
+
+// taskText renders one task entry: its title, content, and a done/todo status
+// marker so status-aware queries can reach it. Empty tasks are skipped.
+func taskText(tm map[string]any) string {
+	base := join(str(tm, "title"), str(tm, "content"))
+	if base == "" {
+		return ""
+	}
+	status := "todo"
+	if done, _ := tm["done"].(bool); done {
+		status = "done"
+	}
+	return join(base, status)
+}
+
+// tableText flattens a table's header cells then row cells in document order.
+func tableText(m map[string]any) string {
+	var parts []string
+	if cols, ok := m["cols"].([]any); ok {
+		for _, c := range cols {
+			if s, ok := c.(string); ok && strings.TrimSpace(s) != "" {
+				parts = append(parts, strings.TrimSpace(s))
+			}
+		}
+	}
+	if rows, ok := m["rows"].([]any); ok {
+		for _, r := range rows {
+			cells, ok := r.([]any)
+			if !ok {
+				continue
+			}
+			for _, cell := range cells {
+				if s, ok := cell.(string); ok && strings.TrimSpace(s) != "" {
+					parts = append(parts, strings.TrimSpace(s))
+				}
+			}
+		}
+	}
+	return join(parts...)
+}
+
+// keyValueText flattens a key-value block's data map into "key: value" pairs
+// in sorted-key order so identical content always yields identical chunk text
+// (Go map iteration is otherwise random, which would churn embeddings).
+func keyValueText(m map[string]any) string {
+	data, ok := m["data"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		v, _ := data[k].(string)
+		parts = append(parts, k+": "+strings.TrimSpace(v))
+	}
+	return join(parts...)
+}
+
+// str reads a trimmed string field, tolerating a missing or non-string value.
+func str(m map[string]any, key string) string {
+	s, _ := m[key].(string)
+	return strings.TrimSpace(s)
+}
+
+// numStr stringifies a JSON number (float64) as a plain integer when it has no
+// fractional part, leaving strings intact and anything else empty.
+func numStr(v any) string {
+	switch n := v.(type) {
+	case string:
+		return strings.TrimSpace(n)
+	case float64:
+		if n == float64(int64(n)) {
+			return strconv.FormatInt(int64(n), 10)
+		}
+		return strconv.FormatFloat(n, 'g', -1, 64)
+	default:
+		return ""
+	}
 }
 
 func deref(p *string) string {
