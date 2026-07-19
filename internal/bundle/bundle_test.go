@@ -2,6 +2,7 @@ package bundle
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -488,6 +489,92 @@ func TestAssembleEmptyProjectFallbacks(t *testing.T) {
 	}
 	if !strings.Contains(b.Markdown, "no plans yet") {
 		t.Errorf("no-plans fallback missing:\n%s", b.Markdown)
+	}
+}
+
+// TestBundleCoversSeparateReads measures whether one startup bundle replaces
+// the separate get_memory / get_decisions / get_journal / plan reads: every
+// item those reads surface (up to the bundle's recency caps) must appear in the
+// single assembled digest.
+func TestBundleCoversSeparateReads(t *testing.T) {
+	f := typicalFixture()
+	ctx := context.Background()
+	b, err := New(f).Assemble(ctx, "mneme", strptr("search"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// get_memory: global + project rows all reachable from the digest.
+	globalMem, _ := f.ListMemory(ctx, store.MemoryFilter{Scope: ptr(models.ScopeGlobal)})
+	projMem, _ := f.ListMemory(ctx, store.MemoryFilter{Scope: ptr(models.ScopeProject), Project: strptr("mneme")})
+	for _, m := range append(globalMem, projMem...) {
+		if b.Memory[m.Key] != m.Value {
+			t.Errorf("memory %q not carried by bundle (get_memory not replaced)", m.Key)
+		}
+		if !strings.Contains(b.Markdown, m.Key) {
+			t.Errorf("memory %q absent from digest", m.Key)
+		}
+	}
+
+	// get_decisions: the project's recent decisions appear by title.
+	decs, _ := f.ListDecisions(ctx, store.DecisionFilter{})
+	for _, d := range decs {
+		if projectOrGlobal(d.Project, "mneme") && !strings.Contains(b.Markdown, d.Title) {
+			t.Errorf("decision %q absent from digest (get_decisions not replaced)", d.Title)
+		}
+	}
+
+	// get_journal: recent session summaries appear.
+	jrnl, _ := f.ListJournalEntries(ctx, store.JournalFilter{})
+	for _, j := range jrnl {
+		if projectOrGlobal(j.Project, "mneme") && !strings.Contains(b.Markdown, j.Summary) {
+			t.Errorf("journal %q absent from digest (get_journal not replaced)", j.Summary)
+		}
+	}
+
+	// plan read: active plan title plus every surfaced next-task id.
+	if b.ActivePlan == nil || !strings.Contains(b.Markdown, b.ActivePlan.Title) {
+		t.Fatalf("active plan not surfaced (plan read not replaced): %+v", b.ActivePlan)
+	}
+	for _, nt := range b.NextTasks {
+		if !strings.Contains(b.Markdown, nt.ID) {
+			t.Errorf("next-task id %q absent from digest", nt.ID)
+		}
+	}
+}
+
+// TestBundleCheaperThanSeparateReads measures the token cost: the single
+// compiled digest must be smaller than reading memory, decisions, journal, and
+// the full plan document separately — the whole point of compiling rather than
+// dumping.
+func TestBundleCheaperThanSeparateReads(t *testing.T) {
+	f := largeFixture()
+	ctx := context.Background()
+	b, err := New(f).Assemble(ctx, "mneme", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Model the four raw reads by their serialized payloads (what an agent would
+	// actually receive from get_memory / get_decisions / get_journal / get_document).
+	mem, _ := f.ListMemory(ctx, store.MemoryFilter{Scope: ptr(models.ScopeProject), Project: strptr("mneme")})
+	decs, _ := f.ListDecisions(ctx, store.DecisionFilter{})
+	jrnl, _ := f.ListJournalEntries(ctx, store.JournalFilter{})
+	plan := f.documents[0] // full document incl. body
+
+	var raw []byte
+	for _, v := range []any{mem, decs, jrnl, plan} {
+		blob, _ := json.Marshal(v)
+		raw = append(raw, blob...)
+	}
+	separateTokens := estimateTokens(string(raw))
+	bundleTokens := b.EstimatedTokens
+
+	t.Logf("one bundle = %d tokens vs %d tokens for four separate reads (%.0f%% of the raw cost)",
+		bundleTokens, separateTokens, 100*float64(bundleTokens)/float64(separateTokens))
+
+	if bundleTokens >= separateTokens {
+		t.Errorf("bundle (%d tok) should be cheaper than four separate reads (%d tok)", bundleTokens, separateTokens)
 	}
 }
 
