@@ -241,7 +241,14 @@ func TestSearchSurfacesSimilarity(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Vector-only hit: reachable by embedding (identical to the query vector),
-	// title carries no query word.
+	// title carries no query word. The source row must exist — vector search
+	// only surfaces live sources.
+	if err := s.CreateDocument(ctx, &models.Document{
+		ID: "vec-doc", Title: "Vector doc", Project: ptr("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{}, Body: map[string]any{},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	qv := fakeVec(0.5)
 	if err := s.UpsertEmbeddings(ctx, []models.Embedding{{
 		SourceType: "documents", SourceID: "vec-doc", ChunkID: "full",
@@ -278,12 +285,86 @@ func TestSearchSurfacesSimilarity(t *testing.T) {
 	}
 }
 
+// A deleted source must vanish from both vector search and coverage even
+// while its orphaned vector still sits in the embeddings table (i.e. before
+// the reconcile sweep runs). The vector path must join to live sources, just
+// as the FTS path reads live tables.
+func TestSearchExcludesDeletedSourceVectors(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	// A live doc reachable only by vector (its title carries no FTS term).
+	if err := s.CreateDocument(ctx, &models.Document{
+		ID: "doomed", Title: "Wireless mesh notes", Project: ptr("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{}, Body: map[string]any{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	qv := fakeVec(0.7)
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{{
+		SourceType: "documents", SourceID: "doomed", ChunkID: "full",
+		ChunkText: "wireless mesh coordinator", Embedding: qv,
+		Project: ptr("apollo"), SourceTitle: "Wireless mesh notes", Model: "fake",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	has := func(hits []*models.SearchHit, id string) bool {
+		for _, h := range hits {
+			if h.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Sanity: while live, the vector-only hit surfaces (FTS term matches nothing).
+	before, err := s.Search(ctx, "zzznomatchword", store.SearchFilter{Vector: qv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has(before, "doomed") {
+		t.Fatalf("precondition: live source should surface via vector, got %+v", before)
+	}
+
+	// Delete the source row, leaving the vector orphaned (no sweep has run).
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM documents WHERE id=$1`, "doomed"); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := s.Search(ctx, "zzznomatchword", store.SearchFilter{Vector: qv})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if has(after, "doomed") {
+		t.Fatalf("deleted source surfaced in vector search: %+v", after)
+	}
+	cov, err := s.EmbeddingCoverage(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cov {
+		if c.Type == "documents" && c.Embedded != 0 {
+			t.Fatalf("deleted source still counted in coverage: %+v", c)
+		}
+	}
+}
+
 func TestSearchVectorFloorDropsWeakMatches(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 	seedProjects(t, s, "apollo")
 	// Two semantic-only sources — the query string matches neither via FTS,
-	// so only the vector path can surface them.
+	// so only the vector path can surface them. Both need live source rows;
+	// vector search excludes orphaned vectors.
+	for _, id := range []string{"near", "far"} {
+		if err := s.CreateDocument(ctx, &models.Document{
+			ID: id, Title: id, Project: ptr("apollo"),
+			Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{}, Body: map[string]any{},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := s.UpsertEmbeddings(ctx, []models.Embedding{
 		{SourceType: "documents", SourceID: "near", ChunkID: "full", ChunkText: "near",
 			Embedding: orthoVec(0), Project: ptr("apollo"), SourceTitle: "Near", Model: "fake"},

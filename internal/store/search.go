@@ -132,7 +132,7 @@ LIMIT ` + limitRef
 	vProjClause := ""
 	if f.Project != nil {
 		// project is already bound at $2 by the FTS arg setup above.
-		vProjClause = " AND project = $2"
+		vProjClause = " AND e.project = $2"
 	}
 	// Relevance floor: drop vector candidates whose cosine distance exceeds
 	// the threshold, so a vague/irrelevant query returns nothing rather than
@@ -141,20 +141,34 @@ LIMIT ` + limitRef
 	vFloorClause := ""
 	if s.vectorMaxDist > 0 {
 		args = append(args, s.vectorMaxDist)
-		vFloorClause = " AND (embedding <=> " + qvecRef + ") < " + fmt.Sprintf("$%d", len(args))
+		vFloorClause = " AND (e.embedding <=> " + qvecRef + ") < " + fmt.Sprintf("$%d", len(args))
 	}
 	args = append(args, limit)
 	limitRef := fmt.Sprintf("$%d", len(args))
 
+	// live_sources enumerates the id of every live source of the requested
+	// types, so vhits can drop orphaned vectors (source deleted, not yet
+	// swept). The FTS path reads live tables directly; this keeps the vector
+	// path consistent — a deleted source never surfaces from either.
+	liveParts := make([]string, 0, len(types))
+	for _, t := range types {
+		b := searchBranches[t]
+		liveParts = append(liveParts, fmt.Sprintf(
+			`SELECT '%s' AS type, id::text AS id FROM %s`, b.typ, b.table))
+	}
+	liveSourcesCTE := "live_sources AS (\n" + strings.Join(liveParts, "\nUNION ALL\n") + "\n)"
+
 	sql := "WITH " + ftsCTE + `,
+` + liveSourcesCTE + `,
 vhits AS (
-  SELECT DISTINCT ON (source_type, source_id)
-         source_type AS type, source_id AS id, source_title AS title,
-         left(chunk_text, 240) AS excerpt, project, created_at AS updated_at,
-         1 - (embedding <=> ` + qvecRef + `) AS sim
-  FROM embeddings
-  WHERE source_type = ANY(` + typesRef + `)` + vProjClause + vFloorClause + `
-  ORDER BY source_type, source_id, embedding <=> ` + qvecRef + `
+  SELECT DISTINCT ON (e.source_type, e.source_id)
+         e.source_type AS type, e.source_id AS id, e.source_title AS title,
+         left(e.chunk_text, 240) AS excerpt, e.project, e.created_at AS updated_at,
+         1 - (e.embedding <=> ` + qvecRef + `) AS sim
+  FROM embeddings e
+  JOIN live_sources ls ON ls.type = e.source_type AND ls.id = e.source_id
+  WHERE e.source_type = ANY(` + typesRef + `)` + vProjClause + vFloorClause + `
+  ORDER BY e.source_type, e.source_id, e.embedding <=> ` + qvecRef + `
 ),
 vranked AS (
   SELECT type, id, title, excerpt, project, updated_at, sim,
