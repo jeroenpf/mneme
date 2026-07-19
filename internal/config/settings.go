@@ -1,8 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+
+	toml "github.com/pelletier/go-toml/v2"
 )
 
 // Settings is the typed, friendly front-door schema serialized to
@@ -66,4 +69,28 @@ func SettingsPath() string {
 // at ~/.mneme/mneme.db, so a freshly-downloaded binary runs with zero config.
 func defaultDSN() string {
 	return "sqlite://" + filepath.Join(mnemeHome(), "mneme.db")
+}
+
+// WriteSettings serializes s to path as TOML, creating any missing parent
+// directory (0700) and writing the file 0600. The 0600 is enforced even when
+// overwriting an existing looser file, because the file may hold the Voyage API
+// key in plaintext (same trust model as the old .env — no encryption, by design).
+func WriteSettings(path string, s *Settings) error {
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("create config dir %s: %w", dir, err)
+		}
+	}
+	raw, err := toml.Marshal(s)
+	if err != nil {
+		return fmt.Errorf("marshal settings: %w", err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	// os.WriteFile only applies the mode on creation; tighten an existing file.
+	if err := os.Chmod(path, 0o600); err != nil {
+		return fmt.Errorf("chmod %s: %w", path, err)
+	}
+	return nil
 }
