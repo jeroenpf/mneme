@@ -34,13 +34,15 @@ func RefTask(docID, taskID string) (string, error) {
 	return nestedRef(docID, KindTask, taskID)
 }
 
-// nestedRef formats mneme://document/<docID>/<kind>/<childID>, validating
-// that the owner is a document id and the child matches the nested kind.
+// nestedRef formats mneme://document/<docID>/<kind>/<childID>. The owner must
+// be a document public id; the child id is document-local, so it may be a
+// generated blk_/task_ id or a legacy semantic id — any non-empty, slash-free
+// token. The relation (kind), not the child's prefix, marks it a block vs task.
 func nestedRef(docID string, kind Kind, childID string) (string, error) {
 	if !ValidFor(KindDocument, docID) {
 		return "", fmt.Errorf("ids: %q is not a valid document id", docID)
 	}
-	if !ValidFor(kind, childID) {
+	if childID == "" || strings.ContainsRune(childID, '/') {
 		return "", fmt.Errorf("ids: %q is not a valid %s id", childID, kind)
 	}
 	return scheme + string(KindDocument) + "/" + docID + "/" + string(kind) + "/" + childID, nil
@@ -89,8 +91,11 @@ func ParseRef(ref string) (Reference, error) {
 		if !ValidFor(KindDocument, docID) {
 			return Reference{}, fmt.Errorf("ids: %q is not a valid document id", docID)
 		}
-		if !ValidFor(child, childID) {
-			return Reference{}, fmt.Errorf("ids: %q is not a valid %s id", childID, child)
+		// The child id is document-local: a generated blk_/task_ id or a legacy
+		// semantic id. Accept any non-empty token (a trailing-slash ref lands
+		// here with an empty childID and is rejected).
+		if childID == "" {
+			return Reference{}, fmt.Errorf("ids: %q is missing its %s id", ref, child)
 		}
 		return Reference{Kind: child, ID: childID, DocID: docID}, nil
 	default:

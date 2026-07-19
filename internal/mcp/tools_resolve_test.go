@@ -134,6 +134,67 @@ func TestResolveReferenceBlockAndTask(t *testing.T) {
 	}
 }
 
+func TestResolveReferenceSemanticNested(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+
+	// samplePlan carries legacy semantic block/task ids (overview, t-001), not
+	// generated blk_/task_ ids — the pre-migration reality P6 must still resolve.
+	var pushed struct {
+		PublicID string `json:"public_id"`
+	}
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), &pushed)
+
+	var block resolveOut
+	call(t, cs, "resolve_reference",
+		map[string]any{"ref": "mneme://document/" + pushed.PublicID + "/block/overview"}, &block)
+	if block.Kind != "block" || block.TargetID != "overview" {
+		t.Errorf("semantic block resolve = %+v", block)
+	}
+	if block.Document == nil || block.Document.ID != "vehicle-api" {
+		t.Errorf("semantic block owning doc = %+v", block.Document)
+	}
+	if block.Reference != "mneme://document/"+pushed.PublicID+"/block/overview" {
+		t.Errorf("semantic block reference = %q", block.Reference)
+	}
+
+	var task resolveOut
+	call(t, cs, "resolve_reference",
+		map[string]any{"ref": "mneme://document/" + pushed.PublicID + "/task/t-001"}, &task)
+	if task.Kind != "task" || task.TargetID != "t-001" {
+		t.Errorf("semantic task resolve = %+v", task)
+	}
+	if got, _ := task.Content["title"].(string); got != "Init Go module" {
+		t.Errorf("semantic task content title = %q", got)
+	}
+}
+
+func TestDocToolsAcceptPublicID(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	var pushed struct {
+		PublicID string `json:"public_id"`
+	}
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), &pushed)
+
+	// get_document accepts the doc_ public id, not only the slug.
+	var doc models.Document
+	call(t, cs, "get_document", map[string]any{"id": pushed.PublicID}, &doc)
+	if doc.ID != "vehicle-api" {
+		t.Errorf("get_document by public id = %q, want vehicle-api", doc.ID)
+	}
+
+	// A surgical edit accepts the public id as doc_id too — so an agent can act
+	// on a resolved reference's document id directly.
+	var ticked struct {
+		Done bool `json:"done"`
+	}
+	call(t, cs, "tick_task", map[string]any{"doc_id": pushed.PublicID, "task_id": "t-001"}, &ticked)
+	if !ticked.Done {
+		t.Errorf("tick_task via public id: done=%v, want true", ticked.Done)
+	}
+}
+
 func TestResolveReferenceDecision(t *testing.T) {
 	cs := newClient(t)
 	var dec models.Decision

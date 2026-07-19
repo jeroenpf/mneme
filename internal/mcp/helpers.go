@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jeroenpfeil/mneme/internal/embed"
+	"github.com/jeroenpfeil/mneme/internal/ids"
 	"github.com/jeroenpfeil/mneme/internal/live"
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -85,13 +86,18 @@ func translateStoreErr(err error) error {
 	}
 }
 
-// loadDoc fetches a document and pre-translates ErrNotFound — used by
-// every R/M/W tool.
+// loadDoc fetches a document by its slug and pre-translates ErrNotFound — used
+// by every R/M/W tool. A doc_ public id is accepted too (falling back to the
+// by-public-id lookup), so an agent can act on a resolved reference's document
+// id directly and legacy slug ids keep working during the transition.
 func (t *tools) loadDoc(ctx context.Context, id string) (*models.Document, error) {
 	if id == "" {
 		return nil, errors.New("id is required")
 	}
 	doc, err := t.store.GetDocument(ctx, id)
+	if errors.Is(err, store.ErrNotFound) && ids.ValidFor(ids.KindDocument, id) {
+		doc, err = t.store.GetDocumentByPublicID(ctx, id)
+	}
 	if err != nil {
 		return nil, translateStoreErr(err)
 	}

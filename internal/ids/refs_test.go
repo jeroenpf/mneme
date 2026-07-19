@@ -67,18 +67,25 @@ func TestRefBlockAndRefTaskNestUnderTheDocument(t *testing.T) {
 	}
 }
 
-func TestRefBlockRejectsMismatchedIDs(t *testing.T) {
-	// Owner must be a document.
+func TestRefBlockRejectsNonDocumentOwner(t *testing.T) {
 	if _, err := ids.RefBlock("prj_000000000000", "blk_111111111111"); err == nil {
 		t.Error("RefBlock with a non-document owner should error")
 	}
-	// The nested id must actually be a block.
-	if _, err := ids.RefBlock("doc_000000000000", "task_111111111111"); err == nil {
-		t.Error("RefBlock with a task id should error")
+	if _, err := ids.RefTask("prj_000000000000", "task_111111111111"); err == nil {
+		t.Error("RefTask with a non-document owner should error")
 	}
-	// And the task variant must reject a block id.
-	if _, err := ids.RefTask("doc_000000000000", "blk_111111111111"); err == nil {
-		t.Error("RefTask with a block id should error")
+}
+
+// Nested child ids are document-local: they may be generated (blk_/task_) or a
+// legacy semantic id preserved from before generated ids, so the nested
+// formatters accept any non-empty child. The relation (block/task) — not the
+// id's prefix — is what distinguishes them.
+func TestRefBlockAndTaskAcceptSemanticChildIDs(t *testing.T) {
+	if got, err := ids.RefBlock("doc_000000000000", "overview"); err != nil || got != "mneme://document/doc_000000000000/block/overview" {
+		t.Errorf("RefBlock(semantic) = %q, err=%v", got, err)
+	}
+	if got, err := ids.RefTask("doc_000000000000", "s6-t1"); err != nil || got != "mneme://document/doc_000000000000/task/s6-t1" {
+		t.Errorf("RefTask(semantic) = %q, err=%v", got, err)
 	}
 }
 
@@ -124,6 +131,20 @@ func TestParseRefNestedBlockAndTask(t *testing.T) {
 	}
 }
 
+// Legacy documents carry semantic block/task ids (overview, s6-t1). Those must
+// parse so pre-migration references resolve — the owner stays strict (a doc_
+// public id), only the document-local child id is lenient.
+func TestParseRefAcceptsSemanticNestedIDs(t *testing.T) {
+	if got, err := ids.ParseRef("mneme://document/doc_000000000000/block/overview"); err != nil ||
+		got != (ids.Reference{Kind: ids.KindBlock, ID: "overview", DocID: "doc_000000000000"}) {
+		t.Errorf("ParseRef(semantic block) = %+v, err=%v", got, err)
+	}
+	if got, err := ids.ParseRef("mneme://document/doc_000000000000/task/s6-t1"); err != nil ||
+		got != (ids.Reference{Kind: ids.KindTask, ID: "s6-t1", DocID: "doc_000000000000"}) {
+		t.Errorf("ParseRef(semantic task) = %+v, err=%v", got, err)
+	}
+}
+
 // ParseRef is the inverse of the Ref/RefBlock/RefTask formatters: anything they
 // emit must parse back to the components that produced it.
 func TestParseRefRoundTripsWithFormatters(t *testing.T) {
@@ -164,21 +185,20 @@ func TestParseRefRoundTripsWithFormatters(t *testing.T) {
 
 func TestParseRefRejectsMalformed(t *testing.T) {
 	cases := map[string]string{
-		"empty":                    "",
-		"wrong scheme":             "http://document/doc_000000000000",
-		"missing scheme":           "document/doc_000000000000",
-		"bare id":                  "doc_000000000000",
-		"unknown kind segment":     "mneme://banana/doc_000000000000",
-		"kind/prefix mismatch":     "mneme://project/doc_000000000000",
-		"malformed id":             "mneme://document/doc_bad",
-		"missing id":               "mneme://document",
-		"trailing slash":           "mneme://document/doc_000000000000/",
-		"unexpected extra segment": "mneme://document/doc_000000000000/foo",
+		"empty":                     "",
+		"wrong scheme":              "http://document/doc_000000000000",
+		"missing scheme":            "document/doc_000000000000",
+		"bare id":                   "doc_000000000000",
+		"unknown kind segment":      "mneme://banana/doc_000000000000",
+		"kind/prefix mismatch":      "mneme://project/doc_000000000000",
+		"malformed id":              "mneme://document/doc_bad",
+		"missing id":                "mneme://document",
+		"trailing slash":            "mneme://document/doc_000000000000/",
+		"unexpected extra segment":  "mneme://document/doc_000000000000/foo",
 		"nested under non-document": "mneme://project/prj_000000000000/block/blk_111111111111",
-		"nested wrong child kind":  "mneme://document/doc_000000000000/task/blk_111111111111",
-		"nested unknown relation":  "mneme://document/doc_000000000000/comment/blk_111111111111",
-		"nested missing child id":  "mneme://document/doc_000000000000/block",
-		"nested malformed owner":   "mneme://document/doc_bad/block/blk_111111111111",
+		"nested unknown relation":   "mneme://document/doc_000000000000/comment/blk_111111111111",
+		"nested missing child id":   "mneme://document/doc_000000000000/block",
+		"nested malformed owner":    "mneme://document/doc_bad/block/blk_111111111111",
 	}
 	for name, ref := range cases {
 		t.Run(name, func(t *testing.T) {
