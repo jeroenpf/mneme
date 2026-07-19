@@ -82,8 +82,15 @@ func (w *Worker) Run(ctx context.Context) {
 }
 
 // ReconcileAll enqueues every source; the per-job chunk_text diff makes a
-// warm DB cheap (no Voyage calls when nothing changed).
+// warm DB cheap (no Voyage calls when nothing changed). It first sweeps
+// orphaned vectors — deleted sources are never enqueued, so this is the only
+// path that collects the chunks they left behind.
 func (w *Worker) ReconcileAll(ctx context.Context) error {
+	if n, err := w.store.DeleteOrphanEmbeddings(ctx); err != nil {
+		return fmt.Errorf("sweep orphans: %w", err)
+	} else if n > 0 {
+		slog.Info("reconcile swept orphaned embeddings", "rows", n)
+	}
 	refs, err := w.store.SourceRefs(ctx)
 	if err != nil {
 		return err

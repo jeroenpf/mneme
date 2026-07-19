@@ -146,6 +146,26 @@ func (s *PostgresStore) EmbeddingCoverage(ctx context.Context) ([]TypeCoverage, 
 	return out, nil
 }
 
+// DeleteOrphanEmbeddings sweeps vectors whose source_id no longer resolves to
+// a live row of that type, across every embeddable type, and returns the total
+// number of rows removed. Reconciliation only enqueues live sources, so a
+// deleted source's chunks are never re-processed — this is how they get
+// collected. Idempotent: a clean index sweeps zero rows.
+func (s *PostgresStore) DeleteOrphanEmbeddings(ctx context.Context) (int64, error) {
+	var deleted int64
+	for _, st := range sourceTables {
+		tag, err := s.pool.Exec(ctx, fmt.Sprintf(
+			`DELETE FROM embeddings e
+			  WHERE e.source_type = $1
+			    AND NOT EXISTS (SELECT 1 FROM %s t WHERE t.id::text = e.source_id)`, st.table), st.typ)
+		if err != nil {
+			return deleted, fmt.Errorf("sweep orphans %s: %w", st.typ, err)
+		}
+		deleted += tag.RowsAffected()
+	}
+	return deleted, nil
+}
+
 func joinUnion(parts []string) string {
 	out := parts[0]
 	for _, p := range parts[1:] {

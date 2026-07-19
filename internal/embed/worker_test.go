@@ -109,3 +109,25 @@ func TestWorkerPurgesEmbeddingsForDeletedSource(t *testing.T) {
 		t.Fatalf("deleted source left orphaned embeddings: %+v", got)
 	}
 }
+
+// Reconciliation only enqueues live sources, so a deleted source's vectors are
+// never re-processed. ReconcileAll must sweep them itself so the index
+// self-heals after missed delete events.
+func TestReconcileAllSweepsOrphans(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx := context.Background()
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{
+		{SourceType: "documents", SourceID: "ghost", ChunkID: "c0", ChunkText: "x",
+			Embedding: make([]float32, 1024), SourceTitle: "Ghost", Model: "m"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
+	if err := w.ReconcileAll(ctx); err != nil {
+		t.Fatalf("ReconcileAll: %v", err)
+	}
+	if got, _ := s.EmbeddingsFor(ctx, "documents", "ghost"); len(got) != 0 {
+		t.Fatalf("ReconcileAll did not sweep orphan vector: %+v", got)
+	}
+}

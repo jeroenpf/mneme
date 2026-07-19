@@ -237,6 +237,9 @@ type Store interface {
 	UpsertEmbeddings(ctx context.Context, rows []models.Embedding) error
 	// DeleteEmbeddingsExcept prunes a source's chunks not in keep.
 	DeleteEmbeddingsExcept(ctx context.Context, sourceType, sourceID string, keep []string) error
+	// DeleteOrphanEmbeddings sweeps vectors whose source_id no longer
+	// resolves to a live source row, returning the count removed.
+	DeleteOrphanEmbeddings(ctx context.Context) (int64, error)
 	// EmbeddingsFor returns chunk_id→chunk_text for a source.
 	EmbeddingsFor(ctx context.Context, sourceType, sourceID string) (map[string]string, error)
 	// SourceRefs enumerates every embeddable source.

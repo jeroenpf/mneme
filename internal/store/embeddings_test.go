@@ -134,3 +134,43 @@ func TestEmbeddingCoverageExcludesOrphans(t *testing.T) {
 		t.Fatalf("coverage should count only the live source, got %+v", got)
 	}
 }
+
+// DeleteOrphanEmbeddings removes vectors whose source_id no longer resolves
+// to a live row of that type, across every embeddable type, while leaving
+// live sources' vectors intact.
+func TestDeleteOrphanEmbeddings(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	if err := s.CreateDocument(ctx, sampleDoc("d1", "Live")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{
+		{SourceType: "documents", SourceID: "d1", ChunkID: "overview", ChunkText: "a",
+			Embedding: fakeVec(0.1), SourceTitle: "Live", Model: "m"},
+		// Orphan document (no such id) and orphan decision (no such uuid).
+		{SourceType: "documents", SourceID: "ghost", ChunkID: "overview", ChunkText: "b",
+			Embedding: fakeVec(0.2), SourceTitle: "Ghost", Model: "m"},
+		{SourceType: "decisions", SourceID: "11111111-1111-1111-1111-111111111111", ChunkID: "c0",
+			ChunkText: "c", Embedding: fakeVec(0.3), SourceTitle: "Dead", Model: "m"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := s.DeleteOrphanEmbeddings(ctx)
+	if err != nil {
+		t.Fatalf("DeleteOrphanEmbeddings: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("expected 2 orphan rows swept, got %d", n)
+	}
+	if got, _ := s.EmbeddingsFor(ctx, "documents", "d1"); len(got) != 1 {
+		t.Fatalf("live source vector must survive the sweep: %+v", got)
+	}
+	if got, _ := s.EmbeddingsFor(ctx, "documents", "ghost"); len(got) != 0 {
+		t.Fatalf("orphan document vector not swept: %+v", got)
+	}
+	if got, _ := s.EmbeddingsFor(ctx, "decisions", "11111111-1111-1111-1111-111111111111"); len(got) != 0 {
+		t.Fatalf("orphan decision vector not swept: %+v", got)
+	}
+}
