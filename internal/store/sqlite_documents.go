@@ -151,7 +151,11 @@ func (s *SQLiteStore) updateDocNoRow(ctx context.Context, id string, expected *i
 		return fmt.Errorf("update document revision check: %w", err)
 	}
 	if expected != nil {
-		return &RevisionConflictError{DocumentID: id, Current: current}
+		return &RevisionConflictError{
+			DocumentID: id,
+			Current:    current,
+			ChangedIDs: changedTargetsSince(ctx, s, id, *expected),
+		}
 	}
 	return ErrNotFound
 }

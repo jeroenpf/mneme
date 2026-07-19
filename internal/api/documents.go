@@ -263,7 +263,11 @@ func (h *DocumentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		var conflict *store.RevisionConflictError
 		if errors.As(err, &conflict) {
 			w.Header().Set("ETag", etag(conflict.Current))
-			writeError(w, http.StatusPreconditionFailed, fmt.Sprintf("revision conflict: document is at revision %d, re-read before retrying", conflict.Current))
+			writeJSON(w, http.StatusPreconditionFailed, map[string]any{
+				"error":            "revision conflict — re-read the document before retrying",
+				"current_revision": conflict.Current,
+				"changed_ids":      conflict.ChangedIDs,
+			})
 			return
 		}
 		writeStoreError(w, err)

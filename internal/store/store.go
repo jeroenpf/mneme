@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/jeroenpfeil/mneme/internal/dsn"
@@ -46,19 +47,51 @@ var ErrRevisionConflict = errors.New("revision conflict")
 
 // RevisionConflictError is returned by UpdateDocument when the caller supplied
 // an expected revision that no longer matches the stored one. It carries the
-// document id and the current revision so callers (REST 409 / MCP) can tell the
-// user what to re-read.
+// document id, the current revision, and the ids the intervening write(s)
+// changed (from the audit log) so callers (REST 412 / MCP) can tell the user
+// exactly what to re-read.
 type RevisionConflictError struct {
 	DocumentID string
 	Current    int
+	ChangedIDs []string
 }
 
 func (e *RevisionConflictError) Error() string {
+	if len(e.ChangedIDs) > 0 {
+		return fmt.Sprintf("revision conflict on %s: current revision is %d; changed since yours: %v",
+			e.DocumentID, e.Current, e.ChangedIDs)
+	}
 	return fmt.Sprintf("revision conflict on %s: current revision is %d", e.DocumentID, e.Current)
 }
 
 // Is lets errors.Is(err, ErrRevisionConflict) match a *RevisionConflictError.
 func (e *RevisionConflictError) Is(target error) bool { return target == ErrRevisionConflict }
+
+// changedTargetsSince collects the distinct, sorted target ids recorded for
+// revisions after sinceRevision — what a writer basing an edit on sinceRevision
+// missed. Best-effort: a history read error yields no ids rather than masking
+// the conflict itself. Backend-agnostic (reads through the Store interface).
+func changedTargetsSince(ctx context.Context, s Store, documentID string, sinceRevision int) []string {
+	revs, err := s.ListDocumentRevisions(ctx, documentID, 0)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, r := range revs {
+		if r.Revision <= sinceRevision {
+			continue
+		}
+		for _, id := range r.TargetIDs {
+			if !seen[id] {
+				seen[id] = true
+				out = append(out, id)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
 
 // MemoryFilter narrows ListMemory. A nil field is "no constraint".
 type MemoryFilter struct {

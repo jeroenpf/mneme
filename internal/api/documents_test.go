@@ -85,13 +85,21 @@ func TestDocumentETagAndIfMatchConflict(t *testing.T) {
 	}
 	ok.Body.Close()
 
-	// A stale If-Match is rejected with 412 and the current ETag.
+	// A stale If-Match is rejected with 412, the current ETag, and a body
+	// naming the current revision.
 	stale := doPatchIfMatch(t, url, patch, `"1"`)
 	requireStatus(t, stale, http.StatusPreconditionFailed)
 	if got := stale.Header.Get("ETag"); got != `"2"` {
 		t.Errorf("conflict ETag = %q, want current %q", got, `"2"`)
 	}
-	stale.Body.Close()
+	var conflictBody struct {
+		CurrentRevision int      `json:"current_revision"`
+		ChangedIDs      []string `json:"changed_ids"`
+	}
+	decodeBody(t, stale, &conflictBody)
+	if conflictBody.CurrentRevision != 2 {
+		t.Errorf("conflict body current_revision = %d, want 2", conflictBody.CurrentRevision)
+	}
 
 	// No If-Match → last-writer-wins, still succeeds.
 	unconditional := doPatchIfMatch(t, url, patch, "")

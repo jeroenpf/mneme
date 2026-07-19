@@ -258,6 +258,47 @@ func TestConformanceDocumentRevisions(t *testing.T) {
 	})
 }
 
+func TestConformanceRevisionConflictReportsChangedIDs(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		doc := sampleDoc("cc-1", "CC doc")
+		doc.Project = ptr("apollo")
+		if err := st.CreateDocument(ctx, doc); err != nil { // rev 1
+			t.Fatalf("CreateDocument: %v", err)
+		}
+		// A concurrent write advances to rev 2 and records which block it changed.
+		doc.Title = "CC v2"
+		if err := st.UpdateDocument(ctx, doc, nil); err != nil { // rev 2
+			t.Fatalf("UpdateDocument: %v", err)
+		}
+		if err := st.AppendDocumentRevision(ctx, &models.DocumentRevision{
+			DocumentID: "cc-1", Revision: 2, Op: "update_section", Actor: "mcp",
+			TargetIDs: []string{"blk-7"}, Title: doc.Title, Status: doc.Status,
+			Meta: doc.Meta, Body: doc.Body,
+		}); err != nil {
+			t.Fatalf("AppendDocumentRevision: %v", err)
+		}
+
+		// A stale writer based on rev 1 conflicts and learns the current revision
+		// AND which ids changed since their base.
+		stale, _ := st.GetDocument(ctx, "cc-1")
+		stale.Title = "stale"
+		err := st.UpdateDocument(ctx, stale, ptr(1))
+		var conflict *store.RevisionConflictError
+		if !errors.As(err, &conflict) {
+			t.Fatalf("expected RevisionConflictError, got %v", err)
+		}
+		if conflict.Current != 2 {
+			t.Errorf("conflict current = %d, want 2", conflict.Current)
+		}
+		if len(conflict.ChangedIDs) != 1 || conflict.ChangedIDs[0] != "blk-7" {
+			t.Errorf("conflict changed ids = %v, want [blk-7]", conflict.ChangedIDs)
+		}
+	})
+}
+
 func TestConformanceDocumentRevisionSnapshots(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, st store.Store) {
 		ctx := context.Background()

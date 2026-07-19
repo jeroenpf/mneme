@@ -207,7 +207,11 @@ func (s *PostgresStore) updateDocNoRow(ctx context.Context, id string, expected 
 		return fmt.Errorf("update document revision check: %w", err)
 	}
 	if expected != nil {
-		return &RevisionConflictError{DocumentID: id, Current: current}
+		return &RevisionConflictError{
+			DocumentID: id,
+			Current:    current,
+			ChangedIDs: changedTargetsSince(ctx, s, id, *expected),
+		}
 	}
 	// Row exists and no expected-revision guard was set, yet nothing updated —
 	// should not happen; surface a generic not-found rather than lie about success.
