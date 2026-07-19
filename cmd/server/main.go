@@ -60,6 +60,11 @@ func run() error {
 	// startup reconciliation on a background ctx so a fast shutdown can't
 	// cancel the backfill mid-flight.
 	client := embed.NewClient(*cfg)
+	if client != nil {
+		// Cache repeated search-query embeds so an identical query does not
+		// re-hit Voyage; document embeds pass through uncached.
+		client = embed.NewCachingClient(client, 256)
+	}
 	var enq embed.Enqueuer = embed.NopEnqueuer{}
 	if client != nil {
 		worker := embed.NewWorker(st, client, 256, cfg.VoyageRPM)
