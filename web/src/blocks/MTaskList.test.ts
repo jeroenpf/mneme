@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
+import { flushPromises, mount } from '@vue/test-utils'
 import MTaskList from './MTaskList.vue'
+import { DOC_PUBLIC_ID } from '@/composables/useDocRef'
 
 const tasks = [
   { id: 't1', title: 'Ship the `viewer`', done: true, tags: ['vue'] },
@@ -25,6 +27,20 @@ describe('MTaskList', () => {
     const rows = w.findAll('li')
     expect(rows[0].attributes('id')).toBe('t1')
     expect(rows[1].attributes('id')).toBe('t2')
+  })
+
+  it('offers a per-task copy-reference control when a document id is in scope', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+    const w = mount(MTaskList, {
+      props: { tasks },
+      global: { provide: { [DOC_PUBLIC_ID as symbol]: ref('doc_000000000000') } },
+    })
+    const controls = w.findAll('[data-test="copy-ref"]')
+    expect(controls).toHaveLength(2)
+    await controls[0].trigger('click')
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith('mneme://document/doc_000000000000/task/t1')
   })
 
   it('renders nothing without tasks', () => {

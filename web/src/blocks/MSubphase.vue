@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, provide } from 'vue'
 import BlockRenderer from './BlockRenderer.vue'
+import BlockRefCopy from './BlockRefCopy.vue'
 import MTaskList from './MTaskList.vue'
 import { renderInline, renderParagraphs } from '@/lib/markdown'
 import type { TaskItem } from '@/types'
@@ -35,11 +36,13 @@ const descParagraphs = computed(() => renderParagraphs(props.description))
       <span v-if="num" class="sec-num mn-mono-sm">{{ num }}</span>
       <h2 class="mn-h2 mn-md heading" v-html="titleHtml" />
       <span v-if="session != null" class="mn-label session">session {{ session }}</span>
+      <BlockRefCopy :block-id="id" kind="block" />
     </div>
     <div v-else class="sub-head">
       <span v-if="num" class="sub-num mn-mono-sm">{{ num }}</span>
       <h3 class="mn-h3 mn-md heading" v-html="titleHtml" />
       <span v-if="session != null" class="mn-label session">session {{ session }}</span>
+      <BlockRefCopy :block-id="id" kind="block" />
     </div>
     <div v-if="descParagraphs.length" class="mn-prose">
       <p v-for="(para, i) in descParagraphs" :key="i" class="mn-body mn-md" v-html="para" />
@@ -89,5 +92,11 @@ const descParagraphs = computed(() => renderParagraphs(props.description))
 }
 .session {
   flex: none;
+}
+.sec-head:hover :deep(.block-ref),
+.sec-head:focus-within :deep(.block-ref),
+.sub-head:hover :deep(.block-ref),
+.sub-head:focus-within :deep(.block-ref) {
+  opacity: 1;
 }
 </style>

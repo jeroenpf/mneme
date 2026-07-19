@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, provide } from 'vue'
 import BlockRenderer from './BlockRenderer.vue'
+import BlockRefCopy from './BlockRefCopy.vue'
 import { renderInline, renderParagraphs } from '@/lib/markdown'
 
 const props = defineProps<{
@@ -32,6 +33,7 @@ const contentParagraphs = computed(() => renderParagraphs(props.content))
     <div v-if="html && isTop" class="sec-head">
       <span v-if="num" class="sec-num mn-mono-sm">{{ num }}</span>
       <h2 class="mn-h2 mn-md heading" v-html="html" />
+      <BlockRefCopy :block-id="id" kind="block" />
     </div>
     <h3 v-else-if="html" class="mn-h3 mn-md subheading" v-html="html" />
     <div v-if="contentParagraphs.length" class="mn-prose">
@@ -63,5 +65,9 @@ const contentParagraphs = computed(() => renderParagraphs(props.content))
 }
 .heading {
   flex: 1;
+}
+.sec-head:hover :deep(.block-ref),
+.sec-head:focus-within :deep(.block-ref) {
+  opacity: 1;
 }
 </style>

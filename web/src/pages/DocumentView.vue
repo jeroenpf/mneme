@@ -7,6 +7,7 @@ import PhaseTracker from '@/components/PhaseTracker.vue'
 import SectionNav from '@/components/SectionNav.vue'
 import { useDocument } from '@/composables/useDocument'
 import { useLiveRefresh } from '@/composables/useLiveRefresh'
+import { provideDocPublicId } from '@/composables/useDocRef'
 import { phasesFromMeta } from '@/lib/phases'
 import { sectionNavItems } from '@/lib/toc'
 
@@ -14,6 +15,10 @@ const props = defineProps<{ id: string }>()
 
 const route = useRoute()
 const { doc, loading, error, refresh } = useDocument(toRef(props, 'id'))
+
+// Expose this document's public id to the block renderers so block/task copy
+// controls can build nested mneme:// references.
+provideDocPublicId(computed(() => doc.value?.public_id))
 
 // Live updates: quietly refetch this document when the agent edits it over
 // MCP. A *silent* refresh swaps the doc in place without toggling `loading`,

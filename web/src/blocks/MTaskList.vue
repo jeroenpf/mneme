@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { renderInline } from '@/lib/markdown'
+import BlockRefCopy from './BlockRefCopy.vue'
 import type { TaskItem } from '@/types'
 
 defineProps<{ id?: string; title?: string; tasks?: TaskItem[] }>()
@@ -28,6 +29,7 @@ defineProps<{ id?: string; title?: string; tasks?: TaskItem[] }>()
             v-html="renderInline(task.content)"
           />
         </div>
+        <BlockRefCopy :block-id="task.id" kind="task" class="task-ref" />
       </li>
     </ul>
   </div>
@@ -52,6 +54,14 @@ defineProps<{ id?: string; title?: string; tasks?: TaskItem[] }>()
 }
 .task:hover {
   background: var(--bg-hover);
+}
+.task-ref {
+  margin-left: auto;
+  align-self: center;
+}
+.task:hover :deep(.block-ref),
+.task:focus-within :deep(.block-ref) {
+  opacity: 1;
 }
 /* Rounded-square checkbox — an empty box for todo, a filled green box with an
    inverse check for done, matching the phase spine's "done is green" language.
