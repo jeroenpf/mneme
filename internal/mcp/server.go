@@ -38,6 +38,8 @@ Typical workflow:
 
 Use search(q, types?) for a single ranked query across every content type (documents, decisions, snippets, solutions, journal) instead of the per-type search tools when you don't know where an answer lives.
 
+Whenever the user pastes a mneme:// reference or a bare public id (doc_…, dec_…, snip_…, etc.), call resolve_reference to fetch the target — it returns the typed entity plus the ids surgical tools need (a block/task's owning document.id and target_id). Never guess what a reference points to.
+
 push_document is upsert-by-meta.id — reserve it for new documents or full rewrites. A document's project must already exist; call create_project(slug, name) once to register a new project before pushing documents that reference it.
 
 At the start of every session, call get_context_bundle(project, area?) — one call returns merged memory, the active plan's status, recent decisions, relevant snippets, and recent journal entries as a paste-ready markdown digest. Use the individual read tools only when you need more detail or history than the bundle contains.
@@ -236,6 +238,11 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "search",
 		Description: "Search documents, decisions, snippets, solutions, and journal in one ranked query when you do not know which content type holds the answer. Returns compact hits and is a superset of search_documents.",
 	}, t.search)
+
+	addTool(s, &sdk.Tool{
+		Name:        "resolve_reference",
+		Description: "Resolve a pasted mneme:// reference (or a bare public id like doc_…/dec_…) to its entity. Returns {kind, reference, target_id, document?, content}: the typed entity plus the ids a follow-up surgical tool needs — for a block or task, document.id is the doc_id argument for tick_task/update_task/update_section and target_id is the block/task id. Call this whenever the user pastes a mneme:// reference instead of guessing what it points to.",
+	}, t.resolveReference)
 
 	addTool(s, &sdk.Tool{
 		Name:        "retry_failed_embeddings",
