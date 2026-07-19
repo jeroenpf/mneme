@@ -68,7 +68,21 @@ func SettingsPath() string {
 // defaultDSN is the built-in storage default: a self-contained SQLite database
 // at ~/.mneme/mneme.db, so a freshly-downloaded binary runs with zero config.
 func defaultDSN() string {
-	return "sqlite://" + filepath.Join(mnemeHome(), "mneme.db")
+	return "sqlite://" + DefaultSQLitePath()
+}
+
+// DefaultSQLitePath is the on-disk location of the default SQLite database,
+// ~/.mneme/mneme.db. Exposed so the init wizard can offer it as the default.
+func DefaultSQLitePath() string {
+	return filepath.Join(mnemeHome(), "mneme.db")
+}
+
+// CertPaths returns the default leaf cert/key locations for HTTPS (mneme.dev)
+// mode, under ~/.mneme/certs. The init wizard's mkcert step writes here and the
+// net settings point at them.
+func CertPaths() (cert, key string) {
+	dir := filepath.Join(mnemeHome(), "certs")
+	return filepath.Join(dir, "mneme.dev.pem"), filepath.Join(dir, "mneme.dev-key.pem")
 }
 
 // WriteSettings serializes s to path as TOML, creating any missing parent
