@@ -75,10 +75,10 @@ func (s *PostgresStore) Search(ctx context.Context, q string, f SearchFilter) ([
 // <<...>> delimiters (matched by the SQLite backend's snippet() later).
 const ftsHeadlineOpts = "MaxFragments=1, MaxWords=28, MinWords=8, StartSel=<<, StopSel=>>"
 
-// ftsCandidates is the Postgres FTS half of the search seam: per-type
-// full-text matches with ts_headline excerpts. Rows are ordered by lexical
-// rank so runHybridSearch's per-type row counter reproduces the reciprocal
-// ranks the original PARTITION BY type window function produced.
+// ftsCandidates is the Postgres FTS half of the search seam: full-text matches
+// across the requested types with ts_headline excerpts, returned in a single
+// global lexical-rank order so runHybridSearch can reciprocal-rank them across
+// types (fusion normalization, road-p4-t4).
 func (s *PostgresStore) ftsCandidates(ctx context.Context, q string, types []string, f SearchFilter) ([]candidate, error) {
 	// $1 = query text; $2 = project when filtering.
 	args := []any{q}

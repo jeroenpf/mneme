@@ -178,24 +178,30 @@ func TestRunHybridSearchAppliesLimit(t *testing.T) {
 	}
 }
 
-// Current (pre-normalization) behaviour: FTS reciprocal rank is computed per
-// type, so every type's top hit scores rr(1). This is the quirk roadmap P4
-// (fusion normalization, road-p4-t4) will deliberately change — pinned here so
-// that change is visible.
-func TestRunHybridSearchScoresPerTypeTopHitsEqually(t *testing.T) {
+// Fusion is normalized across content types (road-p4-t4): FTS reciprocal rank
+// is global, so two different types' top hits get distinct scores instead of
+// both scoring rr(1). The backend returns FTS candidates in global lexical-rank
+// order; runHybridSearch scores them by global position.
+func TestRunHybridSearchRanksFTSGloballyAcrossTypes(t *testing.T) {
 	b := fakeBackend{fts: []candidate{
-		fc("documents", "A", 9), fc("decisions", "X", 1)}}
+		fc("documents", "A", 9), fc("decisions", "X", 8), fc("documents", "B", 7)}}
 	hits, err := runHybridSearch(context.Background(), b, "q",
 		[]string{"documents", "decisions"}, SearchFilter{}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	byID := map[string]float64{}
+	want := map[string]float64{"A": rr(1), "X": rr(2), "B": rr(3)}
 	for _, h := range hits {
-		byID[h.ID] = h.Score
+		if h.Score != want[h.ID] {
+			t.Errorf("%s score = %v, want %v (global RRF)", h.ID, h.Score, want[h.ID])
+		}
 	}
-	if byID["A"] != rr(1) || byID["X"] != rr(1) {
-		t.Fatalf("per-type top hits = A:%v X:%v, want both rr(1)=%v", byID["A"], byID["X"], rr(1))
+	// The two types' top hits (A: documents, X: decisions) must not tie.
+	if got := ids(hits); got[0] != "A" || got[1] != "X" {
+		t.Errorf("global order = %v, want [A X B]", got)
+	}
+	if hits[0].Score == hits[1].Score {
+		t.Errorf("cross-type top hits tied at %v; fusion not normalized", hits[0].Score)
 	}
 }
 

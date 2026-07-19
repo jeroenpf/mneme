@@ -51,10 +51,10 @@ type searchBackend interface {
 // f.Vector is set), reciprocal-rank-fuses the two channels, applies the
 // relevance floor to the vector side, and returns the top f.Limit hits.
 //
-// Fusion sums each side's reciprocal rank 1/(k+rank). FTS rank is computed per
-// type (so every type's best hit scores 1/(k+1)); vector rank is global. This
-// mirrors the original single-query Postgres behaviour verbatim — normalizing
-// the per-type quirk is deliberately deferred to roadmap P4 (road-p4-t4).
+// Fusion sums each side's reciprocal rank 1/(k+rank). Both channels rank
+// globally over their backend-supplied ordering (FTS by lexical rank, vector
+// by similarity), so two different types' top hits get distinct scores rather
+// than both scoring 1/(k+1) (fusion normalization, road-p4-t4).
 //
 // maxDist is the cosine-distance floor (<= 0 disables it): a vector candidate
 // survives only when its distance (1 - similarity) is strictly below maxDist,
@@ -92,11 +92,12 @@ func runHybridSearch(ctx context.Context, b searchBackend, q string, types []str
 		return h
 	}
 
-	// FTS side: reciprocal rank per type (best hit of each type = 1/(k+1)).
-	rankInType := map[string]int{}
+	// FTS side: global reciprocal rank over the backend's lexical-rank order,
+	// so cross-type top hits get distinct scores (road-p4-t4).
+	ftsRank := 0
 	for _, c := range fts {
-		rankInType[c.Type]++
-		upsert(c).Score += 1.0 / float64(rrfK+rankInType[c.Type])
+		ftsRank++
+		upsert(c).Score += 1.0 / float64(rrfK+ftsRank)
 	}
 
 	if f.Vector != nil {
