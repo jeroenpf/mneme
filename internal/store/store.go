@@ -5,8 +5,20 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jeroenpfeil/mneme/internal/dsn"
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
+
+// New builds a Store from a DSN, dispatching on the scheme: sqlite: / file: /
+// a *.db path selects the pure-Go SQLiteStore (the self-contained binary);
+// anything else defaults to the PostgresStore. Everything above this seam — the
+// API, MCP tools, bundle, and live hub — is backend-agnostic.
+func New(ctx context.Context, connDSN string) (Store, error) {
+	if dsn.IsSQLite(connDSN) {
+		return NewSQLiteStore(ctx, connDSN)
+	}
+	return NewPostgresStore(ctx, connDSN)
+}
 
 // ErrNotFound is returned when a document lookup misses.
 var ErrNotFound = errors.New("document not found")
@@ -258,6 +270,12 @@ type Store interface {
 	ClearEmbedFailure(ctx context.Context, sourceType, sourceID string) error
 	// FailedSourceRefs lists sources with a recorded failure, for manual retry.
 	FailedSourceRefs(ctx context.Context) ([]SourceRef, error)
+
+	// SetSearchMaxDist sets the hybrid-search relevance floor (cosine
+	// distance): vector candidates beyond it are dropped so a vague query
+	// returns nothing rather than the whole corpus. <= 0 disables the floor.
+	// Called once at startup from config, before the store is shared.
+	SetSearchMaxDist(d float64)
 
 	// Ping verifies the underlying connection is alive — used by the
 	// /health endpoint.

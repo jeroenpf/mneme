@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,6 +19,18 @@ import (
 
 	"github.com/jeroenpfeil/mneme/internal/migrations"
 )
+
+// TestUpAcceptsSQLiteDSN checks migrations.Up dispatches on the DSN scheme and
+// does not choke on a sqlite: DSN. In P1 the SQLite migration set is empty, so
+// Up is a no-op that must still return nil (the self-contained binary boots
+// against a fresh file). P2 fills sql/sqlite/ and this same call builds the
+// schema.
+func TestUpAcceptsSQLiteDSN(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "mneme.db")
+	if err := migrations.Up("sqlite:" + dbPath); err != nil {
+		t.Fatalf("Up(sqlite): %v", err)
+	}
+}
 
 // TestPublicIDsMigrationRollsBackAndForward exercises migration 015's down
 // and up files: after a full Up the public_id column exists; migrating down

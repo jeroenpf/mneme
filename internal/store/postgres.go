@@ -54,9 +54,10 @@ type PostgresStore struct {
 // requests. <= 0 disables the floor (always-ranked semantic results).
 func (s *PostgresStore) SetSearchMaxDist(d float64) { s.vectorMaxDist = d }
 
-// New builds a PostgresStore from a DSN. It opens the pool, applies
-// the Pi-friendly limits used by Mneme, and pings before returning.
-func New(ctx context.Context, dsn string) (*PostgresStore, error) {
+// NewPostgresStore builds a PostgresStore from a DSN. It opens the pool,
+// applies the modest connection limits used by Mneme, and pings before
+// returning. store.New dispatches here for postgres:// DSNs.
+func NewPostgresStore(ctx context.Context, dsn string) (*PostgresStore, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse dsn: %w", err)
