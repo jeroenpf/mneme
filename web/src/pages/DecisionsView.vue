@@ -2,9 +2,13 @@
 import { computed, ref } from 'vue'
 import type { Decision, DecisionStatus } from '@/api/decisions'
 import { groupDecisions, useDecisions } from '@/composables/useDecisions'
+import { useDeepLinkFlash } from '@/composables/useDeepLinkFlash'
 import { useLiveRefresh } from '@/composables/useLiveRefresh'
 
 const { items, loading, error, refresh } = useDecisions()
+
+// Search deep-links (?flash=<id>) scroll to and flash the matching row.
+useDeepLinkFlash(() => !loading.value)
 
 // Live updates: when the agent logs a decision over MCP, silently refetch
 // (list stays mounted) and flash the changed/added row.

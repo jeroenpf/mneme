@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { groupSolutions, useSolutions } from '@/composables/useSolutions'
+import { useDeepLinkFlash } from '@/composables/useDeepLinkFlash'
 import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import SolutionCard from '@/components/SolutionCard.vue'
 
 const { items, loading, error, refresh } = useSolutions()
+
+// Search deep-links (?flash=<id>) scroll to and flash the matching row.
+useDeepLinkFlash(() => !loading.value)
 
 // Live updates: when the agent logs a solution over MCP, silently refetch
 // (list stays mounted) and flash the changed/added card.

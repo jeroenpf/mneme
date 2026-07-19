@@ -56,8 +56,27 @@ async function run(query: string) {
 
 watch(q, (query) => run(query), { immediate: true })
 
+// Deep-link every result type to its actual viewer with the entity flagged
+// for highlight. Documents open their own page; the list-backed types open
+// their list with ?flash=<id>, which useDeepLinkFlash scrolls to and flashes.
+// Memory rows flash on their key (the hit title), not the uuid.
 function linkFor(h: SearchHit): string | null {
-  return h.type === 'documents' ? `/doc/${h.id}` : null
+  switch (h.type) {
+    case 'documents':
+      return `/doc/${h.id}`
+    case 'decisions':
+      return `/decisions?flash=${encodeURIComponent(h.id)}`
+    case 'snippets':
+      return `/snippets?flash=${encodeURIComponent(h.id)}`
+    case 'solutions':
+      return `/solutions?flash=${encodeURIComponent(h.id)}`
+    case 'journal':
+      return `/journal?flash=${encodeURIComponent(h.id)}`
+    case 'memory':
+      return `/memory?flash=${encodeURIComponent(h.title)}`
+    default:
+      return null
+  }
 }
 
 // ts_headline marks matches with <<…>>; render them as <mark> after escaping.
@@ -74,7 +93,7 @@ function renderExcerpt(raw: string): string {
   <div>
     <main class="content">
       <p class="mn-body-sm intro">
-        Unified full-text search across documents, decisions, snippets, solutions, and journal.
+        Unified search across documents, decisions, snippets, solutions, journal, and memory.
       </p>
       <p v-if="coverage" class="mn-mono-sm coverage" data-test="coverage">{{ coverage }}</p>
 

@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { groupJournal, useJournal } from '@/composables/useJournal'
+import { useDeepLinkFlash } from '@/composables/useDeepLinkFlash'
 import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import JournalEntryCard from '@/components/JournalEntryCard.vue'
 
 const { items, loading, error, refresh } = useJournal()
+
+// Search deep-links (?flash=<id>) scroll to and flash the matching row.
+useDeepLinkFlash(() => !loading.value)
 
 // Live updates: when the agent appends a journal entry over MCP, silently
 // refetch (list stays mounted) and flash the new entry.

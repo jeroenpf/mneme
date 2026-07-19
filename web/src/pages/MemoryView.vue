@@ -7,9 +7,13 @@ import {
   type MemoryTarget,
 } from '@/api/memory'
 import { groupMemory, useMemory } from '@/composables/useMemory'
+import { useDeepLinkFlash } from '@/composables/useDeepLinkFlash'
 import { useLiveRefresh } from '@/composables/useLiveRefresh'
 
 const { items, loading, error, refresh } = useMemory()
+
+// Search deep-links (?flash=<key>) scroll to and flash the matching row.
+useDeepLinkFlash(() => !loading.value)
 const grouped = computed(() => groupMemory(items.value))
 
 // Live updates: when the agent writes memory over MCP, silently refetch

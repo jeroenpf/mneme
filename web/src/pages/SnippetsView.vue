@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { groupSnippets, useSnippets } from '@/composables/useSnippets'
+import { useDeepLinkFlash } from '@/composables/useDeepLinkFlash'
 import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import SnippetCard from '@/components/SnippetCard.vue'
 
 const { items, loading, error, refresh } = useSnippets()
+
+// Search deep-links (?flash=<id>) scroll to and flash the matching row.
+useDeepLinkFlash(() => !loading.value)
 
 // Live updates: when the agent saves a snippet over MCP, silently refetch
 // (list stays mounted) and flash the changed/added card.
