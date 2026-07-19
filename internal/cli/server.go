@@ -95,7 +95,7 @@ func RunServer(ctx context.Context, cfg *config.Config) error {
 	hub := live.NewHub()
 	mcpSrv := mcp.New(st, enq, hub, client)
 	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
+		Addr:              cfg.ListenAddr(),
 		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client, hub),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -103,7 +103,7 @@ func RunServer(ctx context.Context, cfg *config.Config) error {
 	errCh := make(chan error, 1)
 	go func() {
 		useTLS := cfg.TLSEnabled()
-		slog.Info("listening", "port", cfg.Port, "env", cfg.Env, "tls", useTLS)
+		slog.Info("listening", "addr", cfg.ListenAddr(), "env", cfg.Env, "tls", useTLS)
 		var err error
 		if useTLS {
 			err = srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)

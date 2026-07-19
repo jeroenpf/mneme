@@ -18,6 +18,7 @@ const (
 	keyVoyageKey   = "embeddings.voyage_api_key"
 	keyVoyageModel = "embeddings.voyage_model"
 	keyVoyageRPM   = "embeddings.voyage_rpm"
+	keyHost        = "net.host"
 	keyPort        = "net.port"
 	keyCORS        = "net.allowed_origins"
 	keyTLSCert     = "net.tls_cert"
@@ -25,9 +26,10 @@ const (
 )
 
 type Config struct {
-	DSN         string
-	Port        string
-	Env         string
+	DSN  string
+	Host string // bind interface; defaults to 127.0.0.1 (loopback only)
+	Port string
+	Env  string
 	CORSOrigins []string
 	TLSCert     string
 	TLSKey      string
@@ -83,12 +85,14 @@ func LoadWithFlags(flags *pflag.FlagSet) (*Config, error) {
 func newViper(path string) (*viper.Viper, error) {
 	v := viper.New()
 	v.SetDefault(keyDSN, defaultDSN())
+	v.SetDefault(keyHost, "127.0.0.1")
 	v.SetDefault(keyPort, "8080")
 	v.SetDefault(keyCORS, []string{"http://localhost:5273", "https://mneme.dev:8443"})
 	v.SetDefault(keyVoyageModel, "voyage-4-large")
 	v.SetDefault(keyVoyageRPM, 0)
 
 	_ = v.BindEnv(keyDSN, "MNEME_DSN")
+	_ = v.BindEnv(keyHost, "MNEME_HOST")
 	_ = v.BindEnv(keyPort, "MNEME_PORT")
 	_ = v.BindEnv(keyCORS, "MNEME_CORS_ORIGINS")
 	_ = v.BindEnv(keyTLSCert, "MNEME_TLS_CERT")
@@ -128,6 +132,7 @@ func bindFlags(v *viper.Viper, flags *pflag.FlagSet) {
 func fromViper(v *viper.Viper) (*Config, error) {
 	c := &Config{
 		DSN:         v.GetString(keyDSN),
+		Host:        v.GetString(keyHost),
 		Port:        v.GetString(keyPort),
 		TLSCert:     v.GetString(keyTLSCert),
 		TLSKey:      v.GetString(keyTLSKey),
@@ -148,6 +153,13 @@ func fromViper(v *viper.Viper) (*Config, error) {
 		return nil, fmt.Errorf("data.dsn must not be empty")
 	}
 	return c, nil
+}
+
+// ListenAddr is the host:port the HTTP server binds. Host defaults to
+// 127.0.0.1 (loopback only), so the portable binary is not reachable from the
+// LAN unless MNEME_HOST is set (Docker sets 0.0.0.0 so its port mapping works).
+func (c *Config) ListenAddr() string {
+	return c.Host + ":" + c.Port
 }
 
 // TLSEnabled reports whether the server should terminate TLS itself: both

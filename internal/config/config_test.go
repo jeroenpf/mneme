@@ -51,6 +51,33 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 }
 
+// The server binds loopback by default (local-only), overridable via MNEME_HOST
+// (Docker sets 0.0.0.0 so its port mapping works).
+func TestHostDefaultsToLoopback(t *testing.T) {
+	isolateConfig(t)
+	clearMnemeEnv(t)
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.Host != "127.0.0.1" {
+		t.Errorf("default Host: got %q, want 127.0.0.1", c.Host)
+	}
+
+	t.Setenv("MNEME_HOST", "0.0.0.0")
+	c, _ = Load()
+	if c.Host != "0.0.0.0" {
+		t.Errorf("MNEME_HOST override: got %q", c.Host)
+	}
+}
+
+func TestListenAddr(t *testing.T) {
+	c := &Config{Host: "127.0.0.1", Port: "8080"}
+	if got := c.ListenAddr(); got != "127.0.0.1:8080" {
+		t.Errorf("ListenAddr: got %q, want 127.0.0.1:8080", got)
+	}
+}
+
 func TestTLSDisabledByDefault(t *testing.T) {
 	isolateConfig(t)
 	t.Setenv("MNEME_TLS_CERT", "")
