@@ -298,4 +298,19 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "update_document_meta",
 		Description: "Replace a document's meta object (body untouched). Returns a compact summary; pass return_doc:true for the full document.",
 	}, t.updateDocumentMeta)
+
+	addTool(s, &sdk.Tool{
+		Name:        "get_document_history",
+		Description: "List a document's revision history newest-first: each entry's revision, operation, actor, affected ids, title, status, and timestamp (no body). Use diff_document_revisions or restore_document_revision to work with a revision's content.",
+	}, t.getDocumentHistory)
+
+	addTool(s, &sdk.Tool{
+		Name:        "diff_document_revisions",
+		Description: "Report what changed between two revisions of a document without re-emitting them: the node ids added, removed, and modified, plus whether title or status changed. Pass from_revision (required) and to_revision (omit to compare against the current document).",
+	}, t.diffDocumentRevisions)
+
+	addTool(s, &sdk.Tool{
+		Name:        "restore_document_revision",
+		Description: "Restore a past revision's content (title/status/meta/body) onto the document. History is forward-only: this writes a NEW revision rather than rewriting the past. Returns the restored summary and new revision; pass return_doc for the full document.",
+	}, t.restoreDocumentRevision)
 }

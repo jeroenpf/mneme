@@ -2,10 +2,85 @@ package mcp_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/jeroenpfeil/mneme/internal/store"
 )
+
+// TestDocumentHistoryDiffRestore exercises get_document_history,
+// diff_document_revisions, and restore_document_revision end-to-end (roadmap
+// P6-t4).
+func TestDocumentHistoryDiffRestore(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+
+	call(t, cs, "push_document", map[string]any{
+		"meta": map[string]any{"id": "planh", "title": "Plan H", "type": "plan", "project": "apollo"},
+		"body": map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "overview", "title": "Overview"},
+			map[string]any{"type": "subphase", "id": "sp-1", "title": "Phase 1", "tasks": []any{
+				map[string]any{"id": "t-1", "title": "do it", "done": false},
+			}},
+		}},
+	}, nil) // rev 1
+
+	call(t, cs, "tick_task", map[string]any{"doc_id": "planh", "task_id": "t-1"}, nil)                             // rev 2
+	call(t, cs, "update_section", map[string]any{"doc_id": "planh", "section_id": "overview", "patch": map[string]any{"title": "Overview v2"}}, nil) // rev 3
+
+	// History: newest-first, all three writes attributed.
+	var hist struct {
+		Revisions []struct {
+			Revision int    `json:"revision"`
+			Op       string `json:"op"`
+		} `json:"revisions"`
+	}
+	call(t, cs, "get_document_history", map[string]any{"doc_id": "planh"}, &hist)
+	if len(hist.Revisions) != 3 {
+		t.Fatalf("history len = %d, want 3", len(hist.Revisions))
+	}
+	if hist.Revisions[0].Op != "update_section" || hist.Revisions[2].Op != "push_document" {
+		t.Errorf("history order/ops wrong: %+v", hist.Revisions)
+	}
+
+	// Diff rev1 → rev2: only the toggled task changed.
+	var diff struct {
+		ModifiedIDs []string `json:"modified_ids"`
+		AddedIDs    []string `json:"added_ids"`
+		RemovedIDs  []string `json:"removed_ids"`
+	}
+	call(t, cs, "diff_document_revisions", map[string]any{"doc_id": "planh", "from_revision": 1, "to_revision": 2}, &diff)
+	if !slices.Equal(diff.ModifiedIDs, []string{"t-1"}) {
+		t.Errorf("rev1->rev2 modified = %v, want [t-1]", diff.ModifiedIDs)
+	}
+
+	// Diff rev1 → current: both the task and the retitled section changed.
+	call(t, cs, "diff_document_revisions", map[string]any{"doc_id": "planh", "from_revision": 1}, &diff)
+	if !slices.Contains(diff.ModifiedIDs, "t-1") || !slices.Contains(diff.ModifiedIDs, "overview") {
+		t.Errorf("rev1->current modified = %v, want both t-1 and overview", diff.ModifiedIDs)
+	}
+
+	// Restore rev1: forward-only new revision (4), content reverts.
+	var restored struct {
+		RestoredFrom int `json:"restored_from"`
+		NewRevision  int `json:"new_revision"`
+	}
+	call(t, cs, "restore_document_revision", map[string]any{"doc_id": "planh", "revision": 1}, &restored)
+	if restored.RestoredFrom != 1 || restored.NewRevision != 4 {
+		t.Errorf("restore result = %+v, want restored_from=1 new_revision=4", restored)
+	}
+
+	// The restored document matches rev 1: section title back to "Overview".
+	var doc struct {
+		Body map[string]any `json:"body"`
+	}
+	call(t, cs, "get_document", map[string]any{"id": "planh"}, &doc)
+	sections, _ := doc.Body["sections"].([]any)
+	first, _ := sections[0].(map[string]any)
+	if first["title"] != "Overview" {
+		t.Errorf("restore did not revert section title: %v", first["title"])
+	}
+}
 
 // TestWritePathRecordsRevisions proves the MCP write path appends an
 // append-only audit/history snapshot for every document mutation (roadmap P6):
