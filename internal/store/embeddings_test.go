@@ -101,3 +101,36 @@ func TestSourceRefsAndCoverage(t *testing.T) {
 		t.Fatalf("coverage wrong for decisions: %+v", byType["decisions"])
 	}
 }
+
+// Coverage must count only embeddings whose source_id still resolves to a
+// live source row; embeddings orphaned by a deleted source must not inflate
+// the embedded count.
+func TestEmbeddingCoverageExcludesOrphans(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	if err := s.CreateDocument(ctx, sampleDoc("d1", "Live")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{
+		{SourceType: "documents", SourceID: "d1", ChunkID: "overview", ChunkText: "a",
+			Embedding: fakeVec(0.1), SourceTitle: "Live", Model: "m"},
+		// Orphan: no documents row has id 'ghost'.
+		{SourceType: "documents", SourceID: "ghost", ChunkID: "overview", ChunkText: "b",
+			Embedding: fakeVec(0.2), SourceTitle: "Ghost", Model: "m"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	cov, err := s.EmbeddingCoverage(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byType := map[string]store.TypeCoverage{}
+	for _, c := range cov {
+		byType[c.Type] = c
+	}
+	if got := byType["documents"]; got.Total != 1 || got.Embedded != 1 {
+		t.Fatalf("coverage should count only the live source, got %+v", got)
+	}
+}

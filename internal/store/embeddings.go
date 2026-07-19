@@ -134,8 +134,11 @@ func (s *PostgresStore) EmbeddingCoverage(ctx context.Context) ([]TypeCoverage, 
 		if err := s.pool.QueryRow(ctx, fmt.Sprintf(`SELECT count(*) FROM %s`, st.table)).Scan(&total); err != nil {
 			return nil, fmt.Errorf("coverage total %s: %w", st.typ, err)
 		}
-		if err := s.pool.QueryRow(ctx,
-			`SELECT count(DISTINCT source_id) FROM embeddings WHERE source_type=$1`, st.typ).Scan(&embedded); err != nil {
+		if err := s.pool.QueryRow(ctx, fmt.Sprintf(
+			`SELECT count(DISTINCT e.source_id)
+			   FROM embeddings e
+			   JOIN %s t ON t.id::text = e.source_id
+			  WHERE e.source_type=$1`, st.table), st.typ).Scan(&embedded); err != nil {
 			return nil, fmt.Errorf("coverage embedded %s: %w", st.typ, err)
 		}
 		out = append(out, TypeCoverage{Type: st.typ, Embedded: embedded, Total: total})
