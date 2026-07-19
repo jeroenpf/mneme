@@ -46,7 +46,7 @@ func runDoctor(cmd *cobra.Command) error {
 			if err := migrations.Up(cfg.DSN); err != nil {
 				results = append(results, fail("database", "migrations failed: "+err.Error()))
 			} else {
-				results = append(results, checkDatabase(ctx, st), checkSearch(ctx, st), checkEmbeddings(ctx, cfg, st))
+				results = append(results, checkDatabase(ctx, st), checkSearch(ctx, st), checkEmbeddings(ctx, cfg, st), checkBackups(ctx, st))
 			}
 		}
 		results = append(results, checkTLS(cfg))

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jeroenpfeil/mneme/internal/backup"
 	"github.com/jeroenpfeil/mneme/internal/config"
 	"github.com/jeroenpfeil/mneme/internal/dsn"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -88,6 +89,23 @@ func checkEmbeddings(ctx context.Context, cfg *config.Config, st store.Store) ch
 		}
 	}
 	return ok("embeddings", detail)
+}
+
+// checkBackups confirms the knowledge base is exportable end-to-end — the
+// backup path (`mneme export`) actually works against this store — and reports
+// how much is protected. It is advisory (a fresh install has nothing to back up
+// yet), so an empty store warns rather than fails.
+func checkBackups(ctx context.Context, st store.Store) check {
+	arch, err := backup.Export(ctx, st)
+	if err != nil {
+		return fail("backups", "export failed — data is not backup-able: "+err.Error())
+	}
+	total := len(arch.Documents) + len(arch.Decisions) + len(arch.Snippets) +
+		len(arch.Journal) + len(arch.Solutions) + len(arch.Memory) + len(arch.Env)
+	if total == 0 {
+		return warn("backups", "nothing to back up yet — run `mneme export <file>` once you have knowledge")
+	}
+	return ok("backups", fmt.Sprintf("%d item(s) exportable via `mneme export <file>`", total))
 }
 
 // checkTLS validates the networking posture. Plain-HTTP loopback needs nothing.
