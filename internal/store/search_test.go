@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
@@ -347,6 +348,89 @@ func TestSearchExcludesDeletedSourceVectors(t *testing.T) {
 		if c.Type == "documents" && c.Embedded != 0 {
 			t.Fatalf("deleted source still counted in coverage: %+v", c)
 		}
+	}
+}
+
+// A document FTS hit's excerpt comes from the best-matching chunk text, not
+// the raw JSON body: it is clean prose with the matched term highlighted.
+func TestSearchDocumentExcerptFromChunkNotJSON(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	// The matching prose lives inside a section block, so body::text is JSON.
+	if err := s.CreateDocument(ctx, &models.Document{
+		ID: "doc-x", Title: "Ops runbook", Project: ptr("apollo"),
+		Type: models.TypePlan, Status: models.StatusInProgress,
+		Tags: []string{}, Meta: map[string]any{},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "s1", "title": "Recovery",
+				"content": "restore the zigbee coordinator from backup"},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// The chunk the excerpt should be drawn from.
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{{
+		SourceType: "documents", SourceID: "doc-x", ChunkID: "s1",
+		ChunkText: "Ops runbook | apollo | Recovery | restore the zigbee coordinator from backup",
+		Embedding: fakeVec(0.1), Project: ptr("apollo"), SourceTitle: "Ops runbook", Model: "fake",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := s.Search(ctx, "zigbee", store.SearchFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hit *models.SearchHit
+	for _, h := range hits {
+		if h.ID == "doc-x" {
+			hit = h
+		}
+	}
+	if hit == nil {
+		t.Fatalf("expected doc-x among hits, got %+v", hits)
+	}
+	// No raw body JSON leaks into the excerpt.
+	for _, junk := range []string{`"type"`, `"sections"`, "{", "}"} {
+		if strings.Contains(hit.Excerpt, junk) {
+			t.Errorf("excerpt still contains raw body JSON %q: %q", junk, hit.Excerpt)
+		}
+	}
+	// The matched term is highlighted from the clean chunk text.
+	if !strings.Contains(hit.Excerpt, "<<zigbee>>") {
+		t.Errorf("excerpt should highlight the matched term from chunk text, got %q", hit.Excerpt)
+	}
+}
+
+// A document that matches FTS but has no embedded chunk falls back to a clean
+// title excerpt — never raw JSON, never an error.
+func TestSearchDocumentExcerptFallsBackToTitle(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	if err := s.CreateDocument(ctx, &models.Document{
+		ID: "no-embed", Title: "zigbee unembedded notes", Project: ptr("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo,
+		Tags: []string{}, Meta: map[string]any{}, Body: map[string]any{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := s.Search(ctx, "zigbee", store.SearchFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hit *models.SearchHit
+	for _, h := range hits {
+		if h.ID == "no-embed" {
+			hit = h
+		}
+	}
+	if hit == nil {
+		t.Fatalf("expected no-embed among hits, got %+v", hits)
+	}
+	if strings.Contains(hit.Excerpt, "{") || hit.Excerpt == "" {
+		t.Errorf("fallback excerpt should be clean title text, got %q", hit.Excerpt)
 	}
 }
 

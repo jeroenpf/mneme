@@ -71,6 +71,10 @@ func (s *PostgresStore) Search(ctx context.Context, q string, f SearchFilter) ([
 	return runHybridSearch(ctx, s, q, types, f, s.vectorMaxDist)
 }
 
+// ftsHeadlineOpts configures ts_headline: a single highlighted fragment with
+// <<...>> delimiters (matched by the SQLite backend's snippet() later).
+const ftsHeadlineOpts = "MaxFragments=1, MaxWords=28, MinWords=8, StartSel=<<, StopSel=>>"
+
 // ftsCandidates is the Postgres FTS half of the search seam: per-type
 // full-text matches with ts_headline excerpts. Rows are ordered by lexical
 // rank so runHybridSearch's per-type row counter reproduces the reciprocal
@@ -78,25 +82,18 @@ func (s *PostgresStore) Search(ctx context.Context, q string, f SearchFilter) ([
 func (s *PostgresStore) ftsCandidates(ctx context.Context, q string, types []string, f SearchFilter) ([]candidate, error) {
 	// $1 = query text; $2 = project when filtering.
 	args := []any{q}
-	projClause := ""
-	if f.Project != nil {
+	hasProject := f.Project != nil
+	if hasProject {
 		args = append(args, *f.Project)
-		projClause = " AND project = $2"
 	}
 
 	branches := make([]string, 0, len(types))
 	for _, t := range types {
-		b := searchBranches[t]
-		branches = append(branches, fmt.Sprintf(
-			`SELECT '%s' AS type, id::text AS id, %s AS title,
-			   ts_headline('english', %s, websearch_to_tsquery('english', $1),
-			     'MaxFragments=1, MaxWords=28, MinWords=8, StartSel=<<, StopSel=>>') AS excerpt,
-			   project,
-			   ts_rank(search_vector, websearch_to_tsquery('english', $1)) AS rank,
-			   updated_at
-			 FROM %s
-			 WHERE search_vector @@ websearch_to_tsquery('english', $1)%s`,
-			b.typ, b.title, b.excerpt, b.table, projClause))
+		if t == "documents" {
+			branches = append(branches, documentFTSBranch(hasProject))
+		} else {
+			branches = append(branches, genericFTSBranch(searchBranches[t], hasProject))
+		}
 	}
 
 	sql := "WITH hits AS (\n" + strings.Join(branches, "\nUNION ALL\n") + `
@@ -111,6 +108,54 @@ ORDER BY rank DESC, updated_at DESC`
 	}
 	defer rows.Close()
 	return collectFTSCandidates(rows)
+}
+
+// genericFTSBranch renders one type's FTS branch, highlighting the excerpt over
+// the type's own clean text column. Used for every type except documents.
+func genericFTSBranch(b searchBranch, hasProject bool) string {
+	proj := ""
+	if hasProject {
+		proj = " AND project = $2"
+	}
+	return fmt.Sprintf(
+		`SELECT '%s' AS type, id::text AS id, %s AS title,
+		   ts_headline('english', %s, websearch_to_tsquery('english', $1), '%s') AS excerpt,
+		   project,
+		   ts_rank(search_vector, websearch_to_tsquery('english', $1)) AS rank,
+		   updated_at
+		 FROM %s
+		 WHERE search_vector @@ websearch_to_tsquery('english', $1)%s`,
+		b.typ, b.title, b.excerpt, ftsHeadlineOpts, b.table, proj)
+}
+
+// documentFTSBranch renders the documents FTS branch. A document's body is
+// JSON, so instead of highlighting the raw body::text the excerpt is drawn
+// from the block chunk whose text best matches the query (road-p4-t3),
+// falling back to the title when the document has no embedded chunks.
+func documentFTSBranch(hasProject bool) string {
+	proj := ""
+	if hasProject {
+		proj = " AND d.project = $2"
+	}
+	return fmt.Sprintf(
+		`SELECT 'documents' AS type, d.id::text AS id, d.title AS title,
+		   ts_headline('english', coalesce(best.chunk_text, d.title),
+		     websearch_to_tsquery('english', $1), '%s') AS excerpt,
+		   d.project,
+		   ts_rank(d.search_vector, websearch_to_tsquery('english', $1)) AS rank,
+		   d.updated_at
+		 FROM documents d
+		 LEFT JOIN LATERAL (
+		   SELECT e.chunk_text
+		   FROM embeddings e
+		   WHERE e.source_type = 'documents' AND e.source_id = d.id::text
+		   ORDER BY ts_rank(to_tsvector('english', e.chunk_text),
+		                    websearch_to_tsquery('english', $1)) DESC,
+		            length(e.chunk_text) DESC
+		   LIMIT 1
+		 ) best ON true
+		 WHERE d.search_vector @@ websearch_to_tsquery('english', $1)%s`,
+		ftsHeadlineOpts, proj)
 }
 
 // vectorCandidates is the Postgres vector half of the seam: the best chunk per
