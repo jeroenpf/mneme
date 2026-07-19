@@ -213,6 +213,48 @@ func TestResolveReferenceDecision(t *testing.T) {
 	}
 }
 
+// TestReferenceRoundTripToSurgicalUpdate walks the whole path the reference
+// feature promises: a reference a user copies from the UI, resolved via
+// resolve_reference, whose returned ids drive a surgical tick_task — the edit
+// then visible on re-read.
+func TestReferenceRoundTripToSurgicalUpdate(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	var pushed struct {
+		PublicID string `json:"public_id"`
+	}
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), &pushed)
+
+	// The reference RefChip would copy for task t-001.
+	ref := "mneme://document/" + pushed.PublicID + "/task/t-001"
+
+	var resolved resolveOut
+	call(t, cs, "resolve_reference", map[string]any{"ref": ref}, &resolved)
+	if resolved.Kind != "task" || resolved.TargetID != "t-001" || resolved.Document == nil {
+		t.Fatalf("resolve = %+v", resolved)
+	}
+
+	// Surgical update using only what resolve_reference returned.
+	var ticked struct {
+		Done bool `json:"done"`
+	}
+	call(t, cs, "tick_task",
+		map[string]any{"doc_id": resolved.Document.ID, "task_id": resolved.TargetID}, &ticked)
+	if !ticked.Done {
+		t.Fatalf("tick via resolved ids: done=%v, want true", ticked.Done)
+	}
+
+	// Visible on re-read.
+	var doc models.Document
+	call(t, cs, "get_document", map[string]any{"id": resolved.Document.ID}, &doc)
+	sections := doc.Body["sections"].([]any)
+	subphase := sections[1].(map[string]any)
+	task := subphase["tasks"].([]any)[0].(map[string]any)
+	if task["id"] != "t-001" || task["done"] != true {
+		t.Errorf("t-001 done not persisted: %+v", task)
+	}
+}
+
 func TestResolveReferenceErrors(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
