@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -31,21 +30,17 @@ func (NopEnqueuer) Enqueue(SourceRef) {}
 // Worker embeds sources off an in-memory channel. Jobs are best-effort:
 // failures are logged and recovered by the next ReconcileAll.
 type Worker struct {
-	store       store.Store
-	client      Client
-	ch          chan SourceRef
-	minInterval time.Duration // >0 throttles Run to stay under a low RPM tier
+	store   store.Store
+	client  Client
+	ch      chan SourceRef
+	limiter *rateLimiter // spaces actual provider requests under a low RPM tier
 }
 
-// NewWorker builds the worker. rpm>0 sets a proactive inter-job delay
-// (60s/rpm) in Run for accounts on the low no-payment-method tier; rpm=0
-// relies solely on the client's 429 backoff.
+// NewWorker builds the worker. rpm>0 installs a proactive rate limiter
+// (60s/rpm) that spaces only real embedding requests, for accounts on the low
+// no-payment-method tier; rpm=0 relies solely on the client's 429 backoff.
 func NewWorker(st store.Store, c Client, buf, rpm int) *Worker {
-	var interval time.Duration
-	if rpm > 0 {
-		interval = time.Minute / time.Duration(rpm)
-	}
-	return &Worker{store: st, client: c, ch: make(chan SourceRef, buf), minInterval: interval}
+	return &Worker{store: st, client: c, ch: make(chan SourceRef, buf), limiter: newRateLimiter(rpm)}
 }
 
 // Enqueue is non-blocking: a full buffer drops the job (the next reconcile
@@ -58,28 +53,17 @@ func (w *Worker) Enqueue(ref SourceRef) {
 	}
 }
 
-// Run drains the queue until ctx is cancelled, optionally throttled to
-// minInterval between jobs (the client's 429 backoff is the real safety net;
-// this just avoids bursting on a low tier).
+// Run drains the queue until ctx is cancelled. Rate limiting lives in Process
+// (it waits the limiter only around an actual provider request), so warm
+// sources drain at full speed and the loop itself never throttles.
 func (w *Worker) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case ref := <-w.ch:
-			embedded, err := w.Process(ctx, ref)
-			if err != nil {
+			if _, err := w.Process(ctx, ref); err != nil {
 				slog.Error("embed failed", "type", ref.Type, "id", ref.ID, "err", err)
-			}
-			// Only spend rate-limit time after a real provider request; a
-			// warm source (no changed chunks) makes no API call and must
-			// not throttle, so a warm reconcile drains at full speed.
-			if embedded && w.minInterval > 0 {
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(w.minInterval):
-				}
 			}
 		}
 	}
@@ -153,6 +137,12 @@ func (w *Worker) Process(ctx context.Context, ref SourceRef) (embedded bool, err
 		texts := make([]string, len(toEmbed))
 		for i, c := range toEmbed {
 			texts[i] = c.Text
+		}
+		// Acquire the rate limiter only now that the diff has found real
+		// work — warm sources never reach it (P3-t1) and only actual
+		// provider requests are rate-limited (P3-t2).
+		if err := w.limiter.Wait(ctx); err != nil {
+			return false, err
 		}
 		vecs, err := w.client.Embed(ctx, texts, "document")
 		if err != nil {

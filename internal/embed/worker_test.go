@@ -3,6 +3,7 @@ package embed_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jeroenpfeil/mneme/internal/embed"
 	"github.com/jeroenpfeil/mneme/internal/models"
@@ -175,6 +176,55 @@ func TestProcessReportsEmbedActivity(t *testing.T) {
 	}
 	if embedded {
 		t.Fatal("unchanged source should report no embed (no rate-limit spend)")
+	}
+}
+
+// The limiter must space real provider requests (t2: rate-limit actual API
+// requests) while never delaying a warm source that makes no request.
+func TestWorkerRateLimitsOnlyRealRequests(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx := context.Background()
+	seedProject(t, s, "apollo")
+	mkdoc := func(id, content string) {
+		if err := s.CreateDocument(ctx, &models.Document{
+			ID: id, Title: id, Project: ptrs("apollo"),
+			Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{},
+			Body: map[string]any{"sections": []any{
+				map[string]any{"type": "section", "id": "overview", "title": "O", "content": content},
+			}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mkdoc("rl1", "coordinator one")
+	mkdoc("rl2", "coordinator two")
+
+	// rpm=600 => 100ms between real requests.
+	w := embed.NewWorker(s, &fakeClient{}, 8, 600)
+
+	// First real request passes immediately; the second is spaced ~100ms.
+	if _, err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "rl1"}); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if _, err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "rl2"}); err != nil {
+		t.Fatal(err)
+	}
+	if spaced := time.Since(start); spaced < 70*time.Millisecond {
+		t.Fatalf("consecutive real requests not rate-limited: gap %v", spaced)
+	}
+
+	// A warm (unchanged) source skips the limiter and returns promptly.
+	start = time.Now()
+	embedded, err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "rl1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if embedded {
+		t.Fatal("warm source should not embed")
+	}
+	if delay := time.Since(start); delay > 60*time.Millisecond {
+		t.Fatalf("warm source incurred rate-limit delay (%v); limiter must gate only real requests", delay)
 	}
 }
 
