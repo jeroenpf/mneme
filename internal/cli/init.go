@@ -45,6 +45,14 @@ func runInit(cmd *cobra.Command) error {
 		return err
 	}
 
+	// Never write a config pointing at an in-use port: default per mode, then
+	// bump past anything already listening on loopback.
+	port, bumped := resolvePort("127.0.0.1", answers.NetMode, answers.Port)
+	if bumped {
+		cmd.Printf("Port %s is in use — using %s instead.\n", orDefault(answers.Port, defaultPortFor(answers.NetMode)), port)
+	}
+	answers.Port = port
+
 	// NOTE: cli-p4 inserts the mkcert + /etc/hosts automation for mneme.dev
 	// mode here, before the file is written.
 

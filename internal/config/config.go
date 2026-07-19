@@ -86,7 +86,7 @@ func newViper(path string) (*viper.Viper, error) {
 	v := viper.New()
 	v.SetDefault(keyDSN, defaultDSN())
 	v.SetDefault(keyHost, "127.0.0.1")
-	v.SetDefault(keyPort, "8080")
+	v.SetDefault(keyPort, "8765") // uncommon by design — clear of 8080/3000/5000/8000
 	v.SetDefault(keyCORS, []string{"http://localhost:5273", "https://mneme.dev:8443"})
 	v.SetDefault(keyVoyageModel, "voyage-4-large")
 	v.SetDefault(keyVoyageRPM, 0)

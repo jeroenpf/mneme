@@ -28,7 +28,7 @@ func TestWriteInitSQLiteLexicalLocalhost(t *testing.T) {
 	}
 
 	out := buf.String()
-	for _, want := range []string{path, "sqlite://", "lexical", "http://localhost:8080"} {
+	for _, want := range []string{path, "sqlite://", "lexical", "http://localhost:8765"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("summary missing %q; got:\n%s", want, out)
 		}
@@ -41,7 +41,7 @@ func TestWriteInitSQLiteLexicalLocalhost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if c.DSN != s.Data.DSN || c.Port != "8080" {
+	if c.DSN != s.Data.DSN || c.Port != "8765" {
 		t.Errorf("round-trip: dsn=%q port=%q", c.DSN, c.Port)
 	}
 }

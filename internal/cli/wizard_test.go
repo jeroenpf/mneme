@@ -83,8 +83,8 @@ func TestBuildSettingsLocalhostMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildSettings: %v", err)
 	}
-	if s.Net.Port != "8080" {
-		t.Errorf("localhost default port: got %q, want 8080", s.Net.Port)
+	if s.Net.Port != "8765" {
+		t.Errorf("localhost default port: got %q, want 8765", s.Net.Port)
 	}
 	if s.Net.TLSCert != "" || s.Net.TLSKey != "" {
 		t.Errorf("localhost mode must not set TLS paths: cert=%q key=%q", s.Net.TLSCert, s.Net.TLSKey)

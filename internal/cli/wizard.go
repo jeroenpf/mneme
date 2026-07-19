@@ -65,7 +65,7 @@ func buildSettings(a wizardAnswers) (config.Settings, error) {
 		s.Net.TLSCert, s.Net.TLSKey = config.CertPaths()
 		s.Net.AllowedOrigins = []string{"https://mneme.dev:" + s.Net.Port}
 	case "localhost", "":
-		s.Net.Port = orDefault(a.Port, "8080")
+		s.Net.Port = orDefault(a.Port, "8765")
 		s.Net.AllowedOrigins = []string{"http://localhost:" + s.Net.Port}
 	default:
 		return s, fmt.Errorf("unknown network mode %q", a.NetMode)

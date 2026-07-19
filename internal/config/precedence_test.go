@@ -41,8 +41,8 @@ func TestLoadDefaultsResolved(t *testing.T) {
 	if c.DSN != defaultDSN() {
 		t.Errorf("DSN: got %q, want default %q", c.DSN, defaultDSN())
 	}
-	if c.Port != "8080" {
-		t.Errorf("Port: got %q, want 8080", c.Port)
+	if c.Port != "8765" {
+		t.Errorf("Port: got %q, want 8765", c.Port)
 	}
 	if c.VoyageModel != "voyage-4-large" {
 		t.Errorf("VoyageModel: got %q", c.VoyageModel)
