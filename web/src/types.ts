@@ -9,6 +9,7 @@ export type DocumentStatus =
 
 export interface Document {
   id: string
+  public_id?: string
   title: string
   project?: string
   category?: string
@@ -46,6 +47,7 @@ export interface ProjectCounts {
 
 export interface ProjectStats {
   id: string
+  public_id?: string
   name: string
   slug: string
   description?: string

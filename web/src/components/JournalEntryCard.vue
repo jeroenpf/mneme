@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { JournalEntry } from '@/api/journal'
+import RefChip from './RefChip.vue'
 
 defineProps<{ entry: JournalEntry }>()
 
@@ -10,7 +11,10 @@ const fmtDate = (iso: string) => iso.slice(0, 10)
   <article class="entry" :data-test="`entry-${entry.id}`">
     <header class="head">
       <span v-if="entry.session_ref" class="session mn-mono-sm" data-test="session-ref">{{ entry.session_ref }}</span>
-      <time class="date mn-mono-sm" data-test="date">{{ fmtDate(entry.created_at) }}</time>
+      <div class="head-right">
+        <RefChip v-if="entry.public_id" :public-id="entry.public_id" kind="journal" />
+        <time class="date mn-mono-sm" data-test="date">{{ fmtDate(entry.created_at) }}</time>
+      </div>
     </header>
     <p class="summary mn-body">{{ entry.summary }}</p>
 
@@ -41,6 +45,11 @@ const fmtDate = (iso: string) => iso.slice(0, 10)
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: var(--space-3);
+}
+.head-right {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-3);
 }
 .session {

@@ -5,6 +5,7 @@ export type DecisionStatus = 'proposed' | 'accepted' | 'deprecated'
 // Mirrors internal/models.Decision. project is absent for a global decision.
 export interface Decision {
   id: string
+  public_id?: string
   title: string
   project?: string
   decision: string

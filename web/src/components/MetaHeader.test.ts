@@ -6,6 +6,7 @@ import MetaHeader from './MetaHeader.vue'
 function makeDoc(overrides: Partial<Document> = {}): Document {
   return {
     id: 'mneme-implementation',
+    public_id: 'doc_000000000000',
     title: 'Mneme **implementation**',
     project: 'mneme',
     type: 'plan',
@@ -35,6 +36,13 @@ describe('MetaHeader', () => {
     expect(w.text()).toContain('jeroenpfeil/mneme')
     expect(w.text()).toContain('#go')
     expect(w.text()).toContain('Phase plan for the core service.')
+  })
+
+  it('shows the document public id chip beside the title', () => {
+    const w = mount(MetaHeader, { props: { doc: makeDoc() } })
+    const chip = w.find('[data-test="doc-ref"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.text()).toContain('doc_000000000000')
   })
 
   it('renders the document status as a pill (re-homed from the doc topbar)', () => {

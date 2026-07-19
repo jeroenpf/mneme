@@ -3,6 +3,7 @@ import { apiGet, buildQuery } from './client'
 // Mirrors internal/models.Solution. project is absent for a global gotcha.
 export interface Solution {
   id: string
+  public_id?: string
   project?: string
   error_description: string
   solution: string

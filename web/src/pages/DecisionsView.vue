@@ -4,6 +4,7 @@ import type { Decision, DecisionStatus } from '@/api/decisions'
 import { groupDecisions, useDecisions } from '@/composables/useDecisions'
 import { useDeepLinkFlash } from '@/composables/useDeepLinkFlash'
 import { useLiveRefresh } from '@/composables/useLiveRefresh'
+import RefChip from '@/components/RefChip.vue'
 
 const { items, loading, error, refresh } = useDecisions()
 
@@ -102,6 +103,7 @@ const hasDetail = (d: Decision) =>
                 :key="d.id"
                 class="decision"
                 :data-flash-id="d.id"
+                :data-ref-id="d.public_id"
                 :data-test="`decision-${d.id}`"
               >
                 <button
@@ -118,6 +120,9 @@ const hasDetail = (d: Decision) =>
                 </button>
 
                 <div v-if="open.has(d.id)" class="detail" :data-test="`detail-${d.id}`">
+                  <div v-if="d.public_id" class="detail-ref">
+                    <RefChip :public-id="d.public_id" kind="decision" />
+                  </div>
                   <p class="detail-decision mn-body-sm">{{ d.decision }}</p>
                   <template v-if="d.rationale">
                     <h3 class="detail-label mn-label">rationale</h3>

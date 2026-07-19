@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { Document } from '@/types'
 import { renderInline } from '@/lib/markdown'
 import MKeyValue from '@/blocks/MKeyValue.vue'
+import RefChip from './RefChip.vue'
 
 const props = defineProps<{ doc: Document }>()
 
@@ -39,6 +40,7 @@ const cells = computed(() => {
   <header class="meta-header">
     <div class="flex flex-wrap items-baseline gap-3">
       <span class="mn-label">{{ doc.type }}</span>
+      <RefChip v-if="doc.public_id" :public-id="doc.public_id" kind="document" data-test="doc-ref" />
       <span v-if="doc.ticket" class="mn-mono-sm">{{ doc.ticket }}</span>
       <span v-if="doc.repo" class="mn-mono-sm text-text-faint">⎇ {{ doc.repo }}</span>
       <span v-for="tag in doc.tags" :key="tag" class="mn-mono-sm">#{{ tag }}</span>

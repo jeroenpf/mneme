@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Solution } from '@/api/solutions'
+import RefChip from './RefChip.vue'
 
 defineProps<{ solution: Solution }>()
 
@@ -10,7 +11,10 @@ const fmtDate = (iso: string) => iso.slice(0, 10)
   <article class="solution" :data-test="`solution-${solution.id}`">
     <header class="head">
       <span class="err-label mn-label">error</span>
-      <time class="date mn-mono-sm" data-test="date">{{ fmtDate(solution.created_at) }}</time>
+      <div class="head-right">
+        <RefChip v-if="solution.public_id" :public-id="solution.public_id" kind="solution" />
+        <time class="date mn-mono-sm" data-test="date">{{ fmtDate(solution.created_at) }}</time>
+      </div>
     </header>
     <p class="error mn-body" data-test="error">{{ solution.error_description }}</p>
 
@@ -48,6 +52,11 @@ const fmtDate = (iso: string) => iso.slice(0, 10)
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: var(--space-3);
+}
+.head-right {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-3);
 }
 .err-label {

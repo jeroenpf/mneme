@@ -3,6 +3,7 @@ import { apiGet, buildQuery } from './client'
 // Mirrors internal/models.JournalEntry. project is absent for a global entry.
 export interface JournalEntry {
   id: string
+  public_id?: string
   project?: string
   session_ref: string
   summary: string

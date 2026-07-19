@@ -3,6 +3,7 @@ import { apiGet, buildQuery } from './client'
 // Mirrors internal/models.Snippet. project is absent for a global snippet.
 export interface Snippet {
   id: string
+  public_id?: string
   title: string
   project?: string
   language: string

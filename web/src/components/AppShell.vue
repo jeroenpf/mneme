@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useEventStream } from '@/composables/useEventStream'
 import ThemePicker from './ThemePicker.vue'
+import ToastHost from './ToastHost.vue'
 
 // Touching the shared stream here (the app shell mounts for the whole app's
 // life) opens the singleton EventSource at boot, so live updates and the
@@ -100,6 +101,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     </aside>
 
     <main class="content"><slot /></main>
+
+    <ToastHost />
   </div>
 </template>
 
