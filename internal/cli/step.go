@@ -52,3 +52,11 @@ func isTerminal(out io.Writer) bool {
 	f, ok := out.(*os.File)
 	return ok && isatty.IsTerminal(f.Fd())
 }
+
+// isInputTerminal reports whether r is an interactive terminal. When it is not
+// (piped/scripted input, or a screen reader), the wizard runs in accessible
+// mode, which reads plain lines instead of driving a full-screen TUI.
+func isInputTerminal(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	return ok && isatty.IsTerminal(f.Fd())
+}

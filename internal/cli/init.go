@@ -36,7 +36,11 @@ func runInit(cmd *cobra.Command) error {
 		path = f.Value.String()
 	}
 
-	answers, err := collectAnswers(in, out, false)
+	// Piped/scripted stdin (or a screen reader) → accessible line-based prompts
+	// instead of the full-screen TUI.
+	accessible := !isInputTerminal(in)
+
+	answers, err := collectAnswers(in, out, accessible)
 	if errors.Is(err, huh.ErrUserAborted) {
 		cmd.Println("\nSetup cancelled — no changes made.")
 		return nil
@@ -65,7 +69,7 @@ func runInit(cmd *cobra.Command) error {
 		return err
 	}
 
-	launch, err := confirmLaunch(in, out)
+	launch, err := confirmLaunch(in, out, accessible)
 	if errors.Is(err, huh.ErrUserAborted) {
 		return nil
 	}
@@ -84,7 +88,7 @@ func runInit(cmd *cobra.Command) error {
 }
 
 // confirmLaunch asks whether to start the server immediately after setup.
-func confirmLaunch(in io.Reader, out io.Writer) (bool, error) {
+func confirmLaunch(in io.Reader, out io.Writer, accessible bool) (bool, error) {
 	var launch bool
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -92,7 +96,7 @@ func confirmLaunch(in io.Reader, out io.Writer) (bool, error) {
 				Title("Start the Mneme server now?").
 				Value(&launch),
 		),
-	).WithTheme(initTheme()).WithInput(in).WithOutput(out)
+	).WithTheme(initTheme()).WithInput(in).WithOutput(out).WithAccessible(accessible)
 	if err := form.Run(); err != nil {
 		return false, err
 	}

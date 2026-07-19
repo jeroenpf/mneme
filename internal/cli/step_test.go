@@ -30,3 +30,11 @@ func TestRunStepPropagatesError(t *testing.T) {
 		t.Errorf("runStep should return the action error: got %v", err)
 	}
 }
+
+// A non-file reader (scripted/piped input) is never a terminal, so init runs in
+// accessible mode.
+func TestIsInputTerminalNonFile(t *testing.T) {
+	if isInputTerminal(strings.NewReader("data")) {
+		t.Error("a strings.Reader must not be reported as a terminal")
+	}
+}
