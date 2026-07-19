@@ -135,8 +135,9 @@ func TestSearchTypeAndProjectFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, h := range hits {
-		if h.Project == nil || *h.Project != "apollo" {
-			t.Errorf("project filter leaked: %+v", h)
+		// apollo or global (nil) is in scope; another project is a leak.
+		if h.Project != nil && *h.Project != "apollo" {
+			t.Errorf("project filter leaked a foreign-project hit: %+v", h)
 		}
 	}
 }
@@ -549,5 +550,138 @@ func TestSearchVectorFloorDropsWeakMatches(t *testing.T) {
 	}
 	if has(on, "far") {
 		t.Fatalf("floor should drop the far (orthogonal) match, got %+v", on)
+	}
+}
+
+func hitIDs(hits []*models.SearchHit) []string {
+	out := make([]string, len(hits))
+	for i, h := range hits {
+		out[i] = h.ID
+	}
+	return out
+}
+
+// A project-scoped search returns that project's content plus global
+// (unscoped) content, but never another project's — applied consistently.
+func TestSearchProjectScopeIncludesGlobal(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo", "hyperion")
+	mkDecision := func(proj *string, title string) {
+		if err := s.CreateDecision(ctx, &models.Decision{
+			Title: title, Project: proj, Decision: "adopt the zigbee mesh", Status: models.DecisionAccepted,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mkDecision(nil, "global zigbee policy")
+	mkDecision(ptr("apollo"), "apollo zigbee choice")
+	mkDecision(ptr("hyperion"), "hyperion zigbee choice")
+
+	hits, err := s.Search(ctx, "zigbee",
+		store.SearchFilter{Types: []string{"decisions"}, Project: ptr("apollo")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := map[string]bool{}
+	for _, h := range hits {
+		titles[h.Title] = true
+		if h.Project != nil && *h.Project != "apollo" {
+			t.Errorf("foreign-project hit leaked into apollo scope: %+v", h)
+		}
+	}
+	if !titles["apollo zigbee choice"] {
+		t.Errorf("expected the apollo decision, got %v", hitIDs(hits))
+	}
+	if !titles["global zigbee policy"] {
+		t.Errorf("expected the global decision to surface under project scope, got %v", hitIDs(hits))
+	}
+	if titles["hyperion zigbee choice"] {
+		t.Errorf("a foreign-project decision must not surface")
+	}
+}
+
+// --- Relevance fixtures: lexical, semantic, hybrid --------------------------
+
+func relDoc(t *testing.T, s *store.PostgresStore, id, title, content string) {
+	t.Helper()
+	if err := s.CreateDocument(context.Background(), &models.Document{
+		ID: id, Title: title, Project: ptr("apollo"), Type: models.TypePlan,
+		Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "s", "title": title, "content": content}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Lexical: a keyword query ranks the document containing that keyword above an
+// unrelated one.
+func TestRelevanceLexical(t *testing.T) {
+	s := newStore(t)
+	seedProjects(t, s, "apollo")
+	relDoc(t, s, "relevant", "Zigbee pairing", "how to pair a zigbee device")
+	relDoc(t, s, "unrelated", "Cooking pasta", "boil water and add salt")
+
+	hits, err := s.Search(context.Background(), "zigbee pairing",
+		store.SearchFilter{Types: []string{"documents"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 || hits[0].ID != "relevant" {
+		t.Fatalf("lexical: expected 'relevant' first, got %v", hitIDs(hits))
+	}
+}
+
+// Semantic: with a query vector, the nearest-embedding document wins even
+// though neither candidate contains the query term.
+func TestRelevanceSemantic(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	for _, id := range []string{"near", "far"} {
+		relDoc(t, s, id, id+" notes", "no keyword here")
+	}
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{
+		{SourceType: "documents", SourceID: "near", ChunkID: "full", ChunkText: "near",
+			Embedding: orthoVec(0), Project: ptr("apollo"), SourceTitle: "near notes", Model: "fake"},
+		{SourceType: "documents", SourceID: "far", ChunkID: "full", ChunkText: "far",
+			Embedding: orthoVec(5), Project: ptr("apollo"), SourceTitle: "far notes", Model: "fake"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := s.Search(ctx, "zzznomatch", store.SearchFilter{Vector: orthoVec(0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 || hits[0].ID != "near" {
+		t.Fatalf("semantic: expected 'near' first by similarity, got %v", hitIDs(hits))
+	}
+}
+
+// Hybrid: a document reachable through both channels outranks documents
+// reachable through only one.
+func TestRelevanceHybrid(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedProjects(t, s, "apollo")
+	relDoc(t, s, "both", "both", "zigbee coordinator")
+	relDoc(t, s, "lexical", "lexical", "zigbee only here")
+	relDoc(t, s, "semantic", "semantic", "unrelated content")
+	q := orthoVec(0)
+	if err := s.UpsertEmbeddings(ctx, []models.Embedding{
+		{SourceType: "documents", SourceID: "both", ChunkID: "full", ChunkText: "zigbee coordinator",
+			Embedding: q, Project: ptr("apollo"), SourceTitle: "both", Model: "fake"},
+		{SourceType: "documents", SourceID: "semantic", ChunkID: "full", ChunkText: "unrelated content",
+			Embedding: q, Project: ptr("apollo"), SourceTitle: "semantic", Model: "fake"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := s.Search(ctx, "zigbee", store.SearchFilter{Vector: q})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 || hits[0].ID != "both" {
+		t.Fatalf("hybrid: doc matching both channels should rank first, got %v", hitIDs(hits))
 	}
 }

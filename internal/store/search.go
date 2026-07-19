@@ -118,7 +118,9 @@ ORDER BY rank DESC, updated_at DESC`
 func genericFTSBranch(b searchBranch, hasProject bool) string {
 	proj := ""
 	if hasProject {
-		proj = " AND project = $2"
+		// Project scope includes global (unscoped) rows so cross-project
+		// knowledge surfaces under any project (road-p4-t6).
+		proj = " AND (project = $2 OR project IS NULL)"
 	}
 	return fmt.Sprintf(
 		`SELECT '%s' AS type, id::text AS id, %s AS title,
@@ -138,7 +140,7 @@ func genericFTSBranch(b searchBranch, hasProject bool) string {
 func documentFTSBranch(hasProject bool) string {
 	proj := ""
 	if hasProject {
-		proj = " AND d.project = $2"
+		proj = " AND (d.project = $2 OR d.project IS NULL)"
 	}
 	return fmt.Sprintf(
 		`SELECT 'documents' AS type, d.id::text AS id, d.title AS title,
@@ -173,7 +175,8 @@ func (s *PostgresStore) vectorCandidates(ctx context.Context, vec []float32, typ
 	projClause := ""
 	if f.Project != nil {
 		args = append(args, *f.Project)
-		projClause = " AND e.project = $2"
+		// Match the FTS side: project scope also admits global (NULL) rows.
+		projClause = " AND (e.project = $2 OR e.project IS NULL)"
 	}
 	args = append(args, types)
 	typesRef := fmt.Sprintf("$%d", len(args))
