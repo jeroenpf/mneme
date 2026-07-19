@@ -8,14 +8,12 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	t.Setenv("MNEME_DSN", "")
+	isolateConfig(t)
 	t.Setenv("MNEME_PORT", "")
 	t.Setenv("MNEME_ENV", "")
 	t.Setenv("MNEME_CORS_ORIGINS", "")
 
-	// Empty env vars are *set* (t.Setenv), so getenv returns "" — for
-	// CORS this means an empty slice, but DSN empty causes Load() to
-	// reject. Unset them to exercise the defaults path.
+	// An explicit DSN passes straight through, ahead of the file/default layers.
 	t.Setenv("MNEME_DSN", "postgres://x@y/z")
 
 	c, err := Load()
@@ -28,6 +26,7 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 func TestLoadFromEnv(t *testing.T) {
+	isolateConfig(t)
 	t.Setenv("MNEME_DSN", "postgres://u:p@h/d?sslmode=disable")
 	t.Setenv("MNEME_PORT", "9090")
 	t.Setenv("MNEME_ENV", "production")
@@ -53,6 +52,9 @@ func TestLoadFromEnv(t *testing.T) {
 }
 
 func TestTLSDisabledByDefault(t *testing.T) {
+	isolateConfig(t)
+	t.Setenv("MNEME_TLS_CERT", "")
+	t.Setenv("MNEME_TLS_KEY", "")
 	t.Setenv("MNEME_DSN", "postgres://x@y/z")
 
 	c, err := Load()
@@ -92,6 +94,7 @@ func TestTLSEnabled(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			isolateConfig(t)
 			t.Setenv("MNEME_DSN", "postgres://x@y/z")
 			t.Setenv("MNEME_TLS_CERT", tc.cert)
 			t.Setenv("MNEME_TLS_KEY", tc.key)
@@ -107,14 +110,24 @@ func TestTLSEnabled(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsEmptyDSN(t *testing.T) {
+// An empty MNEME_DSN is treated as "unset" and falls back to the self-contained
+// SQLite default — the loader never yields an empty DSN, so a fresh binary with
+// no configuration still boots. (Superseded the old "empty DSN is an error":
+// with a built-in default there is nothing to reject.)
+func TestEmptyDSNFallsBackToDefault(t *testing.T) {
+	isolateConfig(t)
 	t.Setenv("MNEME_DSN", "")
-	if _, err := Load(); err == nil {
-		t.Fatal("expected error for empty DSN, got nil")
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.DSN != defaultDSN() {
+		t.Errorf("empty MNEME_DSN should fall back to the sqlite default; got %q", c.DSN)
 	}
 }
 
 func TestSearchMaxDist(t *testing.T) {
+	isolateConfig(t)
 	t.Setenv("MNEME_DSN", "postgres://x@y/z")
 
 	// Default is the semantic relevance floor (cosine distance).

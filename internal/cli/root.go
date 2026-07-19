@@ -25,6 +25,10 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	// Shared across subcommands (server/init/doctor) so any of them can target
+	// a non-default settings file; empty means ~/.mneme/settings.toml (or
+	// MNEME_CONFIG).
+	root.PersistentFlags().String("config", "", "path to settings.toml (default ~/.mneme/settings.toml)")
 	root.AddCommand(newServerCmd())
 	root.AddCommand(newInitCmd())
 	root.AddCommand(newDoctorCmd())

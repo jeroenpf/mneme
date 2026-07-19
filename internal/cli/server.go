@@ -21,8 +21,10 @@ import (
 
 // newServerCmd builds `mneme server` — the long-running service. It is the
 // operational default: everything the old `cmd/server` binary did lives here.
+// Flags (--dsn, --port) sit at the top of the config precedence chain, ahead of
+// MNEME_* env vars, settings.toml, and the built-in defaults.
 func newServerCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Run the Mneme service (HTTP API, MCP endpoint, embedded UI)",
 		Long: "Start the Mneme server: it applies migrations, serves the REST API,\n" +
@@ -30,21 +32,24 @@ func newServerCmd() *cobra.Command {
 			"interrupted (Ctrl-C / SIGTERM), draining connections on shutdown.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return RunServer(cmd.Context())
+			cfg, err := config.LoadWithFlags(cmd.Flags())
+			if err != nil {
+				return err
+			}
+			return RunServer(cmd.Context(), cfg)
 		},
 	}
+	cmd.Flags().String("dsn", "", "storage DSN (sqlite:// file or postgres:// URL); overrides config/env")
+	cmd.Flags().String("port", "", "TCP port to listen on; overrides config/env")
+	return cmd
 }
 
-// RunServer boots the full service and blocks until ctx is cancelled (an
-// interrupt signal) or the listener fails. It owns config load, store open,
+// RunServer boots the full service from a resolved config and blocks until ctx
+// is cancelled (an interrupt signal) or the listener fails. It owns store open,
 // migrations, the embedding worker, and graceful HTTP shutdown — the lifecycle
-// formerly in cmd/server/main.go's run().
-func RunServer(ctx context.Context) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-
+// formerly in cmd/server/main.go's run(). Config resolution (env/file/flags)
+// happens in the caller so this stays a pure lifecycle function.
+func RunServer(ctx context.Context, cfg *config.Config) error {
 	st, err := store.New(ctx, cfg.DSN)
 	if err != nil {
 		return err
