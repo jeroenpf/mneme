@@ -64,11 +64,9 @@ func run() error {
 	if client != nil {
 		worker := embed.NewWorker(st, client, 256, cfg.VoyageRPM)
 		go worker.Run(ctx)
-		go func() {
-			if err := worker.ReconcileAll(context.Background()); err != nil {
-				slog.Error("startup embed reconcile failed", "err", err)
-			}
-		}()
+		// Bounded startup reconcile + periodic passes so missed enqueue
+		// events (dropped signals, crashes, restarts) self-heal.
+		go worker.Reconcile(ctx, time.Duration(cfg.ReconcileEveryMin)*time.Minute)
 		enq = worker
 		slog.Info("embeddings enabled", "model", client.Model())
 	} else {

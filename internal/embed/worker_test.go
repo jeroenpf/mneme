@@ -120,6 +120,42 @@ func TestWorkerPurgesEmbeddingsForDeletedSource(t *testing.T) {
 	}
 }
 
+// Periodic reconciliation must self-heal sources whose enqueue event was
+// missed (dropped signal, crash): a source created without being enqueued is
+// still discovered and embedded by a later reconcile pass.
+func TestReconcileSelfHealsMissedSources(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	seedProject(t, s, "apollo")
+
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
+	go w.Run(ctx)
+	go w.Reconcile(ctx, 50*time.Millisecond)
+
+	// Create a source WITHOUT enqueuing it — simulates a missed event.
+	if err := s.CreateDocument(ctx, &models.Document{
+		ID: "heal1", Title: "Missed", Project: ptrs("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "overview", "title": "O", "content": "coordinator"},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if got, _ := s.EmbeddingsFor(ctx, "documents", "heal1"); got["overview"] != "" {
+			return // a periodic pass discovered and embedded it
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("periodic reconcile did not self-heal the missed source")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // Run drains enqueued work through the deduplicated pending queue: an
 // enqueued source is picked up and embedded without any channel-buffer drop.
 func TestWorkerRunDrainsEnqueued(t *testing.T) {

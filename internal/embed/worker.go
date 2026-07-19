@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -83,6 +84,33 @@ func (w *Worker) Run(ctx context.Context) {
 		}
 		if _, err := w.Process(ctx, ref); err != nil {
 			slog.Error("embed failed", "type", ref.Type, "id", ref.ID, "err", err)
+		}
+	}
+}
+
+// reconcilePassTimeout bounds a single reconciliation pass (orphan sweep +
+// SourceRefs + enqueue) so a slow DB can't wedge the loop. The actual
+// embedding runs asynchronously in Run and is intentionally not bounded here.
+const reconcilePassTimeout = 2 * time.Minute
+
+// Reconcile runs a bounded reconciliation immediately (startup backfill), then
+// repeats every `every` until ctx is cancelled, so missed enqueue events
+// (dropped signals, crashes, restarts) self-heal. every<=0 runs only the
+// single startup pass. Each pass is bounded by reconcilePassTimeout.
+func (w *Worker) Reconcile(ctx context.Context, every time.Duration) {
+	for {
+		pass, cancel := context.WithTimeout(ctx, reconcilePassTimeout)
+		if err := w.ReconcileAll(pass); err != nil {
+			slog.Error("reconcile pass failed", "err", err)
+		}
+		cancel()
+		if every <= 0 {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(every):
 		}
 	}
 }

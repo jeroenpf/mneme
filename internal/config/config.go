@@ -17,6 +17,10 @@ type Config struct {
 	VoyageKey   string
 	VoyageModel string
 	VoyageRPM   int // optional proactive throttle; 0 = off (rely on 429 backoff)
+	// ReconcileEveryMin is the interval, in minutes, for periodic embedding
+	// reconciliation (orphan sweep + backfill of missed sources). A startup
+	// pass always runs; <=0 disables the periodic passes after it.
+	ReconcileEveryMin int
 	// SearchMaxDist is the semantic relevance floor: hybrid search drops
 	// vector candidates whose cosine distance to the query exceeds it, so a
 	// vague/irrelevant query returns nothing rather than a ranked corpus.
@@ -29,16 +33,17 @@ type Config struct {
 
 func Load() (*Config, error) {
 	c := &Config{
-		DSN:         getenv("MNEME_DSN", "postgres://mneme:mneme@localhost:5432/mneme?sslmode=disable"),
-		Port:        getenv("MNEME_PORT", "8080"),
-		Env:         getenv("MNEME_ENV", "development"),
-		CORSOrigins: splitCSV(getenv("MNEME_CORS_ORIGINS", "http://localhost:5273,https://mneme.dev:8443")),
-		TLSCert:     getenv("MNEME_TLS_CERT", ""),
-		TLSKey:      getenv("MNEME_TLS_KEY", ""),
-		VoyageKey:     getenv("MNEME_VOYAGE_API_KEY", ""),
-		VoyageModel:   getenv("MNEME_VOYAGE_MODEL", "voyage-4-large"),
-		VoyageRPM:     getenvInt("MNEME_VOYAGE_RPM", 0),
-		SearchMaxDist: getenvFloat("MNEME_SEARCH_MAX_DIST", 0.65),
+		DSN:               getenv("MNEME_DSN", "postgres://mneme:mneme@localhost:5432/mneme?sslmode=disable"),
+		Port:              getenv("MNEME_PORT", "8080"),
+		Env:               getenv("MNEME_ENV", "development"),
+		CORSOrigins:       splitCSV(getenv("MNEME_CORS_ORIGINS", "http://localhost:5273,https://mneme.dev:8443")),
+		TLSCert:           getenv("MNEME_TLS_CERT", ""),
+		TLSKey:            getenv("MNEME_TLS_KEY", ""),
+		VoyageKey:         getenv("MNEME_VOYAGE_API_KEY", ""),
+		VoyageModel:       getenv("MNEME_VOYAGE_MODEL", "voyage-4-large"),
+		VoyageRPM:         getenvInt("MNEME_VOYAGE_RPM", 0),
+		ReconcileEveryMin: getenvInt("MNEME_RECONCILE_INTERVAL_MIN", 15),
+		SearchMaxDist:     getenvFloat("MNEME_SEARCH_MAX_DIST", 0.65),
 	}
 	if c.DSN == "" {
 		return nil, fmt.Errorf("MNEME_DSN must not be empty")
