@@ -48,10 +48,9 @@ func (t *tools) tickTask(ctx context.Context, _ *sdk.CallToolRequest, in tickTas
 	task["done"] = !current
 
 	setSections(doc.Body, sections)
-	if err := t.saveDoc(ctx, doc); err != nil {
+	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "tick_task"}); err != nil {
 		return nil, nil, err
 	}
-	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "tick_task"})
 	out := &tickResult{TaskID: in.TaskID, Done: !current}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -97,10 +96,9 @@ func (t *tools) updateTask(ctx context.Context, _ *sdk.CallToolRequest, in updat
 	}
 
 	setSections(doc.Body, sections)
-	if err := t.saveDoc(ctx, doc); err != nil {
+	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "update_task"}); err != nil {
 		return nil, nil, err
 	}
-	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "update_task"})
 	out := &taskResult{Task: task}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -173,11 +171,10 @@ func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskI
 	container["tasks"] = tasks
 
 	setSections(doc.Body, sections)
-	if err := t.saveDoc(ctx, doc); err != nil {
+	newID, _ := in.Task["id"].(string)
+	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: newID, Op: "add_task"}); err != nil {
 		return nil, nil, err
 	}
-	newID, _ := in.Task["id"].(string)
-	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: newID, Op: "add_task"})
 	out := &taskResult{Task: in.Task}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -212,10 +209,9 @@ func (t *tools) removeTask(ctx context.Context, _ *sdk.CallToolRequest, in remov
 	sp["tasks"] = append(tasks[:idx], tasks[idx+1:]...)
 
 	setSections(doc.Body, sections)
-	if err := t.saveDoc(ctx, doc); err != nil {
+	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "remove_task"}); err != nil {
 		return nil, nil, err
 	}
-	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "remove_task"})
 	return nil, &okResult{OK: true}, nil
 }
 

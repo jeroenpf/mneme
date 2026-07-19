@@ -258,6 +258,74 @@ func TestConformanceDocumentRevisions(t *testing.T) {
 	})
 }
 
+func TestConformanceDocumentRevisionSnapshots(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		doc := sampleDoc("snap-001", "Snap doc")
+		doc.Project = ptr("apollo")
+		if err := st.CreateDocument(ctx, doc); err != nil {
+			t.Fatalf("CreateDocument: %v", err)
+		}
+
+		// Record two snapshots for the document.
+		r1 := &models.DocumentRevision{
+			DocumentID: "snap-001", Revision: 1, Op: "push_document", Actor: "mcp",
+			TargetIDs: []string{"snap-001"}, Title: doc.Title, Status: doc.Status,
+			Meta: doc.Meta, Body: doc.Body,
+		}
+		if err := st.AppendDocumentRevision(ctx, r1); err != nil {
+			t.Fatalf("AppendDocumentRevision r1: %v", err)
+		}
+		if r1.ID == 0 || r1.CreatedAt.IsZero() {
+			t.Errorf("append did not populate ID/CreatedAt: %+v", r1)
+		}
+		r2 := &models.DocumentRevision{
+			DocumentID: "snap-001", Revision: 2, Op: "tick_task", Actor: "mcp",
+			TargetIDs: []string{"task-9"}, Title: "Snap doc v2", Status: "in-progress",
+			Meta: map[string]any{}, Body: map[string]any{"sections": []any{}},
+		}
+		if err := st.AppendDocumentRevision(ctx, r2); err != nil {
+			t.Fatalf("AppendDocumentRevision r2: %v", err)
+		}
+
+		// A duplicate (document_id, revision) is rejected.
+		if err := st.AppendDocumentRevision(ctx, r1); err == nil {
+			t.Errorf("duplicate revision should be rejected")
+		}
+
+		// List returns newest-first.
+		list, err := st.ListDocumentRevisions(ctx, "snap-001", 0)
+		if err != nil {
+			t.Fatalf("ListDocumentRevisions: %v", err)
+		}
+		if len(list) != 2 {
+			t.Fatalf("revision count = %d, want 2", len(list))
+		}
+		if list[0].Revision != 2 || list[1].Revision != 1 {
+			t.Errorf("not newest-first: %d, %d", list[0].Revision, list[1].Revision)
+		}
+		if list[0].Op != "tick_task" || len(list[0].TargetIDs) != 1 || list[0].TargetIDs[0] != "task-9" {
+			t.Errorf("snapshot metadata lost: %+v", list[0])
+		}
+
+		// Get one revision round-trips the body snapshot.
+		got, err := st.GetDocumentRevision(ctx, "snap-001", 1)
+		if err != nil {
+			t.Fatalf("GetDocumentRevision: %v", err)
+		}
+		if got.Title != "Snap doc" || got.Body["sections"] == nil {
+			t.Errorf("revision 1 snapshot not round-tripped: %+v", got)
+		}
+
+		// Missing revision → ErrNotFound.
+		if _, err := st.GetDocumentRevision(ctx, "snap-001", 99); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("missing revision: got %v, want ErrNotFound", err)
+		}
+	})
+}
+
 func TestConformanceListDocuments(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, st store.Store) {
 		ctx := context.Background()

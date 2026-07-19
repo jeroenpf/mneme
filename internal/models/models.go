@@ -30,6 +30,26 @@ type Document struct {
 	Revision int `json:"revision"`
 }
 
+// DocumentRevision is one append-only snapshot of a document write — the audit
+// record and the history source (roadmap P6). It captures the post-write state
+// (title/status/meta/body at that revision) plus who/what/when: Op is the
+// operation (e.g. "tick_task", "push_document"), Actor is the surface
+// ("mcp"/"rest"), and TargetIDs are the affected block/task ids (the document
+// id when the whole document changed).
+type DocumentRevision struct {
+	ID         int64          `json:"id"`
+	DocumentID string         `json:"document_id"`
+	Revision   int            `json:"revision"`
+	Op         string         `json:"op"`
+	Actor      string         `json:"actor"`
+	TargetIDs  []string       `json:"target_ids"`
+	Title      string         `json:"title"`
+	Status     string         `json:"status"`
+	Meta       map[string]any `json:"meta"`
+	Body       map[string]any `json:"body"`
+	CreatedAt  time.Time      `json:"created_at"`
+}
+
 // Project mirrors the projects row.
 type Project struct {
 	ID          string    `json:"id"`

@@ -145,6 +145,19 @@ type Store interface {
 	// id has no row.
 	ArchiveDocument(ctx context.Context, id string) error
 
+	// AppendDocumentRevision records an immutable snapshot of a document write
+	// — the audit trail and history source (roadmap P6). Fills rev.ID and
+	// rev.CreatedAt from the DB. A duplicate (document_id, revision) is rejected.
+	AppendDocumentRevision(ctx context.Context, rev *models.DocumentRevision) error
+
+	// ListDocumentRevisions returns a document's revision snapshots newest-first,
+	// capped by limit (0 = no limit). Empty when the document has no history.
+	ListDocumentRevisions(ctx context.Context, documentID string, limit int) ([]*models.DocumentRevision, error)
+
+	// GetDocumentRevision returns one snapshot by (documentID, revision), or
+	// ErrNotFound when that revision was never recorded.
+	GetDocumentRevision(ctx context.Context, documentID string, revision int) (*models.DocumentRevision, error)
+
 	ListDocuments(ctx context.Context, f Filter) ([]*models.Document, error)
 
 	// SearchDocuments runs plainto_tsquery('english', q) against

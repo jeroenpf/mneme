@@ -73,10 +73,9 @@ func (t *tools) updateSection(ctx context.Context, _ *sdk.CallToolRequest, in up
 	}
 
 	setSections(doc.Body, sections)
-	if err := t.saveDoc(ctx, doc); err != nil {
+	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: in.SectionID, Op: "update_section"}); err != nil {
 		return nil, nil, err
 	}
-	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.SectionID, Op: "update_section"})
 	out := &sectionResult{Section: block}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -160,10 +159,9 @@ func (t *tools) addSection(ctx context.Context, _ *sdk.CallToolRequest, in addSe
 	sections[insertAt] = in.Section
 
 	setSections(doc.Body, sections)
-	if err := t.saveDoc(ctx, doc); err != nil {
+	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: id, Op: "add_section"}); err != nil {
 		return nil, nil, err
 	}
-	t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: id, Op: "add_section"})
 	out := &sectionResult{Section: in.Section, Created: created}
 	if in.ReturnDoc {
 		out.Doc = doc
@@ -193,10 +191,9 @@ func (t *tools) removeSection(ctx context.Context, _ *sdk.CallToolRequest, in re
 
 	if removed := removeBlockByID(sections, in.SectionID); removed {
 		setSections(doc.Body, sections)
-		if err := t.saveDoc(ctx, doc); err != nil {
+		if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: in.SectionID, Op: "remove_section"}); err != nil {
 			return nil, nil, err
 		}
-		t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.SectionID, Op: "remove_section"})
 		return nil, &okResult{OK: true}, nil
 	}
 	// Top-level removal needs to mutate the slice itself (length changes).
@@ -208,10 +205,9 @@ func (t *tools) removeSection(ctx context.Context, _ *sdk.CallToolRequest, in re
 		if bid, _ := b["id"].(string); bid == in.SectionID {
 			sections = append(sections[:i], sections[i+1:]...)
 			setSections(doc.Body, sections)
-			if err := t.saveDoc(ctx, doc); err != nil {
+			if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: in.SectionID, Op: "remove_section"}); err != nil {
 				return nil, nil, err
 			}
-			t.broadcast(live.Event{Type: "documents", ID: doc.ID, BlockID: in.SectionID, Op: "remove_section"})
 			return nil, &okResult{OK: true}, nil
 		}
 	}

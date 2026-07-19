@@ -113,10 +113,9 @@ func (t *tools) advancePhase(ctx context.Context, _ *sdk.CallToolRequest, in adv
 	doc.Meta["phase_current"] = float64(*doc.PhaseCurrent)
 	doc.Meta["phase_total"] = float64(total)
 
-	if err := t.saveDoc(ctx, doc); err != nil {
+	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, Op: "advance_phase"}); err != nil {
 		return nil, nil, err
 	}
-	t.broadcast(live.Event{Type: "documents", ID: doc.ID, Op: "advance_phase"})
 	out.PhaseCurrent = doc.PhaseCurrent
 	out.PhaseTotal = doc.PhaseTotal
 	out.Status = doc.Status
@@ -164,10 +163,9 @@ func (t *tools) advancePhaseByCounter(ctx context.Context, doc *models.Document,
 	if doc.PhaseTotal != nil {
 		doc.Meta["phase_total"] = float64(*doc.PhaseTotal)
 	}
-	if err := t.saveDoc(ctx, doc); err != nil {
+	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, Op: "advance_phase"}); err != nil {
 		return nil, nil, err
 	}
-	t.broadcast(live.Event{Type: "documents", ID: doc.ID, Op: "advance_phase"})
 	out.PhaseCurrent = doc.PhaseCurrent
 	out.PhaseTotal = doc.PhaseTotal
 	out.Status = doc.Status
