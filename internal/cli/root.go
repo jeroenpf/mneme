@@ -26,6 +26,10 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(newServerCmd())
+	root.AddCommand(newInitCmd())
+	root.AddCommand(newDoctorCmd())
+	root.AddCommand(newExportCmd())
+	root.AddCommand(newImportCmd())
 	return root
 }
 
