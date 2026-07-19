@@ -98,8 +98,14 @@ func (w *Worker) ReconcileAll(ctx context.Context) error {
 // prune stale chunks. Exported for direct testing.
 func (w *Worker) Process(ctx context.Context, ref SourceRef) error {
 	src, title, project, err := w.load(ctx, ref)
-	if err != nil || src == nil {
+	if err != nil {
 		return err
+	}
+	if src == nil {
+		// The source was deleted between enqueue and now: purge any
+		// embeddings it left behind (passing keep=nil deletes them all)
+		// so orphans never linger in search or coverage.
+		return w.store.DeleteEmbeddingsExcept(ctx, ref.Type, ref.ID, nil)
 	}
 	chunks := Chunks(src)
 	existing, err := w.store.EmbeddingsFor(ctx, ref.Type, ref.ID)

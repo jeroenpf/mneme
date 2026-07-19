@@ -70,3 +70,42 @@ func TestWorkerEmbedsAndPrunes(t *testing.T) {
 		t.Fatalf("stale section chunk not pruned: %+v", got)
 	}
 }
+
+// A source that vanishes between enqueue and Process must have its embeddings
+// purged, not left orphaned. load() returns src==nil on ErrNotFound; Process
+// must delete the source's chunks before returning.
+func TestWorkerPurgesEmbeddingsForDeletedSource(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx := context.Background()
+	seedProject(t, s, "apollo")
+	doc := &models.Document{
+		ID: "gone", Title: "Doomed", Project: ptrs("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "overview", "title": "O", "content": "coordinator"},
+		}},
+	}
+	if err := s.CreateDocument(ctx, doc); err != nil {
+		t.Fatal(err)
+	}
+
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
+	if err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "gone"}); err != nil {
+		t.Fatalf("Process: %v", err)
+	}
+	if got, _ := s.EmbeddingsFor(ctx, "documents", "gone"); len(got) == 0 {
+		t.Fatalf("precondition: expected an embedding before deletion, got %+v", got)
+	}
+
+	// Delete the underlying source, then re-Process its queued ref.
+	if _, err := s.Pool().Exec(ctx, `DELETE FROM documents WHERE id=$1`, "gone"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "gone"}); err != nil {
+		t.Fatalf("Process after delete: %v", err)
+	}
+	got, _ := s.EmbeddingsFor(ctx, "documents", "gone")
+	if len(got) != 0 {
+		t.Fatalf("deleted source left orphaned embeddings: %+v", got)
+	}
+}
