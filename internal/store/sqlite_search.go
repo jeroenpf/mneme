@@ -229,6 +229,49 @@ ORDER BY rank DESC, updated_at DESC`
 	return collectSQLiteFTSCandidates(rows)
 }
 
+// fillPublicIDs looks up each hit's public id from its base table, grouping by
+// table so it runs at most one query per type present on the final page.
+func (s *SQLiteStore) fillPublicIDs(ctx context.Context, hits []*models.SearchHit) error {
+	idsByTable := map[string][]string{}
+	for _, h := range hits {
+		if table, ok := publicIDTable(h.Type); ok {
+			idsByTable[table] = append(idsByTable[table], h.ID)
+		}
+	}
+	pub := map[string]map[string]string{} // table -> id -> public_id
+	for table, ids := range idsByTable {
+		m := map[string]string{}
+		args := make([]any, len(ids))
+		for i, id := range ids {
+			args[i] = id
+		}
+		q := `SELECT id, public_id FROM ` + table + ` WHERE id IN (` + placeholders(len(ids)) + `)`
+		rows, err := s.db.QueryContext(ctx, q, args...)
+		if err != nil {
+			return fmt.Errorf("fill public ids (%s): %w", table, err)
+		}
+		for rows.Next() {
+			var id, publicID string
+			if err := rows.Scan(&id, &publicID); err != nil {
+				rows.Close()
+				return fmt.Errorf("scan public id: %w", err)
+			}
+			m[id] = publicID
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("iterate public ids (%s): %w", table, err)
+		}
+		pub[table] = m
+	}
+	for _, h := range hits {
+		if table, ok := publicIDTable(h.Type); ok {
+			h.PublicID = pub[table][h.ID]
+		}
+	}
+	return nil
+}
+
 func collectSQLiteFTSCandidates(rows *sql.Rows) ([]candidate, error) {
 	out := []candidate{}
 	for rows.Next() {

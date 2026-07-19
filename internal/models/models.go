@@ -304,8 +304,12 @@ type Solution struct {
 // was reached via the vector side; nil for FTS-only hits. It makes the
 // semantic relevance floor observable.
 type SearchHit struct {
-	Type       string    `json:"type"`
-	ID         string    `json:"id"`
+	Type string `json:"type"`
+	ID   string `json:"id"`
+	// PublicID is the hit's prefixed public id (doc_/dec_/snip_/sol_/jrnl_),
+	// so a non-document result can be deep-linked and copied as a reference.
+	// Empty for types without one (memory, which is addressed by its key).
+	PublicID   string    `json:"public_id,omitempty"`
 	Title      string    `json:"title"`
 	Excerpt    string    `json:"excerpt"`
 	Project    *string   `json:"project,omitempty"`

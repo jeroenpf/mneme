@@ -212,6 +212,44 @@ ORDER BY sim DESC`
 	return collectVectorCandidates(rows)
 }
 
+// fillPublicIDs looks up each hit's public id from its base table, grouping by
+// table so it runs at most one query per type present on the final page.
+func (s *PostgresStore) fillPublicIDs(ctx context.Context, hits []*models.SearchHit) error {
+	idsByTable := map[string][]string{}
+	for _, h := range hits {
+		if table, ok := publicIDTable(h.Type); ok {
+			idsByTable[table] = append(idsByTable[table], h.ID)
+		}
+	}
+	pub := map[string]map[string]string{} // table -> id -> public_id
+	for table, ids := range idsByTable {
+		m := map[string]string{}
+		rows, err := s.pool.Query(ctx, `SELECT id::text, public_id FROM `+table+` WHERE id::text = ANY($1)`, ids)
+		if err != nil {
+			return fmt.Errorf("fill public ids (%s): %w", table, err)
+		}
+		for rows.Next() {
+			var id, publicID string
+			if err := rows.Scan(&id, &publicID); err != nil {
+				rows.Close()
+				return fmt.Errorf("scan public id: %w", err)
+			}
+			m[id] = publicID
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("iterate public ids (%s): %w", table, err)
+		}
+		pub[table] = m
+	}
+	for _, h := range hits {
+		if table, ok := publicIDTable(h.Type); ok {
+			h.PublicID = pub[table][h.ID]
+		}
+	}
+	return nil
+}
+
 func collectFTSCandidates(rows pgx.Rows) ([]candidate, error) {
 	out := []candidate{}
 	for rows.Next() {

@@ -44,6 +44,29 @@ type searchBackend interface {
 	// similarity. Orphaned vectors (source deleted) are excluded. No floor and
 	// no limit — fusion applies both.
 	vectorCandidates(ctx context.Context, vec []float32, types []string, f SearchFilter) ([]candidate, error)
+	// fillPublicIDs populates each hit's PublicID from its source table, so a
+	// non-document result can be deep-linked. Types without a public id (memory)
+	// are left empty. Called once on the final page, so lookups stay bounded.
+	fillPublicIDs(ctx context.Context, hits []*models.SearchHit) error
+}
+
+// publicIDTable maps a searchable type to its base table and whether that table
+// has a public_id column (memory does not). Shared by both backends' fillPublicIDs.
+func publicIDTable(typ string) (table string, hasPublicID bool) {
+	switch typ {
+	case "documents":
+		return "documents", true
+	case "decisions":
+		return "decisions", true
+	case "snippets":
+		return "snippets", true
+	case "solutions":
+		return "solutions", true
+	case "journal":
+		return "journal_entries", true
+	default: // memory, or unknown
+		return "", false
+	}
 }
 
 // runHybridSearch is the dialect-free core of unified search. It asks the
@@ -137,6 +160,10 @@ func runHybridSearch(ctx context.Context, b searchBackend, q string, types []str
 	})
 	if len(order) > limit {
 		order = order[:limit]
+	}
+	// Attach each hit's public id (for deep-linking) on the final page only.
+	if err := b.fillPublicIDs(ctx, order); err != nil {
+		return nil, err
 	}
 	return order, nil
 }

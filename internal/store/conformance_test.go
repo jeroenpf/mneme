@@ -812,12 +812,68 @@ func unitVec(n, idx int) []float32 {
 
 // hasHit reports whether a SearchHit of the given type and id is present.
 func hasHit(hits []*models.SearchHit, typ, id string) bool {
+	return findHit(hits, typ, id) != nil
+}
+
+// findHit returns the SearchHit of the given type and id, or nil.
+func findHit(hits []*models.SearchHit, typ, id string) *models.SearchHit {
 	for _, h := range hits {
 		if h.Type == typ && h.ID == id {
-			return true
+			return h
 		}
 	}
-	return false
+	return nil
+}
+
+func TestConformanceSearchHitsCarryPublicID(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+		seedProjectsIfc(t, st, "apollo")
+
+		doc := sampleDoc("pub-1", "Zebra indexing guide")
+		doc.Project = ptr("apollo")
+		if err := st.CreateDocument(ctx, doc); err != nil {
+			t.Fatalf("create doc: %v", err)
+		}
+		dec := &models.Decision{Title: "Adopt Wombat cache", Decision: "use the wombat cache", Status: models.DecisionAccepted, Project: ptr("apollo")}
+		if err := st.CreateDecision(ctx, dec); err != nil {
+			t.Fatalf("create decision: %v", err)
+		}
+		if err := st.SetMemory(ctx, &models.Memory{Scope: models.ScopeProject, Project: ptr("apollo"), Key: "quokka", Value: "the quokka setting"}); err != nil {
+			t.Fatalf("set memory: %v", err)
+		}
+
+		// A document hit carries the document's doc_ public id.
+		hits, err := st.Search(ctx, "Zebra", store.SearchFilter{})
+		if err != nil {
+			t.Fatalf("Search: %v", err)
+		}
+		h := findHit(hits, "documents", "pub-1")
+		if h == nil {
+			t.Fatalf(`Search("Zebra") missing pub-1: %+v`, hits)
+		}
+		if h.PublicID != doc.PublicID || h.PublicID == "" {
+			t.Errorf("document hit public_id = %q, want %q", h.PublicID, doc.PublicID)
+		}
+
+		// A decision hit carries the decision's dec_ public id.
+		hits, _ = st.Search(ctx, "Wombat", store.SearchFilter{})
+		h = findHit(hits, "decisions", dec.ID)
+		if h == nil {
+			t.Fatalf(`Search("Wombat") missing decision: %+v`, hits)
+		}
+		if h.PublicID != dec.PublicID || h.PublicID == "" {
+			t.Errorf("decision hit public_id = %q, want %q", h.PublicID, dec.PublicID)
+		}
+
+		// Memory has no public id; its hit's PublicID stays empty (deep-linked by key).
+		hits, _ = st.Search(ctx, "quokka", store.SearchFilter{})
+		for _, mh := range hits {
+			if mh.Type == "memory" && mh.PublicID != "" {
+				t.Errorf("memory hit should have empty public_id, got %q", mh.PublicID)
+			}
+		}
+	})
 }
 
 func TestConformanceUnifiedSearch(t *testing.T) {

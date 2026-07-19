@@ -24,6 +24,9 @@ func (b fakeBackend) vectorCandidates(_ context.Context, _ []float32, _ []string
 	return b.vec, b.vecErr
 }
 
+// fillPublicIDs is a no-op for the fusion unit tests (no backing tables).
+func (b fakeBackend) fillPublicIDs(_ context.Context, _ []*models.SearchHit) error { return nil }
+
 func simPtr(v float64) *float64 { return &v }
 
 // fc builds an FTS candidate (no similarity). ts orders the deterministic
