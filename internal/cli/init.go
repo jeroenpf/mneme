@@ -53,8 +53,13 @@ func runInit(cmd *cobra.Command) error {
 	}
 	answers.Port = port
 
-	// NOTE: cli-p4 inserts the mkcert + /etc/hosts automation for mneme.dev
-	// mode here, before the file is written.
+	// HTTPS opt-in: generate the trusted cert + hosts entry the settings will
+	// point at, before writing the config.
+	if answers.NetMode == "mneme.dev" {
+		if err := setupHTTPS(cmd.Context(), out); err != nil {
+			return err
+		}
+	}
 
 	if _, err := writeInit(answers, path, out); err != nil {
 		return err
