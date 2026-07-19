@@ -120,6 +120,41 @@ func TestWorkerPurgesEmbeddingsForDeletedSource(t *testing.T) {
 	}
 }
 
+// Run drains enqueued work through the deduplicated pending queue: an
+// enqueued source is picked up and embedded without any channel-buffer drop.
+func TestWorkerRunDrainsEnqueued(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	seedProject(t, s, "apollo")
+	if err := s.CreateDocument(ctx, &models.Document{
+		ID: "q1", Title: "Queued", Project: ptrs("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "overview", "title": "O", "content": "coordinator"},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
+	go w.Run(ctx)
+	// Enqueue the same source twice — dedup must not break delivery.
+	w.Enqueue(embed.SourceRef{Type: "documents", ID: "q1"})
+	w.Enqueue(embed.SourceRef{Type: "documents", ID: "q1"})
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if got, _ := s.EmbeddingsFor(ctx, "documents", "q1"); got["overview"] != "" {
+			return // delivered and embedded
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Run did not drain the enqueued source within 3s")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // Reconciliation only enqueues live sources, so a deleted source's vectors are
 // never re-processed. ReconcileAll must sweep them itself so the index
 // self-heals after missed delete events.

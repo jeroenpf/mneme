@@ -27,44 +27,62 @@ type NopEnqueuer struct{}
 
 func (NopEnqueuer) Enqueue(SourceRef) {}
 
-// Worker embeds sources off an in-memory channel. Jobs are best-effort:
-// failures are logged and recovered by the next ReconcileAll.
+// Worker embeds sources off a deduplicated, non-dropping in-memory queue.
+// Jobs are best-effort: failures are logged and recovered by the next
+// ReconcileAll.
 type Worker struct {
 	store   store.Store
 	client  Client
-	ch      chan SourceRef
-	limiter *rateLimiter // spaces actual provider requests under a low RPM tier
+	limiter *rateLimiter  // spaces actual provider requests under a low RPM tier
+	pending *pendingSet   // dedup, non-dropping work queue
+	signal  chan struct{} // buffered(1) wake-up for Run when new work arrives
 }
 
 // NewWorker builds the worker. rpm>0 installs a proactive rate limiter
 // (60s/rpm) that spaces only real embedding requests, for accounts on the low
 // no-payment-method tier; rpm=0 relies solely on the client's 429 backoff.
+// buf is an initial capacity hint for the pending queue.
 func NewWorker(st store.Store, c Client, buf, rpm int) *Worker {
-	return &Worker{store: st, client: c, ch: make(chan SourceRef, buf), limiter: newRateLimiter(rpm)}
-}
-
-// Enqueue is non-blocking: a full buffer drops the job (the next reconcile
-// re-enqueues it) so a slow Voyage never stalls an MCP tool.
-func (w *Worker) Enqueue(ref SourceRef) {
-	select {
-	case w.ch <- ref:
-	default:
-		slog.Warn("embed queue full, dropping (reconcile will recover)", "type", ref.Type, "id", ref.ID)
+	return &Worker{
+		store:   st,
+		client:  c,
+		limiter: newRateLimiter(rpm),
+		pending: newPendingSet(buf),
+		signal:  make(chan struct{}, 1),
 	}
 }
 
-// Run drains the queue until ctx is cancelled. Rate limiting lives in Process
-// (it waits the limiter only around an actual provider request), so warm
-// sources drain at full speed and the loop itself never throttles.
+// Enqueue is non-blocking and never drops: it coalesces repeat refs for the
+// same source (dedup) and wakes Run. A slow Voyage never stalls an MCP tool,
+// and bursts are held rather than lost.
+func (w *Worker) Enqueue(ref SourceRef) {
+	if w.pending.Add(ref) {
+		select {
+		case w.signal <- struct{}{}:
+		default: // a wake-up is already queued; Run will drain all pending
+		}
+	}
+}
+
+// Run drains the pending queue until ctx is cancelled. Rate limiting lives in
+// Process (it waits the limiter only around an actual provider request), so
+// warm sources drain at full speed and the loop itself never throttles.
 func (w *Worker) Run(ctx context.Context) {
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		case ref := <-w.ch:
-			if _, err := w.Process(ctx, ref); err != nil {
-				slog.Error("embed failed", "type", ref.Type, "id", ref.ID, "err", err)
+		}
+		ref, ok := w.pending.Next()
+		if !ok {
+			select {
+			case <-ctx.Done():
+				return
+			case <-w.signal:
 			}
+			continue
+		}
+		if _, err := w.Process(ctx, ref); err != nil {
+			slog.Error("embed failed", "type", ref.Type, "id", ref.ID, "err", err)
 		}
 	}
 }
