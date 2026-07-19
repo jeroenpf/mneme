@@ -45,7 +45,7 @@ func renderMarkdown(b *Bundle) string {
 
 	sb.WriteString("\n## Active plan\n")
 	if b.ActivePlan == nil {
-		sb.WriteString("_none_\n")
+		sb.WriteString("_no in-progress plan — start one, or pick up a todo plan_\n")
 	} else {
 		p := b.ActivePlan
 		phase := "—"
@@ -53,6 +53,40 @@ func renderMarkdown(b *Bundle) string {
 			phase = fmt.Sprintf("%d/%d", *p.PhaseCurrent, *p.PhaseTotal)
 		}
 		fmt.Fprintf(&sb, "**%s** — phase %s (%s)\n", p.Title, phase, p.Status)
+		if p.ActivePhase != "" {
+			fmt.Fprintf(&sb, "Current phase: **%s**\n", p.ActivePhase)
+		}
+	}
+
+	sb.WriteString("\n## Next tasks\n")
+	if len(b.NextTasks) == 0 {
+		if b.ActivePlan == nil {
+			sb.WriteString("_none_\n")
+		} else {
+			sb.WriteString("_none incomplete — the active plan's tasks are all done_\n")
+		}
+	} else {
+		for _, t := range b.NextTasks {
+			if t.Phase != "" {
+				fmt.Fprintf(&sb, "- [ ] %s — %s `%s`\n", t.Title, t.Phase, t.ID)
+			} else {
+				fmt.Fprintf(&sb, "- [ ] %s `%s`\n", t.Title, t.ID)
+			}
+		}
+	}
+
+	if len(b.Blockers) > 0 {
+		sb.WriteString("\n## Blockers\n")
+		for _, bl := range b.Blockers {
+			fmt.Fprintf(&sb, "- %s `%s`\n", bl.Title, bl.ID)
+		}
+	}
+
+	if len(b.Deferred) > 0 {
+		sb.WriteString("\n## Deferred (from last session)\n")
+		for _, d := range b.Deferred {
+			fmt.Fprintf(&sb, "- %s\n", d)
+		}
 	}
 
 	sb.WriteString("\n## Recent decisions\n")

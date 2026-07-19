@@ -16,17 +16,36 @@ const (
 	maxDecisions = 5
 	maxSnippets  = 10
 	maxJournal   = 3
+	maxNextTasks = 6
+	maxBlockers  = 5
 )
 
 // PlanSummary is the active plan's status line — title, lifecycle status,
-// and phase progress. The plan body is intentionally omitted (too heavy
-// for a session preamble).
+// phase progress, and the current (wip) phase title. The plan body is
+// intentionally omitted (too heavy for a session preamble); its next tasks are
+// lifted out separately into Bundle.NextTasks.
 type PlanSummary struct {
 	ID           string `json:"id"`
 	Title        string `json:"title"`
 	Status       string `json:"status"`
+	ActivePhase  string `json:"active_phase,omitempty"`
 	PhaseCurrent *int   `json:"phase_current,omitempty"`
 	PhaseTotal   *int   `json:"phase_total,omitempty"`
+}
+
+// NextTask is one incomplete task lifted from the active plan, carrying the
+// stable id a surgical tool (tick_task) needs and its owning phase for context.
+type NextTask struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Phase string `json:"phase,omitempty"`
+}
+
+// Blocker is a document parked in the blocked state — work the session may need
+// to unstick before proceeding.
+type Blocker struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 // Bundle is everything a session needs to start work on a project:
@@ -37,6 +56,9 @@ type Bundle struct {
 	Memory     map[string]string      `json:"memory"`
 	Env        []*models.EnvEntry     `json:"env"`
 	ActivePlan *PlanSummary           `json:"active_plan"`
+	NextTasks  []NextTask             `json:"next_tasks"`
+	Blockers   []Blocker              `json:"blockers"`
+	Deferred   []string               `json:"deferred"`
 	Decisions  []*models.Decision     `json:"decisions"`
 	Snippets   []*models.Snippet      `json:"snippets"`
 	Journal    []*models.JournalEntry `json:"journal"`
@@ -95,7 +117,11 @@ func (a *Assembler) Assemble(ctx context.Context, project string, area *string) 
 	if err != nil {
 		return nil, fmt.Errorf("bundle: env: %w", err)
 	}
-	plan, err := a.activePlan(ctx, project)
+	plan, nextTasks, err := a.activePlan(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+	blockers, err := a.blockers(ctx, project)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +144,9 @@ func (a *Assembler) Assemble(ctx context.Context, project string, area *string) 
 		Memory:     memory,
 		Env:        env,
 		ActivePlan: plan,
+		NextTasks:  nextTasks,
+		Blockers:   blockers,
+		Deferred:   deferredFrom(journal),
 		Decisions:  decisions,
 		Snippets:   snippets,
 		Journal:    journal,
@@ -146,7 +175,11 @@ func (a *Assembler) assembleMemory(ctx context.Context, project string, area *st
 	return mergeMemory(groups...), nil
 }
 
-func (a *Assembler) activePlan(ctx context.Context, project string) (*PlanSummary, error) {
+// activePlan returns the in-progress plan's status line plus the next
+// incomplete tasks lifted from its body — the "what to do next" the compiler
+// exists to surface. Returns (nil, nil, nil) when the project has no
+// in-progress plan.
+func (a *Assembler) activePlan(ctx context.Context, project string) (*PlanSummary, []NextTask, error) {
 	plans, err := a.store.ListDocuments(ctx, store.Filter{
 		Project: &project,
 		Type:    ptr(models.TypePlan),
@@ -154,19 +187,105 @@ func (a *Assembler) activePlan(ctx context.Context, project string) (*PlanSummar
 		Limit:   1,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("bundle: active plan: %w", err)
+		return nil, nil, fmt.Errorf("bundle: active plan: %w", err)
 	}
 	if len(plans) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	d := plans[0]
-	return &PlanSummary{
+	sum := &PlanSummary{
 		ID:           d.ID,
 		Title:        d.Title,
 		Status:       d.Status,
+		ActivePhase:  wipPhase(d.Meta),
 		PhaseCurrent: d.PhaseCurrent,
 		PhaseTotal:   d.PhaseTotal,
-	}, nil
+	}
+	return sum, firstN(incompleteTasks(d.Body), maxNextTasks), nil
+}
+
+// wipPhase returns the title of the phase currently in progress, read from
+// meta.phases[].status == "wip"; empty when there is no wip phase.
+func wipPhase(meta map[string]any) string {
+	phases, _ := meta["phases"].([]any)
+	for _, raw := range phases {
+		p, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if s, _ := p["status"].(string); s == "wip" {
+			t, _ := p["title"].(string)
+			return t
+		}
+	}
+	return ""
+}
+
+// incompleteTasks walks a plan body and returns every not-done task in document
+// order, tagged with its owning subphase/task-list title. Document order puts
+// earlier (usually current-phase) work first, so the leading entries are the
+// natural next steps.
+func incompleteTasks(body map[string]any) []NextTask {
+	sections, _ := body["sections"].([]any)
+	var out []NextTask
+	var walk func(blocks []any, phase string)
+	walk = func(blocks []any, phase string) {
+		for _, raw := range blocks {
+			b, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			ph := phase
+			if t, _ := b["type"].(string); t == "subphase" || t == "task-list" {
+				if title, _ := b["title"].(string); title != "" {
+					ph = title
+				}
+				tasks, _ := b["tasks"].([]any)
+				for _, traw := range tasks {
+					tm, ok := traw.(map[string]any)
+					if !ok {
+						continue
+					}
+					if done, _ := tm["done"].(bool); done {
+						continue
+					}
+					id, _ := tm["id"].(string)
+					title, _ := tm["title"].(string)
+					out = append(out, NextTask{ID: id, Title: title, Phase: ph})
+				}
+			}
+			if children, _ := b["children"].([]any); children != nil {
+				walk(children, ph)
+			}
+		}
+	}
+	walk(sections, "")
+	return out
+}
+
+// blockers lists documents parked in the blocked state for the project.
+func (a *Assembler) blockers(ctx context.Context, project string) ([]Blocker, error) {
+	docs, err := a.store.ListDocuments(ctx, store.Filter{
+		Project: &project,
+		Status:  ptr(models.StatusBlocked),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bundle: blockers: %w", err)
+	}
+	out := []Blocker{}
+	for _, d := range firstN(docs, maxBlockers) {
+		out = append(out, Blocker{ID: d.ID, Title: d.Title})
+	}
+	return out, nil
+}
+
+// deferredFrom lifts the deferred-work list from the most recent journal entry
+// (the bundle's journal is newest-first) — the work a prior session parked.
+func deferredFrom(journal []*models.JournalEntry) []string {
+	if len(journal) == 0 {
+		return nil
+	}
+	return journal[0].Deferred
 }
 
 func (a *Assembler) recentDecisions(ctx context.Context, project string) ([]*models.Decision, error) {

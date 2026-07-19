@@ -196,6 +196,64 @@ func TestAssembleCapsAndArea(t *testing.T) {
 	}
 }
 
+func TestAssembleExtractsNextTasksPhaseBlockersDeferred(t *testing.T) {
+	plan := &models.Document{
+		ID: "impl", Title: "Impl plan", Project: strptr("mneme"),
+		Type: models.TypePlan, Status: models.StatusInProgress,
+		PhaseCurrent: ptr(2), PhaseTotal: ptr(3),
+		Meta: map[string]any{"phases": []any{
+			map[string]any{"title": "Foundation", "status": "done"},
+			map[string]any{"title": "API Layer", "status": "wip"},
+			map[string]any{"title": "Frontend", "status": "todo"},
+		}},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "subphase", "id": "sp-1", "title": "Foundation", "tasks": []any{
+				map[string]any{"id": "t-1", "title": "done thing", "done": true},
+			}},
+			map[string]any{"type": "subphase", "id": "sp-2", "title": "API Layer", "tasks": []any{
+				map[string]any{"id": "t-2", "title": "wire routes", "done": false},
+				map[string]any{"id": "t-3", "title": "add handlers", "done": false},
+			}},
+		}},
+	}
+	blocked := &models.Document{
+		ID: "spike", Title: "TLS spike", Project: strptr("mneme"),
+		Type: models.TypeSpec, Status: models.StatusBlocked,
+	}
+	f := &fakeStore{
+		projects:  map[string]*models.Project{"mneme": {Slug: "mneme"}},
+		documents: []*models.Document{plan, blocked},
+		journal: []*models.JournalEntry{
+			{Summary: "did stuff", Project: strptr("mneme"), Deferred: []string{"backfill embeddings", "retry flaky test"}},
+		},
+	}
+	b, err := New(f).Assemble(context.Background(), "mneme", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if b.ActivePlan == nil || b.ActivePlan.ActivePhase != "API Layer" {
+		t.Errorf("active phase = %+v", b.ActivePlan)
+	}
+	if len(b.NextTasks) != 2 {
+		t.Fatalf("next tasks = %d, want 2 incomplete: %+v", len(b.NextTasks), b.NextTasks)
+	}
+	if b.NextTasks[0].ID != "t-2" || b.NextTasks[0].Title != "wire routes" || b.NextTasks[0].Phase != "API Layer" {
+		t.Errorf("first next task = %+v", b.NextTasks[0])
+	}
+	if len(b.Blockers) != 1 || b.Blockers[0].ID != "spike" {
+		t.Errorf("blockers = %+v", b.Blockers)
+	}
+	if len(b.Deferred) != 2 || b.Deferred[0] != "backfill embeddings" {
+		t.Errorf("deferred = %+v", b.Deferred)
+	}
+	for _, want := range []string{"t-2", "wire routes", "API Layer", "TLS spike", "backfill embeddings"} {
+		if !strings.Contains(b.Markdown, want) {
+			t.Errorf("digest missing %q:\n%s", want, b.Markdown)
+		}
+	}
+}
+
 func TestRenderMarkdownNoneSections(t *testing.T) {
 	b := &Bundle{Project: "mneme", Memory: map[string]string{}}
 	md := renderMarkdown(b)
@@ -203,7 +261,7 @@ func TestRenderMarkdownNoneSections(t *testing.T) {
 		"# Context bundle — mneme",
 		"## Memory\n_none_",
 		"## Env\n_none_",
-		"## Active plan\n_none_",
+		"## Active plan\n_no in-progress plan",
 		"## Recent journal\n_none_",
 	} {
 		if !strings.Contains(md, want) {
