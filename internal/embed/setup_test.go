@@ -58,8 +58,8 @@ func TestMain(m *testing.M) {
 }
 
 // newEmbedStore returns a fresh-state store, TRUNCATEing so each test
-// starts clean.
-func newEmbedStore(t *testing.T) *store.PostgresStore {
+// starts clean. Accepts testing.TB so benchmarks can use it too.
+func newEmbedStore(t testing.TB) *store.PostgresStore {
 	t.Helper()
 	ctx := context.Background()
 
@@ -79,7 +79,7 @@ func newEmbedStore(t *testing.T) *store.PostgresStore {
 func ptrs(s string) *string { return &s }
 
 // seedProject inserts a project slug so FK-constrained rows can reference it.
-func seedProject(t *testing.T, s *store.PostgresStore, slug string) {
+func seedProject(t testing.TB, s *store.PostgresStore, slug string) {
 	t.Helper()
 	if _, err := s.Pool().Exec(context.Background(),
 		`INSERT INTO projects (name, slug) VALUES ($1, $1)`, slug); err != nil {
