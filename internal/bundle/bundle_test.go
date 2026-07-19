@@ -442,6 +442,55 @@ func TestSelectRelevantSnippetsKeepsOrderWithoutSignal(t *testing.T) {
 	}
 }
 
+func TestAssembleCompletedWorkFallback(t *testing.T) {
+	f := &fakeStore{
+		projects: map[string]*models.Project{"mneme": {Slug: "mneme"}},
+		documents: []*models.Document{
+			{ID: "p1", Title: "Done plan", Project: strptr("mneme"), Type: models.TypePlan, Status: models.StatusComplete},
+		},
+	}
+	b, err := New(f).Assemble(context.Background(), "mneme", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.ActivePlan != nil {
+		t.Fatalf("no in-progress plan expected, got %+v", b.ActivePlan)
+	}
+	if !strings.Contains(b.Markdown, "all plans complete") {
+		t.Errorf("completed-work fallback missing:\n%s", b.Markdown)
+	}
+}
+
+func TestAssembleTodoWaitingFallback(t *testing.T) {
+	f := &fakeStore{
+		projects: map[string]*models.Project{"mneme": {Slug: "mneme"}},
+		documents: []*models.Document{
+			{ID: "p1", Title: "Next plan", Project: strptr("mneme"), Type: models.TypePlan, Status: models.StatusTodo},
+		},
+	}
+	b, err := New(f).Assemble(context.Background(), "mneme", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.Markdown, "todo plan") {
+		t.Errorf("todo-waiting fallback missing:\n%s", b.Markdown)
+	}
+}
+
+func TestAssembleEmptyProjectFallbacks(t *testing.T) {
+	f := &fakeStore{projects: map[string]*models.Project{"mneme": {Slug: "mneme"}}}
+	b, err := New(f).Assemble(context.Background(), "mneme", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.Markdown, "no recorded work yet") {
+		t.Errorf("empty-project note missing:\n%s", b.Markdown)
+	}
+	if !strings.Contains(b.Markdown, "no plans yet") {
+		t.Errorf("no-plans fallback missing:\n%s", b.Markdown)
+	}
+}
+
 func TestRenderMarkdownNoneSections(t *testing.T) {
 	b := &Bundle{Project: "mneme", Memory: map[string]string{}}
 	md := renderMarkdown(b)
@@ -449,7 +498,7 @@ func TestRenderMarkdownNoneSections(t *testing.T) {
 		"# Context bundle — mneme",
 		"## Memory\n_none_",
 		"## Env\n_none_",
-		"## Active plan\n_no in-progress plan",
+		"## Active plan\n_no plans yet",
 		"## Recent journal\n_none_",
 	} {
 		if !strings.Contains(md, want) {

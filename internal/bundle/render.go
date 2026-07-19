@@ -27,6 +27,30 @@ func excerpt(s string, n int) string {
 	return strings.TrimRight(cut, " ,.;:") + "…"
 }
 
+// planFallback returns the Active-plan message when no plan is in progress,
+// classified by PlanStats so the digest clearly distinguishes completed work,
+// waiting work, and a project with no plans yet (road-p5-t5).
+func planFallback(s PlanStats) string {
+	switch {
+	case s.Total == 0:
+		return "_no plans yet — start one_"
+	case s.Todo > 0:
+		return fmt.Sprintf("_no plan in progress — %d todo plan(s) waiting; pick one up_", s.Todo)
+	case s.Complete > 0:
+		return "_all plans complete — nothing in progress; start a new plan or reopen one_"
+	default:
+		return "_no in-progress plan — start one, or pick up a todo plan_"
+	}
+}
+
+// isEmptyProject reports whether the project has no recorded work at all —
+// used to render a clear "get started" note instead of a wall of _none_.
+func isEmptyProject(b *Bundle) bool {
+	return len(b.Memory) == 0 && len(b.Env) == 0 && b.PlanStats.Total == 0 &&
+		len(b.Decisions) == 0 && len(b.Snippets) == 0 && len(b.Journal) == 0 &&
+		len(b.Blockers) == 0 && b.ActivePlan == nil
+}
+
 // renderMarkdown produces the paste-ready session digest. Every section
 // renders "_none_" when empty so the shape is stable and auditable.
 func renderMarkdown(b *Bundle) string {
@@ -36,6 +60,10 @@ func renderMarkdown(b *Bundle) string {
 		title += " / " + *b.Area
 	}
 	fmt.Fprintf(&sb, "# Context bundle — %s\n\n", title)
+
+	if isEmptyProject(b) {
+		sb.WriteString("_This project has no recorded work yet — push a plan or log a decision to get started._\n\n")
+	}
 
 	sb.WriteString("## Memory\n")
 	if len(b.Memory) == 0 {
@@ -66,7 +94,8 @@ func renderMarkdown(b *Bundle) string {
 
 	sb.WriteString("\n## Active plan\n")
 	if b.ActivePlan == nil {
-		sb.WriteString("_no in-progress plan — start one, or pick up a todo plan_\n")
+		sb.WriteString(planFallback(b.PlanStats))
+		sb.WriteByte('\n')
 	} else {
 		p := b.ActivePlan
 		phase := "—"

@@ -72,6 +72,16 @@ type Blocker struct {
 	Title string `json:"title"`
 }
 
+// PlanStats counts the project's plans by lifecycle status. It drives the
+// Active-plan fallback when no plan is in progress, letting the digest say
+// whether work is complete, waiting, or not yet started (road-p5-t5).
+type PlanStats struct {
+	Total      int `json:"total"`
+	InProgress int `json:"in_progress"`
+	Todo       int `json:"todo"`
+	Complete   int `json:"complete"`
+}
+
 // Bundle is everything a session needs to start work on a project:
 // structured fields plus a paste-ready markdown digest.
 type Bundle struct {
@@ -80,6 +90,7 @@ type Bundle struct {
 	Memory     map[string]string      `json:"memory"`
 	Env        []*models.EnvEntry     `json:"env"`
 	ActivePlan *PlanSummary           `json:"active_plan"`
+	PlanStats  PlanStats              `json:"plan_stats"`
 	NextTasks  []NextTask             `json:"next_tasks"`
 	Blockers   []Blocker              `json:"blockers"`
 	Deferred   []string               `json:"deferred"`
@@ -157,7 +168,7 @@ func (a *Assembler) AssembleWithOptions(ctx context.Context, project string, are
 	if err != nil {
 		return nil, fmt.Errorf("bundle: env: %w", err)
 	}
-	plan, nextTasks, planTags, err := a.activePlan(ctx, project)
+	plan, nextTasks, planTags, planStats, err := a.planContext(ctx, project)
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +205,7 @@ func (a *Assembler) AssembleWithOptions(ctx context.Context, project string, are
 		Memory:     memory,
 		Env:        env,
 		ActivePlan: plan,
+		PlanStats:  planStats,
 		NextTasks:  nextTasks,
 		Blockers:   blockers,
 		Deferred:   deferred,
@@ -278,33 +290,47 @@ func (a *Assembler) assembleMemory(ctx context.Context, project string, area *st
 	return mergeMemory(groups...), nil
 }
 
-// activePlan returns the in-progress plan's status line, the next incomplete
-// tasks lifted from its body — the "what to do next" the compiler exists to
-// surface — and the plan's tags (a relevance signal for knowledge selection).
-// Returns (nil, nil, nil, nil) when the project has no in-progress plan.
-func (a *Assembler) activePlan(ctx context.Context, project string) (*PlanSummary, []NextTask, []string, error) {
+// planContext fetches every plan for the project and returns: the first
+// in-progress plan's status line, its next incomplete tasks — the "what to do
+// next" the compiler exists to surface — its tags (a relevance signal), and
+// PlanStats classifying all plans by status. When no plan is in progress the
+// first three are nil/empty and PlanStats drives the fallback message.
+func (a *Assembler) planContext(ctx context.Context, project string) (*PlanSummary, []NextTask, []string, PlanStats, error) {
 	plans, err := a.store.ListDocuments(ctx, store.Filter{
 		Project: &project,
 		Type:    ptr(models.TypePlan),
-		Status:  ptr(models.StatusInProgress),
-		Limit:   1,
 	})
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("bundle: active plan: %w", err)
+		return nil, nil, nil, PlanStats{}, fmt.Errorf("bundle: plans: %w", err)
 	}
-	if len(plans) == 0 {
-		return nil, nil, nil, nil
+	var stats PlanStats
+	var active *models.Document
+	for _, d := range plans {
+		stats.Total++
+		switch d.Status {
+		case models.StatusInProgress:
+			stats.InProgress++
+			if active == nil {
+				active = d
+			}
+		case models.StatusTodo:
+			stats.Todo++
+		case models.StatusComplete:
+			stats.Complete++
+		}
 	}
-	d := plans[0]
+	if active == nil {
+		return nil, nil, nil, stats, nil
+	}
 	sum := &PlanSummary{
-		ID:           d.ID,
-		Title:        d.Title,
-		Status:       d.Status,
-		ActivePhase:  wipPhase(d.Meta),
-		PhaseCurrent: d.PhaseCurrent,
-		PhaseTotal:   d.PhaseTotal,
+		ID:           active.ID,
+		Title:        active.Title,
+		Status:       active.Status,
+		ActivePhase:  wipPhase(active.Meta),
+		PhaseCurrent: active.PhaseCurrent,
+		PhaseTotal:   active.PhaseTotal,
 	}
-	return sum, firstN(incompleteTasks(d.Body), maxNextTasks), d.Tags, nil
+	return sum, firstN(incompleteTasks(active.Body), maxNextTasks), active.Tags, stats, nil
 }
 
 // wipPhase returns the title of the phase currently in progress, read from
