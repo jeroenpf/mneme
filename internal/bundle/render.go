@@ -6,6 +6,27 @@ import (
 	"strings"
 )
 
+const (
+	decisionExcerptLen = 180
+	snippetExcerptLen  = 120
+)
+
+// excerpt collapses all whitespace in s to single spaces and truncates the
+// result to at most n runes on a word boundary, appending an ellipsis when it
+// had to cut. Returns "" for empty/whitespace-only input. Used to lift a small,
+// scannable line of context out of long rationale or snippet bodies.
+func excerpt(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if len([]rune(s)) <= n {
+		return s
+	}
+	cut := string([]rune(s)[:n])
+	if i := strings.LastIndex(cut, " "); i > 0 {
+		cut = cut[:i]
+	}
+	return strings.TrimRight(cut, " ,.;:") + "…"
+}
+
 // renderMarkdown produces the paste-ready session digest. Every section
 // renders "_none_" when empty so the shape is stable and auditable.
 func renderMarkdown(b *Bundle) string {
@@ -94,7 +115,10 @@ func renderMarkdown(b *Bundle) string {
 		sb.WriteString("_none_\n")
 	} else {
 		for _, d := range b.Decisions {
-			fmt.Fprintf(&sb, "- %s — %s (%s)\n", d.Title, d.Status, d.CreatedAt.Format("2006-01-02"))
+			fmt.Fprintf(&sb, "- **%s** — %s (%s)\n", d.Title, d.Status, d.CreatedAt.Format("2006-01-02"))
+			if r := excerpt(d.Rationale, decisionExcerptLen); r != "" {
+				fmt.Fprintf(&sb, "  %s\n", r)
+			}
 		}
 	}
 
@@ -107,7 +131,15 @@ func renderMarkdown(b *Bundle) string {
 			if lang == "" {
 				lang = "text"
 			}
-			fmt.Fprintf(&sb, "- %s [%s]\n", s.Title, lang)
+			ex := excerpt(s.Description, snippetExcerptLen)
+			if ex == "" {
+				ex = excerpt(s.Content, snippetExcerptLen)
+			}
+			if ex != "" {
+				fmt.Fprintf(&sb, "- **%s** [%s] — %s\n", s.Title, lang, ex)
+			} else {
+				fmt.Fprintf(&sb, "- **%s** [%s]\n", s.Title, lang)
+			}
 		}
 	}
 

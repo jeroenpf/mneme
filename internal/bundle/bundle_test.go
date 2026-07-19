@@ -254,6 +254,48 @@ func TestAssembleExtractsNextTasksPhaseBlockersDeferred(t *testing.T) {
 	}
 }
 
+func TestRenderIncludesDecisionRationaleAndSnippetExcerpt(t *testing.T) {
+	longRationale := "Postgres is already the store of record and pgvector keeps embeddings colocated, " +
+		"so a second datastore would add operational surface with no retrieval benefit for a single-user local tool " +
+		"that never approaches Postgres scaling limits."
+	b := &Bundle{
+		Project: "mneme",
+		Memory:  map[string]string{},
+		Decisions: []*models.Decision{
+			{Title: "Use pgvector", Status: models.DecisionAccepted, Rationale: longRationale},
+			{Title: "No rationale dec", Status: models.DecisionAccepted},
+		},
+		Snippets: []*models.Snippet{
+			{Title: "pgx pool", Language: "go", Description: "Bounded connection pool wired from config."},
+			{Title: "raw content only", Language: "sql", Content: "SELECT 1\nFROM docs\nWHERE id = $1"},
+		},
+	}
+	md := renderMarkdown(b)
+
+	// Decision rationale appears as an excerpt, truncated with an ellipsis.
+	if !strings.Contains(md, "Postgres is already the store of record") {
+		t.Errorf("decision rationale excerpt missing:\n%s", md)
+	}
+	if !strings.Contains(md, "…") {
+		t.Errorf("long rationale should be truncated with an ellipsis:\n%s", md)
+	}
+	if strings.Contains(md, "scaling limits.") {
+		t.Errorf("long rationale should be truncated, not shown in full:\n%s", md)
+	}
+	// A decision without rationale still renders its title line, no dangling excerpt.
+	if !strings.Contains(md, "No rationale dec") {
+		t.Errorf("decision without rationale should still render:\n%s", md)
+	}
+	// Snippet excerpt prefers the description.
+	if !strings.Contains(md, "Bounded connection pool wired from config.") {
+		t.Errorf("snippet description excerpt missing:\n%s", md)
+	}
+	// Snippet with no description falls back to a content excerpt on one line.
+	if !strings.Contains(md, "SELECT 1 FROM docs") {
+		t.Errorf("snippet content excerpt (newlines collapsed) missing:\n%s", md)
+	}
+}
+
 func TestRenderMarkdownNoneSections(t *testing.T) {
 	b := &Bundle{Project: "mneme", Memory: map[string]string{}}
 	md := renderMarkdown(b)
