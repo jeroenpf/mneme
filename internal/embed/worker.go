@@ -67,10 +67,14 @@ func (w *Worker) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case ref := <-w.ch:
-			if err := w.Process(ctx, ref); err != nil {
+			embedded, err := w.Process(ctx, ref)
+			if err != nil {
 				slog.Error("embed failed", "type", ref.Type, "id", ref.ID, "err", err)
 			}
-			if w.minInterval > 0 {
+			// Only spend rate-limit time after a real provider request; a
+			// warm source (no changed chunks) makes no API call and must
+			// not throttle, so a warm reconcile drains at full speed.
+			if embedded && w.minInterval > 0 {
 				select {
 				case <-ctx.Done():
 					return
@@ -111,30 +115,34 @@ func (w *Worker) ReconcileAll(ctx context.Context) error {
 //   - Model change: if any stored vector is on a different model, the whole
 //     source is re-embedded so vector spaces never mix.
 //
-// Exported for direct testing.
-func (w *Worker) Process(ctx context.Context, ref SourceRef) error {
+// It returns embedded=true iff it called the provider (the chunk diff found
+// new, changed, or stale-model work), so Run throttles only after real API
+// requests. Exported for direct testing.
+func (w *Worker) Process(ctx context.Context, ref SourceRef) (embedded bool, err error) {
 	src, title, project, err := w.load(ctx, ref)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if src == nil {
 		// The source was deleted between enqueue and now: purge any
 		// embeddings it left behind (passing keep=nil deletes them all)
 		// so orphans never linger in search or coverage.
-		return w.store.DeleteEmbeddingsExcept(ctx, ref.Type, ref.ID, nil)
+		return false, w.store.DeleteEmbeddingsExcept(ctx, ref.Type, ref.ID, nil)
 	}
 	chunks := Chunks(src)
 	existing, err := w.store.EmbeddingsFor(ctx, ref.Type, ref.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	// A model switch leaves stale-model vectors that must all be replaced,
 	// so re-embed the full chunk set even where the text is unchanged.
 	staleModel, err := w.store.HasStaleModelEmbeddings(ctx, ref.Type, ref.ID, w.client.Model())
 	if err != nil {
-		return err
+		return false, err
 	}
 
+	// The chunk comparison runs before any provider call, so unchanged
+	// sources never reach the rate limiter.
 	var toEmbed []Chunk
 	for _, c := range chunks {
 		if staleModel || existing[c.ID] != c.Text {
@@ -148,7 +156,7 @@ func (w *Worker) Process(ctx context.Context, ref SourceRef) error {
 		}
 		vecs, err := w.client.Embed(ctx, texts, "document")
 		if err != nil {
-			return err
+			return false, err
 		}
 		rows := make([]models.Embedding, len(toEmbed))
 		for i, c := range toEmbed {
@@ -158,15 +166,16 @@ func (w *Worker) Process(ctx context.Context, ref SourceRef) error {
 			}
 		}
 		if err := w.store.UpsertEmbeddings(ctx, rows); err != nil {
-			return err
+			return false, err
 		}
+		embedded = true
 	}
 
 	keep := make([]string, len(chunks))
 	for i, c := range chunks {
 		keep[i] = c.ID
 	}
-	return w.store.DeleteEmbeddingsExcept(ctx, ref.Type, ref.ID, keep)
+	return embedded, w.store.DeleteEmbeddingsExcept(ctx, ref.Type, ref.ID, keep)
 }
 
 // load fetches the source model + its title/project for the embedding row.

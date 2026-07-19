@@ -49,7 +49,7 @@ func TestWorkerEmbedsAndPrunes(t *testing.T) {
 
 	fc := &fakeClient{}
 	w := embed.NewWorker(s, fc, 8, 0) // rpm=0: no throttle in tests
-	if err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "d1"}); err != nil {
+	if _, err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "d1"}); err != nil {
 		t.Fatalf("Process: %v", err)
 	}
 	got, _ := s.EmbeddingsFor(ctx, "documents", "d1")
@@ -59,7 +59,7 @@ func TestWorkerEmbedsAndPrunes(t *testing.T) {
 
 	// Re-process unchanged: no new embed calls (chunk_text diff skips it).
 	before := fc.calls
-	if err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "d1"}); err != nil {
+	if _, err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "d1"}); err != nil {
 		t.Fatal(err)
 	}
 	if fc.calls != before {
@@ -71,7 +71,7 @@ func TestWorkerEmbedsAndPrunes(t *testing.T) {
 	if err := s.UpdateDocument(ctx, doc); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "d1"}); err != nil {
+	if _, err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "d1"}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = s.EmbeddingsFor(ctx, "documents", "d1")
@@ -99,7 +99,7 @@ func TestWorkerPurgesEmbeddingsForDeletedSource(t *testing.T) {
 	}
 
 	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
-	if err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "gone"}); err != nil {
+	if _, err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "gone"}); err != nil {
 		t.Fatalf("Process: %v", err)
 	}
 	if got, _ := s.EmbeddingsFor(ctx, "documents", "gone"); len(got) == 0 {
@@ -110,7 +110,7 @@ func TestWorkerPurgesEmbeddingsForDeletedSource(t *testing.T) {
 	if _, err := s.Pool().Exec(ctx, `DELETE FROM documents WHERE id=$1`, "gone"); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "gone"}); err != nil {
+	if _, err := w.Process(ctx, embed.SourceRef{Type: "documents", ID: "gone"}); err != nil {
 		t.Fatalf("Process after delete: %v", err)
 	}
 	got, _ := s.EmbeddingsFor(ctx, "documents", "gone")
@@ -141,6 +141,43 @@ func TestReconcileAllSweepsOrphans(t *testing.T) {
 	}
 }
 
+// Process reports whether it actually called the provider, so Run only spends
+// rate-limit time on real requests: a warm (unchanged) source makes no API
+// call and must report no embed, gating the throttle.
+func TestProcessReportsEmbedActivity(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx := context.Background()
+	seedProject(t, s, "apollo")
+	doc := &models.Document{
+		ID: "act1", Title: "Activity", Project: ptrs("apollo"),
+		Type: models.TypePlan, Status: models.StatusTodo, Tags: []string{}, Meta: map[string]any{},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "section", "id": "overview", "title": "O", "content": "coordinator"},
+		}},
+	}
+	if err := s.CreateDocument(ctx, doc); err != nil {
+		t.Fatal(err)
+	}
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
+	ref := embed.SourceRef{Type: "documents", ID: "act1"}
+
+	embedded, err := w.Process(ctx, ref)
+	if err != nil {
+		t.Fatalf("Process: %v", err)
+	}
+	if !embedded {
+		t.Fatal("fresh source should report an embed")
+	}
+
+	embedded, err = w.Process(ctx, ref)
+	if err != nil {
+		t.Fatalf("Process (warm): %v", err)
+	}
+	if embedded {
+		t.Fatal("unchanged source should report no embed (no rate-limit spend)")
+	}
+}
+
 // A source's stored vectors must all reflect the current embedding model.
 // Switching models must re-embed the source even when its chunk text is
 // unchanged, replacing the stale-model vectors.
@@ -160,13 +197,13 @@ func TestProcessReembedsOnModelChange(t *testing.T) {
 	}
 	ref := embed.SourceRef{Type: "documents", ID: "m1"}
 
-	if err := embed.NewWorker(s, &fakeClient{model: "v1"}, 8, 0).Process(ctx, ref); err != nil {
+	if _, err := embed.NewWorker(s,&fakeClient{model: "v1"}, 8, 0).Process(ctx, ref); err != nil {
 		t.Fatalf("Process v1: %v", err)
 	}
 
 	// Same text, new model: must re-embed and replace the stored vector.
 	fc2 := &fakeClient{model: "v2"}
-	if err := embed.NewWorker(s, fc2, 8, 0).Process(ctx, ref); err != nil {
+	if _, err := embed.NewWorker(s,fc2, 8, 0).Process(ctx, ref); err != nil {
 		t.Fatalf("Process v2: %v", err)
 	}
 	if fc2.calls == 0 {
