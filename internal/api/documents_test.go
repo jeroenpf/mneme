@@ -53,6 +53,31 @@ func TestCreateAndGetDocument(t *testing.T) {
 	}
 }
 
+func TestGetDocumentByPublicID(t *testing.T) {
+	srv, _ := newServer(t)
+
+	resp := doJSON(t, http.MethodPost, srv.URL+"/api/v1/documents", map[string]any{
+		"meta": map[string]any{"title": "Ref Doc", "type": "spec"},
+		"body": map[string]any{},
+	})
+	requireStatus(t, resp, http.StatusCreated)
+	var created models.Document
+	decodeBody(t, resp, &created)
+	if created.PublicID == "" {
+		t.Fatal("create did not return a public id")
+	}
+
+	// GET by the doc_ public id resolves the same document as its slug, so a
+	// pasted mneme://document/doc_… reference can open /doc/doc_….
+	resp = doJSON(t, http.MethodGet, srv.URL+"/api/v1/documents/"+created.PublicID, nil)
+	requireStatus(t, resp, http.StatusOK)
+	var fetched models.Document
+	decodeBody(t, resp, &fetched)
+	if fetched.ID != created.ID {
+		t.Errorf("by-public-id fetched %q, want slug %q", fetched.ID, created.ID)
+	}
+}
+
 func TestCreateDocumentSlugDedup(t *testing.T) {
 	srv, _ := newServer(t)
 

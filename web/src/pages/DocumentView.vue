@@ -10,6 +10,7 @@ import { useLiveRefresh } from '@/composables/useLiveRefresh'
 import { provideDocPublicId } from '@/composables/useDocRef'
 import { phasesFromMeta } from '@/lib/phases'
 import { sectionNavItems } from '@/lib/toc'
+import { flashElement } from '@/lib/flash'
 
 const props = defineProps<{ id: string }>()
 
@@ -49,12 +50,17 @@ const blocks = computed(() => {
   )
 })
 
-// Deep links: scroll once content exists (initial load), then follow
-// hash changes from the section nav.
+// Deep links: scroll once content exists (initial load), then follow hash
+// changes from the section nav. A pasted block/task reference lands here as
+// #<blockId>, so flash the target too — the same highlight live edits use — to
+// select it, not just scroll to it.
 function scrollToHash(smooth: boolean) {
   const hash = route.hash.slice(1)
   if (!hash) return
-  document.getElementById(hash)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' })
+  const el = document.getElementById(hash)
+  if (!el) return
+  el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
+  flashElement(el)
 }
 
 watch(loading, async (isLoading) => {

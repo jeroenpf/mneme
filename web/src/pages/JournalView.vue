@@ -74,6 +74,7 @@ const projectLabel = (slug: string) => (slug === '' ? 'global' : slug)
                 :key="e.id"
                 :entry="e"
                 :data-flash-id="e.id"
+                :data-ref-id="e.public_id"
               />
             </div>
           </section>

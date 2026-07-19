@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useEventStream } from '@/composables/useEventStream'
+import { tryOpenRef } from '@/lib/openRef'
 import ThemePicker from './ThemePicker.vue'
 import ToastHost from './ToastHost.vue'
 
@@ -34,7 +35,14 @@ const router = useRouter()
 
 function onEnter() {
   const q = search.value.trim()
-  if (q) router.push({ path: '/search', query: { q } })
+  if (!q) return
+  // A pasted mneme:// reference (or bare public id) jumps straight to its
+  // target; anything else runs a full-text search.
+  if (tryOpenRef(router, q)) {
+    search.value = ''
+    return
+  }
+  router.push({ path: '/search', query: { q } })
 }
 
 // Terminal affordance: `/` focuses search from anywhere on the page.

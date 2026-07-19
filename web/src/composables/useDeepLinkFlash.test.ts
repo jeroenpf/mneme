@@ -44,6 +44,17 @@ describe('useDeepLinkFlash', () => {
     expect(document.querySelector('[data-flash-id="d1"]')?.classList.contains('mn-flash')).toBe(false)
   })
 
+  it('also reveals a row by its public reference id (data-ref-id)', async () => {
+    const comp = defineComponent({
+      setup() {
+        useDeepLinkFlash(() => true)
+        return () => h('ul', [h('li', { 'data-ref-id': 'dec_1' }, 'x')])
+      },
+    })
+    await mountAt(comp as ReturnType<typeof host>, '/x?flash=dec_1')
+    expect(document.querySelector('[data-ref-id="dec_1"]')?.classList.contains('mn-flash')).toBe(true)
+  })
+
   it('does nothing without a ?flash param', async () => {
     await mountAt(host(() => true), '/x')
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()

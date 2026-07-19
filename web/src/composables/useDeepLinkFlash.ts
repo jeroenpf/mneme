@@ -2,11 +2,13 @@ import { nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { flashElement } from '@/lib/flash'
 
-// Reveal the entity a search deep-link points at. When a list view is opened
-// with `?flash=<id>`, scroll the matching `[data-flash-id]` row into view and
-// flash it — reusing the same highlight the live-update layer uses. `ready`
-// reports when the list has rendered its rows (e.g. `() => !loading.value`) so
-// we wait for async data before looking for the target row.
+// Reveal the entity a deep-link points at. When a list view is opened with
+// `?flash=<id>`, scroll the matching row into view and flash it — reusing the
+// same highlight the live-update layer uses. The id is matched against both
+// `[data-flash-id]` (internal id, from search deep-links) and `[data-ref-id]`
+// (public id, from a pasted mneme:// reference). `ready` reports when the list
+// has rendered its rows (e.g. `() => !loading.value`) so we wait for async data
+// before looking for the target row.
 export function useDeepLinkFlash(ready: () => boolean): void {
   const route = useRoute()
 
@@ -14,7 +16,8 @@ export function useDeepLinkFlash(ready: () => boolean): void {
     const target = route.query.flash
     if (typeof target !== 'string' || target === '' || !ready()) return
     await nextTick() // let the list render (or re-render after loading)
-    const el = document.querySelector(`[data-flash-id="${escapeAttr(target)}"]`)
+    const sel = escapeAttr(target)
+    const el = document.querySelector(`[data-flash-id="${sel}"], [data-ref-id="${sel}"]`)
     if (!el) return
     el.scrollIntoView({ block: 'center' })
     flashElement(el)

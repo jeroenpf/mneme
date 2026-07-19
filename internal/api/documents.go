@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jeroenpfeil/mneme/internal/docmeta"
+	"github.com/jeroenpfeil/mneme/internal/ids"
 	"github.com/jeroenpfeil/mneme/internal/models"
 	"github.com/jeroenpfeil/mneme/internal/slug"
 	"github.com/jeroenpfeil/mneme/internal/store"
@@ -169,6 +170,11 @@ func (h *DocumentsHandler) createWithSlug(ctx context.Context, doc *models.Docum
 func (h *DocumentsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	doc, err := h.Store.GetDocument(r.Context(), id)
+	// Accept a doc_ public id too, so a pasted mneme://document/doc_… reference
+	// opens /doc/doc_… without the UI having to map it back to the slug first.
+	if errors.Is(err, store.ErrNotFound) && ids.ValidFor(ids.KindDocument, id) {
+		doc, err = h.Store.GetDocumentByPublicID(r.Context(), id)
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return

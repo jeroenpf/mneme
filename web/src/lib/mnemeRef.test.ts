@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatRef, parseRef, publicIdKind, type MnemeRef } from './mnemeRef'
+import { formatRef, parseRef, publicIdKind, routeForRef, type MnemeRef } from './mnemeRef'
 
 describe('formatRef', () => {
   it('formats top-level entity references', () => {
@@ -77,6 +77,34 @@ describe('parseRef', () => {
     ]) {
       expect(parseRef(bad)).toBeNull()
     }
+  })
+})
+
+describe('routeForRef', () => {
+  it('routes a document to its viewer by public id', () => {
+    expect(routeForRef({ kind: 'document', id: 'doc_1' })).toEqual({ path: '/doc/doc_1' })
+  })
+
+  it('routes a block/task to the document with the child id as the hash', () => {
+    expect(routeForRef({ kind: 'block', id: 'blk_9', docId: 'doc_1' })).toEqual({
+      path: '/doc/doc_1',
+      hash: '#blk_9',
+    })
+    expect(routeForRef({ kind: 'task', id: 's6-t1', docId: 'doc_1' })).toEqual({
+      path: '/doc/doc_1',
+      hash: '#s6-t1',
+    })
+  })
+
+  it('routes knowledge entities to their list view with a flash query', () => {
+    expect(routeForRef({ kind: 'decision', id: 'dec_1' })).toEqual({ path: '/decisions', query: { flash: 'dec_1' } })
+    expect(routeForRef({ kind: 'snippet', id: 'snip_1' })).toEqual({ path: '/snippets', query: { flash: 'snip_1' } })
+    expect(routeForRef({ kind: 'journal', id: 'jrnl_1' })).toEqual({ path: '/journal', query: { flash: 'jrnl_1' } })
+    expect(routeForRef({ kind: 'solution', id: 'sol_1' })).toEqual({ path: '/solutions', query: { flash: 'sol_1' } })
+  })
+
+  it('routes a project to the registry', () => {
+    expect(routeForRef({ kind: 'project', id: 'prj_1' })).toEqual({ path: '/' })
   })
 })
 

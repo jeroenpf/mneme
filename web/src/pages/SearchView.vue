@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { search, searchStatus, type SearchHit, type SearchStatus } from '@/api/search'
+import { tryOpenRef } from '@/lib/openRef'
 
 const route = useRoute()
+const router = useRouter()
 const hits = ref<SearchHit[]>([])
 const loading = ref(false)
 const error = ref<Error | null>(null)
@@ -54,7 +56,16 @@ async function run(query: string) {
   }
 }
 
-watch(q, (query) => run(query), { immediate: true })
+// A mneme:// reference (or bare public id) that lands in ?q= opens its target
+// instead of running a full-text search for the literal reference string.
+watch(
+  q,
+  (query) => {
+    if (query && tryOpenRef(router, query)) return
+    run(query)
+  },
+  { immediate: true },
+)
 
 // Deep-link every result type to its actual viewer with the entity flagged
 // for highlight. Documents open their own page; the list-backed types open

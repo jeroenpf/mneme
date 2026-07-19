@@ -60,6 +60,37 @@ export function formatRef(kind: Kind, id: string, docId?: string): string {
   return `${SCHEME}${kind}/${id}`
 }
 
+// RefRoute is a router-agnostic navigation target for a resolved reference.
+export interface RefRoute {
+  path: string
+  hash?: string
+  query?: Record<string, string>
+}
+
+// routeForRef maps a parsed reference to the in-app route that opens it: a
+// document (or its block/task, as a hash) opens the viewer by public id — the
+// GET-document endpoint accepts the doc_ id — and a knowledge entity opens its
+// list view with a ?flash=<publicId> the list uses to reveal the row.
+export function routeForRef(ref: MnemeRef): RefRoute {
+  switch (ref.kind) {
+    case 'document':
+      return { path: `/doc/${ref.id}` }
+    case 'block':
+    case 'task':
+      return { path: `/doc/${ref.docId}`, hash: `#${ref.id}` }
+    case 'decision':
+      return { path: '/decisions', query: { flash: ref.id } }
+    case 'journal':
+      return { path: '/journal', query: { flash: ref.id } }
+    case 'snippet':
+      return { path: '/snippets', query: { flash: ref.id } }
+    case 'solution':
+      return { path: '/solutions', query: { flash: ref.id } }
+    case 'project':
+      return { path: '/' }
+  }
+}
+
 // parseRef parses a canonical mneme:// reference or a bare top-level public id.
 // Returns null for anything unrecognisable so callers can branch simply.
 export function parseRef(input: string): MnemeRef | null {
