@@ -82,6 +82,7 @@ describe('AppShell', () => {
   it('renders the brand wordmark', async () => {
     const w = await mountShell(makeRouter())
     expect(w.text()).toContain('mneme')
+    expect(w.get('.mark').attributes('aria-hidden')).toBe('true')
   })
 
   it('renders default slot content in the content area', async () => {

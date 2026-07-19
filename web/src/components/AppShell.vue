@@ -53,7 +53,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     <aside class="rail">
       <div class="brandbar">
         <RouterLink to="/" class="brand">
-          <span class="glyph">⬡</span><span class="word">mneme</span>
+          <img class="mark" src="/mneme-mark.svg" alt="" aria-hidden="true" />
+          <span class="word">mneme</span>
         </RouterLink>
         <span
           class="conn-dot"
@@ -168,10 +169,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     animation: none;
   }
 }
-.glyph {
-  color: var(--accent);
-  font-size: 17px;
-  line-height: 1;
+.mark {
+  display: block;
+  width: 21px;
+  height: 21px;
+  flex: none;
 }
 .word {
   font-family: var(--font-display);

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="title">
+  <title id="title">Mneme</title>
+  <rect x="2" y="2" width="28" height="28" rx="6" fill="#2f5d80"/>
+  <path
+    d="M7.5 23V11.2A3.7 3.7 0 0 1 11.2 7.5c1.25 0 2.42.63 3.1 1.68L16 11.8l1.7-2.62a3.7 3.7 0 0 1 6.8 2.02V23"
+    fill="none"
+    stroke="#faf8f3"
+    stroke-width="2.75"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="16" cy="16.25" r="1.5" fill="#d48a32"/>
+</svg>
