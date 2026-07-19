@@ -8,6 +8,10 @@ import (
 	"github.com/jeroenpfeil/mneme/internal/models"
 )
 
+// rrfK is the reciprocal-rank-fusion constant. Larger flattens the
+// contribution of rank position; 60 is the conventional default.
+const rrfK = 60
+
 // candidate is one ranked hit from a single retrieval channel (FTS or vector)
 // before fusion. Backends return candidates already ordered best-first — FTS
 // per type by descending lexical rank, vector by descending cosine similarity —
