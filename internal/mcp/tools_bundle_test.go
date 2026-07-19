@@ -37,6 +37,30 @@ func TestGetContextBundle(t *testing.T) {
 	}
 }
 
+func TestGetContextBundleBudget(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	for _, title := range []string{"alpha choice", "beta choice", "gamma choice", "delta choice"} {
+		call(t, cs, "log_decision", map[string]any{
+			"project": "apollo", "title": title, "decision": "x",
+			"rationale": "a reasonably long rationale that consumes budget so trimming becomes observable once the cap is tight",
+		}, nil)
+	}
+
+	var big, small map[string]any
+	call(t, cs, "get_context_bundle", map[string]any{"project": "apollo"}, &big)
+	call(t, cs, "get_context_bundle", map[string]any{"project": "apollo", "budget": 60}, &small)
+	bigMD, _ := big["markdown"].(string)
+	smallMD, _ := small["markdown"].(string)
+
+	if len(smallMD) >= len(bigMD) {
+		t.Errorf("tight budget should shrink the digest: small=%d big=%d", len(smallMD), len(bigMD))
+	}
+	if strings.Count(smallMD, "choice") >= strings.Count(bigMD, "choice") {
+		t.Errorf("tight budget should drop decisions:\nsmall:\n%s\nbig:\n%s", smallMD, bigMD)
+	}
+}
+
 func TestGetContextBundleUnknownProject(t *testing.T) {
 	cs := newClient(t)
 	if msg := callExpectError(t, cs, "get_context_bundle", map[string]any{"project": "ghost"}); msg == "" {

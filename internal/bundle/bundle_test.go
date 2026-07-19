@@ -296,6 +296,92 @@ func TestRenderIncludesDecisionRationaleAndSnippetExcerpt(t *testing.T) {
 	}
 }
 
+// budgetFixture builds a store whose full render is comfortably over a small
+// budget: an in-progress plan (core), plus many snippets/decisions/journal
+// (expendable) and one blocker.
+func budgetFixture() *fakeStore {
+	plan := &models.Document{
+		ID: "impl", Title: "Impl plan", Project: strptr("mneme"),
+		Type: models.TypePlan, Status: models.StatusInProgress,
+		PhaseCurrent: ptr(2), PhaseTotal: ptr(3),
+		Meta: map[string]any{"phases": []any{
+			map[string]any{"title": "API Layer", "status": "wip"},
+		}},
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "subphase", "id": "sp-2", "title": "API Layer", "tasks": []any{
+				map[string]any{"id": "t-2", "title": "wire routes", "done": false},
+				map[string]any{"id": "t-3", "title": "add handlers", "done": false},
+			}},
+		}},
+	}
+	blocked := &models.Document{ID: "spike", Title: "TLS spike", Project: strptr("mneme"), Type: models.TypeSpec, Status: models.StatusBlocked}
+	decs := make([]*models.Decision, 5)
+	for i := range decs {
+		decs[i] = &models.Decision{Title: "Decision number " + string(rune('A'+i)), Project: strptr("mneme"), Status: models.DecisionAccepted, Rationale: "A fairly wordy rationale that eats budget and should be trimmed when space is tight."}
+	}
+	snips := make([]*models.Snippet, 8)
+	for i := range snips {
+		snips[i] = &models.Snippet{Title: "Snippet " + string(rune('A'+i)), Project: strptr("mneme"), Language: "go", Description: "A reusable pattern worth keeping around for later reference and reuse."}
+	}
+	jrnl := make([]*models.JournalEntry, 3)
+	for i := range jrnl {
+		jrnl[i] = &models.JournalEntry{Summary: "Session summary number " + string(rune('A'+i)), Project: strptr("mneme"), SessionRef: "sp-" + string(rune('A'+i))}
+	}
+	return &fakeStore{
+		projects:  map[string]*models.Project{"mneme": {Slug: "mneme"}},
+		documents: []*models.Document{plan, blocked},
+		decisions: decs,
+		snippets:  snips,
+		journal:   jrnl,
+	}
+}
+
+func TestAssembleDefaultBudgetNoTruncation(t *testing.T) {
+	b, err := New(budgetFixture()).Assemble(context.Background(), "mneme", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.TokenBudget != DefaultTokenBudget {
+		t.Errorf("token budget = %d, want default %d", b.TokenBudget, DefaultTokenBudget)
+	}
+	if b.EstimatedTokens == 0 {
+		t.Errorf("estimated tokens should be reported, got 0")
+	}
+	if b.Truncated {
+		t.Errorf("small fixture under the default budget should not be truncated")
+	}
+	if len(b.Snippets) != 8 {
+		t.Errorf("no truncation expected, snippets = %d", len(b.Snippets))
+	}
+}
+
+func TestAssembleTightBudgetTruncatesByPriority(t *testing.T) {
+	b, err := New(budgetFixture()).AssembleWithOptions(context.Background(), "mneme", nil, Options{TokenBudget: 130})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !b.Truncated {
+		t.Fatalf("tight budget should truncate; estimated=%d budget=%d", b.EstimatedTokens, b.TokenBudget)
+	}
+	// Expendable sections are trimmed in priority order: snippets first, then
+	// journal and decisions toward their floors. Core survives.
+	if len(b.Snippets) != 0 {
+		t.Errorf("snippets are sacrificed first, got %d remaining", len(b.Snippets))
+	}
+	if len(b.Journal) < 1 {
+		t.Errorf("journal floor is 1, got %d", len(b.Journal))
+	}
+	if len(b.Decisions) < 1 {
+		t.Errorf("decision floor is 1, got %d", len(b.Decisions))
+	}
+	if b.ActivePlan == nil || len(b.NextTasks) != 2 {
+		t.Errorf("core (plan + next tasks) must survive truncation: plan=%+v tasks=%d", b.ActivePlan, len(b.NextTasks))
+	}
+	if b.EstimatedTokens > b.TokenBudget {
+		t.Errorf("estimated %d should fit budget %d after truncation:\n%s", b.EstimatedTokens, b.TokenBudget, b.Markdown)
+	}
+}
+
 func TestRenderMarkdownNoneSections(t *testing.T) {
 	b := &Bundle{Project: "mneme", Memory: map[string]string{}}
 	md := renderMarkdown(b)

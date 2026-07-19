@@ -20,6 +20,27 @@ const (
 	maxBlockers  = 5
 )
 
+// DefaultTokenBudget bounds the estimated size of the rendered digest. A
+// session preamble should be scannable, not a whole-document dump; when the
+// assembled content would exceed this, expendable sections are trimmed
+// deterministically (see applyBudget). ~900 tokens ≈ a screen of markdown.
+const DefaultTokenBudget = 900
+
+// Section floors: the minimum items an expendable section keeps under budget
+// pressure, so the digest never loses its most-recent signal entirely.
+const (
+	journalFloor   = 1
+	decisionsFloor = 1
+	blockersFloor  = 1
+)
+
+// Options tunes bundle assembly. The zero value selects defaults.
+type Options struct {
+	// TokenBudget caps the estimated tokens of the rendered markdown digest.
+	// <= 0 selects DefaultTokenBudget.
+	TokenBudget int
+}
+
 // PlanSummary is the active plan's status line — title, lifecycle status,
 // phase progress, and the current (wip) phase title. The plan body is
 // intentionally omitted (too heavy for a session preamble); its next tasks are
@@ -63,6 +84,13 @@ type Bundle struct {
 	Snippets   []*models.Snippet      `json:"snippets"`
 	Journal    []*models.JournalEntry `json:"journal"`
 	Markdown   string                 `json:"markdown"`
+
+	// Budget accounting for the rendered digest (road-p5-t3). TokenBudget is the
+	// cap applied; EstimatedTokens is the ~4-chars-per-token estimate of the
+	// final Markdown; Truncated reports whether any section was dropped to fit.
+	TokenBudget     int  `json:"token_budget"`
+	EstimatedTokens int  `json:"estimated_tokens"`
+	Truncated       bool `json:"truncated"`
 }
 
 // Assembler composes the store read methods into a Bundle.
@@ -99,9 +127,18 @@ func mergeMemory(groups ...[]*models.Memory) map[string]string {
 	return out
 }
 
-// Assemble builds the bundle for a project (area optional). Returns
-// store.ErrInvalidProject when the project slug does not exist.
+// Assemble builds the bundle for a project (area optional) under the default
+// token budget. Returns store.ErrInvalidProject when the project slug does not
+// exist.
 func (a *Assembler) Assemble(ctx context.Context, project string, area *string) (*Bundle, error) {
+	return a.AssembleWithOptions(ctx, project, area, Options{})
+}
+
+// AssembleWithOptions is Assemble with an explicit token budget (Options).
+// After gathering every section it renders the digest and, if the estimate
+// exceeds the budget, trims expendable sections in priority order until it
+// fits or only core content remains.
+func (a *Assembler) AssembleWithOptions(ctx context.Context, project string, area *string, opts Options) (*Bundle, error) {
 	if _, err := a.store.GetProject(ctx, project); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil, store.ErrInvalidProject
@@ -151,8 +188,61 @@ func (a *Assembler) Assemble(ctx context.Context, project string, area *string) 
 		Snippets:   snippets,
 		Journal:    journal,
 	}
-	b.Markdown = renderMarkdown(b)
+	budget := opts.TokenBudget
+	if budget <= 0 {
+		budget = DefaultTokenBudget
+	}
+	applyBudget(b, budget)
 	return b, nil
+}
+
+// estimateTokens approximates the token count of s using the standard
+// ~4-characters-per-token heuristic for English prose. It is intentionally
+// backend-independent — no tokenizer dependency for a rough budget check.
+func estimateTokens(s string) int { return (len(s) + 3) / 4 }
+
+// applyBudget renders the digest and, when the estimate exceeds budget, drops
+// tail items from expendable sections in a fixed priority order — snippets
+// first, then journal, decisions, deferred, and finally blockers — each toward
+// its floor, re-rendering after every drop. Core sections (active plan, next
+// tasks, memory, env) are never trimmed: the bundle always answers "what next".
+func applyBudget(b *Bundle, budget int) {
+	b.TokenBudget = budget
+	render := func() {
+		b.Markdown = renderMarkdown(b)
+		b.EstimatedTokens = estimateTokens(b.Markdown)
+	}
+	render()
+	if b.EstimatedTokens <= budget {
+		return
+	}
+	// Each reducer drops one tail item from its section if above its floor.
+	reducers := []func() bool{
+		func() bool { return dropTail(&b.Snippets, 0) },
+		func() bool { return dropTail(&b.Journal, journalFloor) },
+		func() bool { return dropTail(&b.Decisions, decisionsFloor) },
+		func() bool { return dropTail(&b.Deferred, 0) },
+		func() bool { return dropTail(&b.Blockers, blockersFloor) },
+	}
+	for _, reduce := range reducers {
+		for b.EstimatedTokens > budget && reduce() {
+			b.Truncated = true
+			render()
+		}
+		if b.EstimatedTokens <= budget {
+			return
+		}
+	}
+}
+
+// dropTail removes the last element of *xs when its length exceeds floor,
+// reporting whether it dropped anything.
+func dropTail[T any](xs *[]T, floor int) bool {
+	if len(*xs) > floor {
+		*xs = (*xs)[:len(*xs)-1]
+		return true
+	}
+	return false
 }
 
 func (a *Assembler) assembleMemory(ctx context.Context, project string, area *string) (map[string]string, error) {

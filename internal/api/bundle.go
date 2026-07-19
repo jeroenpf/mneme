@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/jeroenpfeil/mneme/internal/bundle"
@@ -23,7 +24,8 @@ func (h *BundleHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if a := strings.TrimSpace(q.Get("area")); a != "" {
 		areaPtr = &a
 	}
-	b, err := bundle.New(h.Store).Assemble(r.Context(), project, areaPtr)
+	budget, _ := strconv.Atoi(strings.TrimSpace(q.Get("budget"))) // 0/invalid -> default
+	b, err := bundle.New(h.Store).AssembleWithOptions(r.Context(), project, areaPtr, bundle.Options{TokenBudget: budget})
 	if err != nil {
 		writeStoreError(w, err) // ErrInvalidProject -> 400 "unknown project"
 		return
