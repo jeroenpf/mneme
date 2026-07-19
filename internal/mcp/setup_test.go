@@ -139,7 +139,7 @@ func sdkServer(s *mcpsrv.Server) *sdk.Server {
 func resetDB(t *testing.T) {
 	t.Helper()
 	if _, err := testPool.Exec(context.Background(),
-		`TRUNCATE documents, projects, embeddings RESTART IDENTITY CASCADE`); err != nil {
+		`TRUNCATE documents, projects, embeddings, embed_failures RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

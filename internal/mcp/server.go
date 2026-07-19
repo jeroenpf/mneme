@@ -238,6 +238,11 @@ func (t *tools) register(s *sdk.Server) {
 	}, t.search)
 
 	addTool(s, &sdk.Tool{
+		Name:        "retry_failed_embeddings",
+		Description: "Re-enqueue every source whose last embedding attempt failed terminally (the 'failed' count in search status). Use after fixing a transient outage. Returns how many sources were queued for retry.",
+	}, t.retryFailedEmbeddings)
+
+	addTool(s, &sdk.Tool{
 		Name:        "tick_task",
 		Description: "Toggle a task's done flag. Returns {task_id, done}; pass return_doc for the full updated document.",
 	}, t.tickTask)
