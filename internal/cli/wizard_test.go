@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -121,5 +122,22 @@ func TestBuildSettingsCustomPort(t *testing.T) {
 	}
 	if s.Net.AllowedOrigins[0] != "http://localhost:9000" {
 		t.Errorf("origin should reflect custom port: got %v", s.Net.AllowedOrigins)
+	}
+}
+
+func TestBuildSettingsLocalhostAllowsBothLoopbackOrigins(t *testing.T) {
+	// A browser reaches a loopback server as either http://localhost:PORT or
+	// http://127.0.0.1:PORT, and those are distinct Origins. The server logs its
+	// 127.0.0.1 listen address, so a user who opens that must not get a blank
+	// page from OriginGuard 403ing the crossorigin assets. Both loopback origins
+	// must be allow-listed.
+	s, err := buildSettings(wizardAnswers{Backend: "sqlite", NetMode: "localhost", Port: "8901"})
+	if err != nil {
+		t.Fatalf("buildSettings: %v", err)
+	}
+	for _, want := range []string{"http://localhost:8901", "http://127.0.0.1:8901"} {
+		if !slices.Contains(s.Net.AllowedOrigins, want) {
+			t.Errorf("localhost mode must allow-list %q; got %v", want, s.Net.AllowedOrigins)
+		}
 	}
 }

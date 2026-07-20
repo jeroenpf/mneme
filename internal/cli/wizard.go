@@ -66,7 +66,14 @@ func buildSettings(a wizardAnswers) (config.Settings, error) {
 		s.Net.AllowedOrigins = []string{"https://mneme.dev:" + s.Net.Port}
 	case "localhost", "":
 		s.Net.Port = orDefault(a.Port, "8765")
-		s.Net.AllowedOrigins = []string{"http://localhost:" + s.Net.Port}
+		// localhost and 127.0.0.1 are the same loopback interface but distinct
+		// Origins. Allow both so opening either URL serves the crossorigin SPA
+		// assets rather than 403ing to a blank page — the summary prints the
+		// localhost URL, but the server logs the 127.0.0.1 listen address.
+		s.Net.AllowedOrigins = []string{
+			"http://localhost:" + s.Net.Port,
+			"http://127.0.0.1:" + s.Net.Port,
+		}
 	default:
 		return s, fmt.Errorf("unknown network mode %q", a.NetMode)
 	}
