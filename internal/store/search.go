@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // ErrInvalidSearchType is returned when SearchFilter.Types names a type

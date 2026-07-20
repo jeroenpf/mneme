@@ -7,8 +7,8 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/slug"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/slug"
 )
 
 // --- create_project ---------------------------------------------------

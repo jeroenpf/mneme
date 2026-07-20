@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	idspkg "github.com/jeroenpfeil/mneme/internal/ids"
+	idspkg "github.com/jeroenpf/mneme/internal/ids"
 )
 
 // This file holds the shared plumbing for the SQLite Store implementation:

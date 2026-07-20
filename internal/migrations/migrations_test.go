@@ -19,7 +19,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 	_ "modernc.org/sqlite"
 
-	"github.com/jeroenpfeil/mneme/internal/migrations"
+	"github.com/jeroenpf/mneme/internal/migrations"
 )
 
 // TestSQLiteMigrationsApplyToFreshDB runs the SQLite migration set against a

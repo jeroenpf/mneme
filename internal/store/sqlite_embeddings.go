@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // UpsertEmbeddings inserts/updates rows keyed by (source_type, source_id,

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeroenpfeil/mneme/internal/embed"
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/embed"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // failClient always errors, to exercise terminal-failure recording.

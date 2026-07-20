@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/slug"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/slug"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 type ProjectsHandler struct {

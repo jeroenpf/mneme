@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 var updateGolden = flag.Bool("update", false, "update bundle golden snapshot files")

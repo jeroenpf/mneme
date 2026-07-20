@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/config"
 )
 
 // writeInit writes a private 0600 file and a summary naming the resolved

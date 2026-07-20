@@ -3,7 +3,7 @@ package mcp
 import (
 	"fmt"
 
-	"github.com/jeroenpfeil/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/ids"
 )
 
 // The architecture contract is "all id fields must be unique within a

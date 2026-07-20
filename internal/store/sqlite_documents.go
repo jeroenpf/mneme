@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	idspkg "github.com/jeroenpfeil/mneme/internal/ids"
-	"github.com/jeroenpfeil/mneme/internal/models"
+	idspkg "github.com/jeroenpf/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // translateSQLiteDocErr maps SQLite constraint failures on documents writes to

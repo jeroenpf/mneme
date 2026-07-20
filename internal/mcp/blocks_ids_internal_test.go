@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/ids"
 )
 
 // body builds a {sections:[...]} body from top-level blocks.

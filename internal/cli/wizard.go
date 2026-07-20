@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/jeroenpfeil/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/config"
 )
 
 // wizardAnswers is the raw set of choices the init form collects. It is a plain

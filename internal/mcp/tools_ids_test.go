@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/ids"
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // createdID mirrors the tools' created-id outline entry for decoding.

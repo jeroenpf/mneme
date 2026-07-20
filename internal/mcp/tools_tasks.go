@@ -7,9 +7,9 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jeroenpfeil/mneme/internal/ids"
-	"github.com/jeroenpfeil/mneme/internal/live"
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // tickResult is the lean payload from tick_task: just the flipped

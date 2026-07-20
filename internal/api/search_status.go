@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // EmbedRuntime exposes live embedding-worker state to the status endpoint and

@@ -8,11 +8,11 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jeroenpfeil/mneme/internal/api"
-	"github.com/jeroenpfeil/mneme/internal/config"
-	mcpsrv "github.com/jeroenpfeil/mneme/internal/mcp"
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/api"
+	"github.com/jeroenpf/mneme/internal/config"
+	mcpsrv "github.com/jeroenpf/mneme/internal/mcp"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // TestHTTPMount verifies that the production wiring works end-to-end:

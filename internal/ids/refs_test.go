@@ -3,7 +3,7 @@ package ids_test
 import (
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/ids"
 )
 
 func TestRefFormatsTopLevelEntities(t *testing.T) {

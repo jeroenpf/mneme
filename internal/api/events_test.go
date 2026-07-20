@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeroenpfeil/mneme/internal/api"
-	"github.com/jeroenpfeil/mneme/internal/config"
-	"github.com/jeroenpfeil/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/api"
+	"github.com/jeroenpf/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/live"
 )
 
 // TestEventsStream connects to GET /api/events and asserts it opens an

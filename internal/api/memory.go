@@ -6,8 +6,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // MemoryHandler serves the un-merged memory CRUD surface. The Vue memory

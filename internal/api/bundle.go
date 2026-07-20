@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jeroenpfeil/mneme/internal/bundle"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/bundle"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // BundleHandler serves the read-only context-bundle preview. The same

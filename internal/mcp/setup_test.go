@@ -14,11 +14,11 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/jeroenpfeil/mneme/internal/embed"
-	"github.com/jeroenpfeil/mneme/internal/live"
-	mcpsrv "github.com/jeroenpfeil/mneme/internal/mcp"
-	"github.com/jeroenpfeil/mneme/internal/migrations"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/embed"
+	"github.com/jeroenpf/mneme/internal/live"
+	mcpsrv "github.com/jeroenpf/mneme/internal/mcp"
+	"github.com/jeroenpf/mneme/internal/migrations"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // testPool is shared across the whole package; each test calls

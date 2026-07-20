@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/config"
 )
 
 // Both network modes selectable via the wizard produce a coherent settings.toml

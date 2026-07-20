@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/embed"
-	"github.com/jeroenpfeil/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/embed"
+	"github.com/jeroenpf/mneme/internal/live"
 )
 
 // captureBroadcaster records every event for assertions.

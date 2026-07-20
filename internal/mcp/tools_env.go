@@ -7,8 +7,8 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jeroenpfeil/mneme/internal/live"
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // flattenEnv projects env records into a flat key→value map — the get_env

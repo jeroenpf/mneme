@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/migrations"
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/migrations"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 func TestMigrateIDsCommandReportsThenApplies(t *testing.T) {

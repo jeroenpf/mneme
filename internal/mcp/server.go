@@ -12,10 +12,10 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jeroenpfeil/mneme/internal/command"
-	"github.com/jeroenpfeil/mneme/internal/embed"
-	"github.com/jeroenpfeil/mneme/internal/live"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/command"
+	"github.com/jeroenpf/mneme/internal/embed"
+	"github.com/jeroenpf/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // Implementation identifies this server in MCP handshakes.

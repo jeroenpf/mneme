@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 func TestBundleMissingProject(t *testing.T) {

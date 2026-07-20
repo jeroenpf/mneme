@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // createPlan POSTs a plan with the given body and returns the created document.

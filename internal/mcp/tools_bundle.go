@@ -7,7 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jeroenpfeil/mneme/internal/bundle"
+	"github.com/jeroenpf/mneme/internal/bundle"
 )
 
 type getContextBundleInput struct {

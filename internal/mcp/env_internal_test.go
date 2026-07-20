@@ -3,7 +3,7 @@ package mcp
 import (
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 func TestFlattenEnv(t *testing.T) {

@@ -8,11 +8,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	"github.com/jeroenpfeil/mneme/internal/command"
-	"github.com/jeroenpfeil/mneme/internal/config"
-	"github.com/jeroenpfeil/mneme/internal/embed"
-	"github.com/jeroenpfeil/mneme/internal/live"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/command"
+	"github.com/jeroenpf/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/embed"
+	"github.com/jeroenpf/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // Router builds the top-level HTTP handler. Composes middleware,

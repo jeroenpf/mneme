@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/config"
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 func strptr(s string) *string { return &s }

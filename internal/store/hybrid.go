@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // rrfK is the reciprocal-rank-fusion constant. Larger flattens the

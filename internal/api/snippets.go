@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // SnippetsHandler serves the read-only snippet-library REST surface.

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/live"
 )
 
 // recordingBroadcaster captures the live events emitted by tool calls so a

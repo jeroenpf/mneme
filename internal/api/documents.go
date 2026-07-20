@@ -12,13 +12,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jeroenpfeil/mneme/internal/command"
-	"github.com/jeroenpfeil/mneme/internal/docmeta"
-	"github.com/jeroenpfeil/mneme/internal/ids"
-	"github.com/jeroenpfeil/mneme/internal/live"
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/slug"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/command"
+	"github.com/jeroenpf/mneme/internal/docmeta"
+	"github.com/jeroenpf/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/slug"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 const (

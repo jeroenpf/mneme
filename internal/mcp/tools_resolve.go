@@ -8,8 +8,8 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jeroenpfeil/mneme/internal/ids"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // resolveRefInput is resolve_reference's single argument: a pasted mneme://

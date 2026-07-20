@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeroenpfeil/mneme/internal/api"
+	"github.com/jeroenpf/mneme/internal/api"
 )
 
 // fakeRuntime satisfies api.EmbedRuntime with fixed values, so the status

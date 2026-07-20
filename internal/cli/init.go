@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 
-	"github.com/jeroenpfeil/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/config"
 )
 
 // newInitCmd builds `mneme init` — the interactive setup wizard. It collects a

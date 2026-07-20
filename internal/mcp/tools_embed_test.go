@@ -7,10 +7,10 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jeroenpfeil/mneme/internal/embed"
-	"github.com/jeroenpfeil/mneme/internal/live"
-	mcpsrv "github.com/jeroenpfeil/mneme/internal/mcp"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/embed"
+	"github.com/jeroenpf/mneme/internal/live"
+	mcpsrv "github.com/jeroenpf/mneme/internal/mcp"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // captureEnq records the refs it is asked to enqueue.

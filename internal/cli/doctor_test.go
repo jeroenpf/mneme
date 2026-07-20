@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/config"
-	"github.com/jeroenpfeil/mneme/internal/migrations"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/migrations"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // migratedStore opens a fresh, migrated SQLite store for check tests.

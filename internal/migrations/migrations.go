@@ -11,7 +11,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/sqlite" // pure-Go modernc driver
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
-	dsnpkg "github.com/jeroenpfeil/mneme/internal/dsn"
+	dsnpkg "github.com/jeroenpf/mneme/internal/dsn"
 )
 
 //go:embed sql/postgres/*.sql sql/sqlite/*.sql

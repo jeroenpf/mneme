@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 func TestCreateAndGetDocument(t *testing.T) {

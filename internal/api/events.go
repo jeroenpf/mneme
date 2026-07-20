@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jeroenpfeil/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/live"
 )
 
 // EventsHandler streams live entity-change events to the browser over SSE.

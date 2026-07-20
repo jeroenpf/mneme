@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/web"
+	"github.com/jeroenpf/mneme/internal/web"
 )
 
 func TestHandlerServesIndex(t *testing.T) {

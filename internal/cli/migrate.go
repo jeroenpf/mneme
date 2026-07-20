@@ -3,9 +3,9 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/jeroenpfeil/mneme/internal/config"
-	"github.com/jeroenpfeil/mneme/internal/mcp"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/mcp"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // newMigrateCmd is the parent for data migrations over existing knowledge.

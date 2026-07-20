@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // FromMeta builds a Document by promoting known top-level meta keys

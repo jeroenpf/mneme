@@ -7,8 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jeroenpfeil/mneme/internal/dsn"
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/dsn"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // New builds a Store from a DSN, dispatching on the scheme: sqlite: / file: /

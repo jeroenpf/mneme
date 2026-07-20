@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jeroenpfeil/mneme/internal/backup"
-	"github.com/jeroenpfeil/mneme/internal/config"
-	"github.com/jeroenpfeil/mneme/internal/dsn"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/backup"
+	"github.com/jeroenpf/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/dsn"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // checkLevel is a diagnostic outcome. Only levelFail makes `mneme doctor` exit

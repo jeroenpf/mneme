@@ -1,4 +1,4 @@
-module github.com/jeroenpfeil/mneme
+module github.com/jeroenpf/mneme
 
 go 1.25.4
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // samplePlan returns a meta+body pair shaped like the Mneme plan format

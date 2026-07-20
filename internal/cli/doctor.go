@@ -7,9 +7,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
-	"github.com/jeroenpfeil/mneme/internal/config"
-	"github.com/jeroenpfeil/mneme/internal/migrations"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/migrations"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // newDoctorCmd builds `mneme doctor` — a one-shot diagnostics scorecard over

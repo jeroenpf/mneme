@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/ids"
 )
 
 // allKinds is every addressable entity kind, used to assert the prefix

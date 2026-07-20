@@ -17,8 +17,8 @@ import (
 	"io"
 	"sort"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // FormatVersion is the archive schema version, bumped on incompatible changes.

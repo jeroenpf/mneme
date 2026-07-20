@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/jeroenpfeil/mneme/internal/cli"
+	"github.com/jeroenpf/mneme/internal/cli"
 )
 
 func main() {

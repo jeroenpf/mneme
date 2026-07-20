@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 func fakeVec(seed float32) []float32 {

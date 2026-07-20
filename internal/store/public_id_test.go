@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/ids"
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/ids"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // TestPublicIDColumnDefaultsToAValidID verifies migration 015: every

@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // --- websearch → FTS5 query translation ------------------------------------

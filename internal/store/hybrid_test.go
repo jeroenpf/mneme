@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/models"
 )
 
 // fakeBackend feeds runHybridSearch canned candidate lists so the fusion core

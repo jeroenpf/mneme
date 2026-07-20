@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // SolutionsHandler serves the read-only error/solution REST surface. Writes

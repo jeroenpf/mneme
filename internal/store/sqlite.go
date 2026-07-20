@@ -10,7 +10,7 @@ import (
 
 	_ "modernc.org/sqlite" // registers the pure-Go "sqlite" database/sql driver
 
-	"github.com/jeroenpfeil/mneme/internal/dsn"
+	"github.com/jeroenpf/mneme/internal/dsn"
 )
 
 // SQLiteStore implements the full Store contract.

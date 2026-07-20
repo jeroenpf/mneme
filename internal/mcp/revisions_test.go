@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // TestDocumentHistoryDiffRestore exercises get_document_history,

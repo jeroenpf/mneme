@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // MigrateSummary reports an id audit/backfill over every stored document.

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jeroenpfeil/mneme/internal/ids"
-	mcpsrv "github.com/jeroenpfeil/mneme/internal/mcp"
-	"github.com/jeroenpfeil/mneme/internal/models"
-	"github.com/jeroenpfeil/mneme/internal/store"
+	"github.com/jeroenpf/mneme/internal/ids"
+	mcpsrv "github.com/jeroenpf/mneme/internal/mcp"
+	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 func TestMigrateDocIDsBackfillsMissing(t *testing.T) {

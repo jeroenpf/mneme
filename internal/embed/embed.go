@@ -3,7 +3,7 @@ package embed
 import (
 	"context"
 
-	"github.com/jeroenpfeil/mneme/internal/config"
+	"github.com/jeroenpf/mneme/internal/config"
 )
 
 // Client turns text into embedding vectors. A nil Client means embedding is

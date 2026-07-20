@@ -5,7 +5,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jeroenpfeil/mneme/internal/embed"
+	"github.com/jeroenpf/mneme/internal/embed"
 )
 
 // retryFailedInput takes no arguments — it retries every recorded failure.
