@@ -19,6 +19,9 @@ web/node_modules/.vite/
 internal/web/dist/*
 !internal/web/dist/.gitkeep
 
+# GoReleaser snapshot / release output
+/dist/
+
 # OS
 .DS_Store
 

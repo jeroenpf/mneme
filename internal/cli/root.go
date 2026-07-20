@@ -20,6 +20,10 @@ func newRootCmd() *cobra.Command {
 		Long: "Mneme is a local, single-user knowledge service for AI-assisted development.\n" +
 			"It stores plans, decisions, snippets, and journals, and exposes them to\n" +
 			"Claude Code over MCP. Run `mneme init` to set up, then `mneme server`.",
+		// Setting Version makes cobra register the `--version` flag, which prints
+		// "mneme version <version>". GoReleaser overrides `version` via ldflags;
+		// the Homebrew formula smoke-tests `mneme --version`.
+		Version: version,
 		// No Run: a bare invocation prints help and exits 0 rather than
 		// silently starting the server.
 		SilenceUsage:  true,
