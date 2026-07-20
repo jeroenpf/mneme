@@ -76,7 +76,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         />
       </div>
 
-      <div class="project"><b>mneme</b></div>
+      <RouterLink to="/project/mneme" class="project" data-test="to-project-home">
+        <b>mneme</b>
+        <span class="project-hint mn-mono-sm">home</span>
+      </RouterLink>
 
       <input
         ref="input"
@@ -194,6 +197,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: var(--text-primary);
 }
 .project {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
   margin: 0 var(--space-1);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
@@ -201,10 +208,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   background: var(--bg);
   font-size: var(--fs-body-sm);
   color: var(--text-secondary);
+  text-decoration: none;
+  transition:
+    border-color var(--duration-fast),
+    background var(--duration-fast);
+}
+.project:hover {
+  border-color: var(--accent-border);
+  background: var(--bg-hover);
+}
+.project:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 .project b {
   color: var(--text-primary);
   font-weight: 600;
+}
+.project-hint {
+  color: var(--text-faint);
+}
+.project.router-link-exact-active .project-hint {
+  color: var(--accent);
 }
 .search {
   width: 100%;

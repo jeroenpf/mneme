@@ -7,6 +7,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/RegistryView.vue'),
   },
   {
+    path: '/project/:slug',
+    name: 'project',
+    component: () => import('@/pages/ProjectHome.vue'),
+    props: true,
+  },
+  {
     path: '/doc/:id',
     name: 'document',
     component: () => import('@/pages/DocumentView.vue'),
