@@ -40,7 +40,10 @@ services:
       # Bind all interfaces INSIDE the container so Docker's 127.0.0.1:8443
       # host mapping can reach it — the portable binary defaults to loopback.
       MNEME_HOST: 0.0.0.0
-      MNEME_PORT: "8080"
+      # Bind the same port the host maps (8443) so the app's advertised URL —
+      # what the Help page and startup box report — matches how you actually
+      # reach it (https://mneme.dev:8443), not an internal-only port.
+      MNEME_PORT: "8443"
       MNEME_ENV: development
       MNEME_CORS_ORIGINS: http://localhost:5273,https://mneme.dev:8443
       MNEME_TLS_CERT: /app/.certs/mneme.dev.pem
@@ -56,7 +59,7 @@ services:
       # clear of anything already on :443. Host is mneme.dev, NOT mneme.local:
       # macOS routes *.local through mDNS, which adds a ~5s resolver timeout
       # before falling back to /etc/hosts — see the deployment spec addendum.
-      - "127.0.0.1:8443:8080"
+      - "127.0.0.1:8443:8443"
     volumes:
       - .:/app
       - go_mod_cache:/go/pkg/mod
@@ -64,7 +67,7 @@ services:
     healthcheck:
       # Server is TLS when the certs exist, plain HTTP before setup-host has
       # run — probe https first (no CA trust inside the container), fall back.
-      test: ["CMD-SHELL", "wget -qO- --no-check-certificate https://localhost:8080/health || wget -qO- http://localhost:8080/health"]
+      test: ["CMD-SHELL", "wget -qO- --no-check-certificate https://localhost:8443/health || wget -qO- http://localhost:8443/health"]
       interval: 10s
       timeout: 3s
       retries: 5
