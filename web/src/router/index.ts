@@ -63,6 +63,11 @@ const routes: RouteRecordRaw[] = [
     name: 'embeddings',
     component: () => import('@/pages/EmbeddingsView.vue'),
   },
+  {
+    path: '/help',
+    name: 'help',
+    component: () => import('@/pages/HelpView.vue'),
+  },
 ]
 
 export const router = createRouter({

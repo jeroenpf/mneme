@@ -29,7 +29,10 @@ const NAV = [
 
 // Operational surfaces — index health and diagnostics, distinct from the
 // knowledge stores above.
-const SYSTEM_NAV = [{ to: '/embeddings', label: 'Search index', test: 'to-embeddings' }] as const
+const SYSTEM_NAV = [
+  { to: '/embeddings', label: 'Search index', test: 'to-embeddings' },
+  { to: '/help', label: 'Help', test: 'to-help' },
+] as const
 
 // Global search (lifted from Topbar). A local ref — deliberately NOT wired to
 // registry filtering; Enter routes to the global /search page for the query.
