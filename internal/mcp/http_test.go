@@ -9,6 +9,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jeroenpf/mneme/internal/api"
+	"github.com/jeroenpf/mneme/internal/appinfo"
 	"github.com/jeroenpf/mneme/internal/config"
 	mcpsrv "github.com/jeroenpf/mneme/internal/mcp"
 	"github.com/jeroenpf/mneme/internal/models"
@@ -25,7 +26,7 @@ func TestHTTPMount(t *testing.T) {
 	st := store.NewWithPool(testPool)
 	mcpSrv := mcpsrv.New(st, nil, nil, nil)
 	cfg := &config.Config{CORSOrigins: []string{"http://localhost:5173"}}
-	srv := httptest.NewServer(api.Router(cfg, st, mcpSrv.Handler(), nil, nil, nil, nil))
+	srv := httptest.NewServer(api.Router(cfg, st, mcpSrv.Handler(), nil, nil, nil, nil, appinfo.Info{}))
 	t.Cleanup(srv.Close)
 
 	// /mcp must accept a Streamable HTTP MCP session.

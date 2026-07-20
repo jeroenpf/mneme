@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/jeroenpf/mneme/internal/appinfo"
 	"github.com/jeroenpf/mneme/internal/command"
 	"github.com/jeroenpf/mneme/internal/config"
 	"github.com/jeroenpf/mneme/internal/embed"
@@ -21,7 +22,7 @@ import (
 // useful in test setups that don't need them. client (may be nil) embeds the
 // /search query for hybrid ranking and flips /search/status enabled; nil ⇒
 // FTS-only, enabled=false.
-func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler, client embed.Client, hub *live.Hub, enq embed.Enqueuer) http.Handler {
+func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler, client embed.Client, hub *live.Hub, enq embed.Enqueuer, installInfo appinfo.Info) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
@@ -82,6 +83,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		if rt, ok := enq.(EmbedRuntime); ok {
 			statusH.Runtime = rt
 		}
+		install := &InstallHandler{Info: installInfo}
 
 		r.Route("/api/v1", func(r chi.Router) {
 			r.Get("/documents", docs.List)
@@ -107,6 +109,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 			r.Get("/search", searchH.Get)
 			r.Get("/search/status", statusH.Get)
 			r.Post("/search/reindex-failed", statusH.Retry)
+			r.Get("/install", install.Get)
 		})
 
 		if mcpHandler != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/jeroenpf/mneme/internal/api"
+	"github.com/jeroenpf/mneme/internal/appinfo"
 	"github.com/jeroenpf/mneme/internal/config"
 	"github.com/jeroenpf/mneme/internal/embed"
 	"github.com/jeroenpf/mneme/internal/live"
@@ -94,9 +95,10 @@ func RunServer(ctx context.Context, cfg *config.Config) error {
 	// browser), so agent writes push straight to connected viewers.
 	hub := live.NewHub()
 	mcpSrv := mcp.New(st, enq, hub, client)
+	info := appinfo.Summarize(cfg, version, client != nil)
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr(),
-		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client, hub, enq),
+		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client, hub, enq, info),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jeroenpf/mneme/internal/api"
+	"github.com/jeroenpf/mneme/internal/appinfo"
 	"github.com/jeroenpf/mneme/internal/config"
 	"github.com/jeroenpf/mneme/internal/live"
 )
@@ -20,7 +21,7 @@ import (
 func TestEventsStream(t *testing.T) {
 	hub := live.NewHub()
 	cfg := &config.Config{CORSOrigins: []string{"*"}}
-	srv := httptest.NewServer(api.Router(cfg, nil, nil, nil, nil, hub, nil))
+	srv := httptest.NewServer(api.Router(cfg, nil, nil, nil, nil, hub, nil, appinfo.Info{}))
 	t.Cleanup(srv.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -73,7 +74,7 @@ func TestEventsStream(t *testing.T) {
 func TestEventsStreamSendsInitialByte(t *testing.T) {
 	hub := live.NewHub()
 	cfg := &config.Config{CORSOrigins: []string{"*"}}
-	srv := httptest.NewServer(api.Router(cfg, nil, nil, nil, nil, hub, nil))
+	srv := httptest.NewServer(api.Router(cfg, nil, nil, nil, nil, hub, nil, appinfo.Info{}))
 	t.Cleanup(srv.Close)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
