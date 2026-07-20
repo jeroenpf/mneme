@@ -121,3 +121,43 @@ func TestRestoreBadRevisionREST(t *testing.T) {
 	requireStatus(t, resp, http.StatusBadRequest)
 	resp.Body.Close()
 }
+
+// POST /documents/{id}/archive routes through the command service like every
+// other write: archiving records an "archive_document" revision (actor rest),
+// and re-archiving an already-archived doc is a safe idempotent no-op recording
+// no further revision (closes the roadmap P6 audit gap).
+func TestArchiveRecordsRevisionREST(t *testing.T) {
+	srv, _ := newServer(t)
+	seedProject(t, "apollo")
+	created := createPlan(t, srv.URL, "Archive Me", sectionBody("s1", "A")) // rev 1
+
+	getRevs := func() []map[string]any {
+		resp := doJSON(t, http.MethodGet, srv.URL+"/api/v1/documents/"+created.ID+"/revisions", nil)
+		requireStatus(t, resp, http.StatusOK)
+		var body struct {
+			Items []map[string]any `json:"items"`
+		}
+		decodeBody(t, resp, &body)
+		return body.Items
+	}
+
+	resp := doJSON(t, http.MethodPost, srv.URL+"/api/v1/documents/"+created.ID+"/archive", nil)
+	requireStatus(t, resp, http.StatusNoContent)
+	resp.Body.Close()
+
+	revs := getRevs()
+	if len(revs) != 2 {
+		t.Fatalf("revisions len = %d, want 2 (create + archive)", len(revs))
+	}
+	if top := revs[0]; top["op"] != "archive_document" || top["actor"] != "rest" || top["status"] != models.StatusArchived {
+		t.Fatalf("archive revision = %v; want op=archive_document actor=rest status=archived", top)
+	}
+
+	// Re-archiving is an idempotent no-op: still 204, no extra revision.
+	resp = doJSON(t, http.MethodPost, srv.URL+"/api/v1/documents/"+created.ID+"/archive", nil)
+	requireStatus(t, resp, http.StatusNoContent)
+	resp.Body.Close()
+	if revs := getRevs(); len(revs) != 2 {
+		t.Fatalf("revisions len after re-archive = %d, want 2 (idempotent)", len(revs))
+	}
+}

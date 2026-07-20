@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/jeroenpf/mneme/internal/models"
 	"github.com/jeroenpf/mneme/internal/store"
 )
 
@@ -25,7 +26,7 @@ func TestDocumentHistoryDiffRestore(t *testing.T) {
 		}},
 	}, nil) // rev 1
 
-	call(t, cs, "tick_task", map[string]any{"doc_id": "planh", "task_id": "t-1"}, nil)                             // rev 2
+	call(t, cs, "tick_task", map[string]any{"doc_id": "planh", "task_id": "t-1"}, nil)                                                               // rev 2
 	call(t, cs, "update_section", map[string]any{"doc_id": "planh", "section_id": "overview", "patch": map[string]any{"title": "Overview v2"}}, nil) // rev 3
 
 	// History: newest-first, all three writes attributed.
@@ -125,5 +126,41 @@ func TestWritePathRecordsRevisions(t *testing.T) {
 	// The latest snapshot captures the post-write body (task now done).
 	if revs[0].Body["sections"] == nil {
 		t.Errorf("snapshot body not captured: %+v", revs[0].Body)
+	}
+}
+
+// TestArchiveRecordsRevision proves archive_document routes through the command
+// service like every other write: archiving records an append-only
+// "archive_document" revision (not a silent status flip), and re-archiving an
+// already-archived doc is a safe idempotent no-op that records no further
+// revision (closes the roadmap P6 audit gap).
+func TestArchiveRecordsRevision(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	call(t, cs, "push_document", samplePlan("archme", "apollo"), nil) // rev 1
+
+	call(t, cs, "archive_document", map[string]any{"id": "archme"}, nil) // rev 2
+
+	var hist struct {
+		Revisions []struct {
+			Revision int    `json:"revision"`
+			Op       string `json:"op"`
+			Actor    string `json:"actor"`
+			Status   string `json:"status"`
+		} `json:"revisions"`
+	}
+	call(t, cs, "get_document_history", map[string]any{"doc_id": "archme"}, &hist)
+	if len(hist.Revisions) != 2 {
+		t.Fatalf("history len = %d, want 2 (push + archive)", len(hist.Revisions))
+	}
+	if top := hist.Revisions[0]; top.Op != "archive_document" || top.Actor != "mcp" || top.Status != models.StatusArchived {
+		t.Errorf("archive revision = %+v, want op=archive_document actor=mcp status=archived", top)
+	}
+
+	// Re-archiving an already-archived doc: still ok, but no redundant revision.
+	call(t, cs, "archive_document", map[string]any{"id": "archme"}, nil)
+	call(t, cs, "get_document_history", map[string]any{"doc_id": "archme"}, &hist)
+	if len(hist.Revisions) != 2 {
+		t.Fatalf("history len after re-archive = %d, want 2 (idempotent)", len(hist.Revisions))
 	}
 }

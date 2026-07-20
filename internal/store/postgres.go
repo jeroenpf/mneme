@@ -218,18 +218,6 @@ func (s *PostgresStore) updateDocNoRow(ctx context.Context, id string, expected 
 	return ErrNotFound
 }
 
-func (s *PostgresStore) ArchiveDocument(ctx context.Context, id string) error {
-	tag, err := s.pool.Exec(ctx,
-		`UPDATE documents SET status = 'archived' WHERE id = $1`, id)
-	if err != nil {
-		return fmt.Errorf("archive document: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // queryBuilder accumulates WHERE clauses, args, and trailing ORDER /
 // LIMIT / OFFSET. Used by both ListDocuments and SearchDocuments.
 type queryBuilder struct {

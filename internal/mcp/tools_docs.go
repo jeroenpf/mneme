@@ -185,13 +185,21 @@ type archiveInput struct {
 }
 
 func (t *tools) archiveDocument(ctx context.Context, _ *sdk.CallToolRequest, in archiveInput) (*sdk.CallToolResult, *okResult, error) {
-	if in.ID == "" {
-		return nil, nil, errors.New("id is required")
+	doc, err := t.loadDoc(ctx, in.ID)
+	if err != nil {
+		return nil, nil, err
 	}
-	if err := t.store.ArchiveDocument(ctx, in.ID); err != nil {
-		return nil, nil, translateStoreErr(err)
+	// Already archived → safe idempotent no-op: skip the redundant revision.
+	if doc.Status == models.StatusArchived {
+		return nil, &okResult{OK: true}, nil
 	}
-	t.broadcast(live.Event{Type: "documents", ID: in.ID, Op: "archive_document"})
+	// Route through the command service so the archive records a revision
+	// snapshot (op archive_document), re-embeds, and broadcasts — exactly once,
+	// like every other document write (roadmap P6).
+	doc.Status = models.StatusArchived
+	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, Op: "archive_document"}); err != nil {
+		return nil, nil, err
+	}
 	return nil, &okResult{OK: true}, nil
 }
 

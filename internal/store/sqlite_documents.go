@@ -160,21 +160,6 @@ func (s *SQLiteStore) updateDocNoRow(ctx context.Context, id string, expected *i
 	return ErrNotFound
 }
 
-func (s *SQLiteStore) ArchiveDocument(ctx context.Context, id string) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE documents SET status = 'archived' WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("archive document: %w", err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("archive document rows: %w", err)
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 func (s *SQLiteStore) ListDocuments(ctx context.Context, f Filter) ([]*models.Document, error) {
 	var b sqliteQB
 	if f.Project != nil {

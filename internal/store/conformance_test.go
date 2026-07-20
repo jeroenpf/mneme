@@ -156,15 +156,6 @@ func TestConformanceDocumentCRUD(t *testing.T) {
 		if !reloaded.UpdatedAt.After(reloaded.CreatedAt) {
 			t.Errorf("updated_at %v should be after created_at %v", reloaded.UpdatedAt, reloaded.CreatedAt)
 		}
-
-		// Archive.
-		if err := st.ArchiveDocument(ctx, "doc-001"); err != nil {
-			t.Fatalf("ArchiveDocument: %v", err)
-		}
-		archived, _ := st.GetDocument(ctx, "doc-001")
-		if archived.Status != models.StatusArchived {
-			t.Errorf("archived status: got %q", archived.Status)
-		}
 	})
 }
 
@@ -178,9 +169,6 @@ func TestConformanceDocumentErrors(t *testing.T) {
 		}
 		if err := st.UpdateDocument(ctx, sampleDoc("ghost", "Ghost"), nil); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("UpdateDocument(missing): got %v, want ErrNotFound", err)
-		}
-		if err := st.ArchiveDocument(ctx, "ghost"); !errors.Is(err, store.ErrNotFound) {
-			t.Errorf("ArchiveDocument(missing): got %v, want ErrNotFound", err)
 		}
 
 		// Unknown project → ErrInvalidProject.

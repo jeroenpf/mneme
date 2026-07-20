@@ -174,10 +174,6 @@ type Store interface {
 	// ErrNotFound when id has no row.
 	UpdateDocument(ctx context.Context, doc *models.Document, expected *int) error
 
-	// ArchiveDocument sets status='archived'. Returns ErrNotFound when
-	// id has no row.
-	ArchiveDocument(ctx context.Context, id string) error
-
 	// AppendDocumentRevision records an immutable snapshot of a document write
 	// — the audit trail and history source (roadmap P6). Fills rev.ID and
 	// rev.CreatedAt from the DB. A duplicate (document_id, revision) is rejected.

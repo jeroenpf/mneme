@@ -298,9 +298,28 @@ func (h *DocumentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, doc)
 }
 
+// Archive marks a document archived through the shared command service, so the
+// archive records its own revision snapshot (op archive_document), re-embeds,
+// and broadcasts — exactly once, like every other write (roadmap P6). Archiving
+// an already-archived document is a safe idempotent no-op. POST
+// /documents/{id}/archive.
 func (h *DocumentsHandler) Archive(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.Store.ArchiveDocument(r.Context(), id); err != nil {
+	doc, err := h.resolveDoc(r.Context(), id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if doc.Status == models.StatusArchived {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	doc.Status = models.StatusArchived
+	if err := h.Writer.Update(r.Context(), doc, command.Write{
+		Op:    "archive_document",
+		Actor: "rest",
+		Event: live.Event{Type: "documents", ID: doc.ID, Op: "archive_document"},
+	}); err != nil {
 		writeStoreError(w, err)
 		return
 	}

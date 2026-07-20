@@ -343,30 +343,6 @@ func TestUpdateDocumentNotFound(t *testing.T) {
 	}
 }
 
-func TestArchiveDocument(t *testing.T) {
-	s := newStore(t)
-	ctx := context.Background()
-
-	doc := sampleDoc("doc-archive", "Will be archived")
-	if err := s.CreateDocument(ctx, doc); err != nil {
-		t.Fatalf("CreateDocument: %v", err)
-	}
-	if err := s.ArchiveDocument(ctx, "doc-archive"); err != nil {
-		t.Fatalf("ArchiveDocument: %v", err)
-	}
-	got, err := s.GetDocument(ctx, "doc-archive")
-	if err != nil {
-		t.Fatalf("GetDocument: %v", err)
-	}
-	if got.Status != models.StatusArchived {
-		t.Errorf("status: got %q, want %q", got.Status, models.StatusArchived)
-	}
-
-	if err := s.ArchiveDocument(ctx, "nope"); err != store.ErrNotFound {
-		t.Errorf("missing doc: expected ErrNotFound, got %v", err)
-	}
-}
-
 func TestListDocumentsFilters(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
