@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/jeroenpfeil/mneme/internal/models"
@@ -37,6 +38,9 @@ type Worker struct {
 	limiter *rateLimiter  // spaces actual provider requests under a low RPM tier
 	pending *pendingSet   // dedup, non-dropping work queue
 	signal  chan struct{} // buffered(1) wake-up for Run when new work arrives
+
+	mu            sync.Mutex // guards lastReconcile
+	lastReconcile time.Time  // completion time of the most recent reconcile pass
 }
 
 // NewWorker builds the worker. rpm>0 installs a proactive rate limiter
@@ -51,6 +55,39 @@ func NewWorker(st store.Store, c Client, buf, rpm int) *Worker {
 		pending: newPendingSet(buf),
 		signal:  make(chan struct{}, 1),
 	}
+}
+
+// QueueDepth reports how many distinct sources are currently waiting to be
+// embedded — the live backlog surfaced by the status endpoint.
+func (w *Worker) QueueDepth() int { return w.pending.Len() }
+
+// LastReconcile reports when the most recent reconciliation pass completed. The
+// zero time means no pass has finished yet in this process; it is intentionally
+// process-local (not persisted) — a startup pass sets it within seconds of boot.
+func (w *Worker) LastReconcile() time.Time {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.lastReconcile
+}
+
+func (w *Worker) markReconciled() {
+	w.mu.Lock()
+	w.lastReconcile = time.Now()
+	w.mu.Unlock()
+}
+
+// RetryFailed re-enqueues every source in the terminal-failure bucket for
+// another embedding attempt, returning how many it queued. It is the manual
+// retry control behind the operations UI (and mirrors the MCP retry tool).
+func (w *Worker) RetryFailed(ctx context.Context) (int, error) {
+	refs, err := w.store.FailedSourceRefs(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("retry failed: list failures: %w", err)
+	}
+	for _, r := range refs {
+		w.Enqueue(SourceRef{Type: r.Type, ID: r.ID})
+	}
+	return len(refs), nil
 }
 
 // Enqueue is non-blocking and never drops: it coalesces repeat refs for the
@@ -149,6 +186,7 @@ func (w *Worker) ReconcileAll(ctx context.Context) error {
 	for _, r := range refs {
 		w.Enqueue(SourceRef{Type: r.Type, ID: r.ID})
 	}
+	w.markReconciled()
 	return nil
 }
 

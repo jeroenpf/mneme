@@ -67,6 +67,63 @@ func (f *fakeClient) Embed(_ context.Context, texts []string, _ string) ([][]flo
 	return out, nil
 }
 
+// QueueDepth reports how many distinct sources are waiting to be embedded, so
+// the status UI can show a live backlog. Enqueues that have not yet drained
+// (no Run goroutine here) are counted; repeats coalesce.
+func TestWorkerQueueDepth(t *testing.T) {
+	s := newEmbedStore(t)
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
+	if w.QueueDepth() != 0 {
+		t.Fatalf("fresh worker depth = %d, want 0", w.QueueDepth())
+	}
+	w.Enqueue(embed.SourceRef{Type: "documents", ID: "a"})
+	w.Enqueue(embed.SourceRef{Type: "documents", ID: "b"})
+	w.Enqueue(embed.SourceRef{Type: "documents", ID: "a"}) // dedup
+	if got := w.QueueDepth(); got != 2 {
+		t.Fatalf("depth after 2 distinct enqueues = %d, want 2", got)
+	}
+}
+
+// A completed reconciliation pass records its time, so the UI can show when the
+// index was last swept. Before any pass the time is zero.
+func TestWorkerRecordsLastReconcile(t *testing.T) {
+	s := newEmbedStore(t)
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
+	if !w.LastReconcile().IsZero() {
+		t.Fatal("LastReconcile should be zero before any pass")
+	}
+	if err := w.ReconcileAll(context.Background()); err != nil {
+		t.Fatalf("ReconcileAll: %v", err)
+	}
+	if w.LastReconcile().IsZero() {
+		t.Fatal("LastReconcile should be set after a reconcile pass")
+	}
+}
+
+// RetryFailed re-enqueues every terminally-failed source for another attempt,
+// returning the count — the manual retry control behind the UI button.
+func TestWorkerRetryFailed(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx := context.Background()
+	if err := s.RecordEmbedFailure(ctx, "documents", "boom1", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordEmbedFailure(ctx, "decisions", "boom2", "y"); err != nil {
+		t.Fatal(err)
+	}
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
+	n, err := w.RetryFailed(ctx)
+	if err != nil {
+		t.Fatalf("RetryFailed: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("RetryFailed returned %d, want 2", n)
+	}
+	if got := w.QueueDepth(); got != 2 {
+		t.Fatalf("failed sources not enqueued: depth = %d, want 2", got)
+	}
+}
+
 func TestWorkerEmbedsAndPrunes(t *testing.T) {
 	s := newEmbedStore(t) // container-backed store, mirrors store.newStore
 	ctx := context.Background()
@@ -405,13 +462,13 @@ func TestProcessReembedsOnModelChange(t *testing.T) {
 	}
 	ref := embed.SourceRef{Type: "documents", ID: "m1"}
 
-	if _, err := embed.NewWorker(s,&fakeClient{model: "v1"}, 8, 0).Process(ctx, ref); err != nil {
+	if _, err := embed.NewWorker(s, &fakeClient{model: "v1"}, 8, 0).Process(ctx, ref); err != nil {
 		t.Fatalf("Process v1: %v", err)
 	}
 
 	// Same text, new model: must re-embed and replace the stored vector.
 	fc2 := &fakeClient{model: "v2"}
-	if _, err := embed.NewWorker(s,fc2, 8, 0).Process(ctx, ref); err != nil {
+	if _, err := embed.NewWorker(s, fc2, 8, 0).Process(ctx, ref); err != nil {
 		t.Fatalf("Process v2: %v", err)
 	}
 	if fc2.calls == 0 {

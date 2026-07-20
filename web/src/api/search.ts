@@ -1,4 +1,4 @@
-import { apiGet, buildQuery } from './client'
+import { apiGet, apiPost, buildQuery } from './client'
 
 // Mirrors internal/models.SearchHit. The REST endpoint wraps results in
 // { items }, so unwrap like the other list endpoints.
@@ -33,13 +33,41 @@ export function search(
   return apiGet<SearchResponse>(`/api/v1/search${query}`).then((r) => r.items)
 }
 
-// SearchStatus mirrors GET /api/v1/search/status — embedding coverage per
-// type + whether embedding is enabled (a Voyage key is configured).
+// SearchStatus mirrors GET /api/v1/search/status — per-type reconciliation
+// buckets, provider identity, live queue depth, and the last reconciliation
+// time. `enabled` is true when an embedding provider (a Voyage key) is
+// configured; when false the store falls back to lexical-only search.
+export interface EmbeddingTypeStatus {
+  type: string
+  total: number
+  embedded: number
+  reconciled: number
+  missing: number
+  stale: number
+  orphaned: number
+  failed: number
+}
+
+export interface EmbeddingProvider {
+  name: string
+  model: string
+  enabled: boolean
+}
+
 export interface SearchStatus {
   enabled: boolean
-  items: { type: string; embedded: number; total: number }[]
+  provider: EmbeddingProvider
+  items: EmbeddingTypeStatus[]
+  queue_depth: number
+  last_reconcile?: string
 }
 
 export function searchStatus(): Promise<SearchStatus> {
   return apiGet<SearchStatus>('/api/v1/search/status')
+}
+
+// reindexFailed re-enqueues every terminally-failed source for another
+// embedding attempt (POST /api/v1/search/reindex-failed), returning the count.
+export function reindexFailed(): Promise<{ retried: number }> {
+  return apiPost<{ retried: number }>('/api/v1/search/reindex-failed')
 }

@@ -27,6 +27,10 @@ const NAV = [
   { to: '/bundle', label: 'Bundle', test: 'to-bundle' },
 ] as const
 
+// Operational surfaces — index health and diagnostics, distinct from the
+// knowledge stores above.
+const SYSTEM_NAV = [{ to: '/embeddings', label: 'Search index', test: 'to-embeddings' }] as const
+
 // Global search (lifted from Topbar). A local ref — deliberately NOT wired to
 // registry filtering; Enter routes to the global /search page for the query.
 const search = ref('')
@@ -95,6 +99,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         <p class="nav-title mn-label">Knowledge</p>
         <RouterLink
           v-for="item in NAV"
+          :key="item.to"
+          :to="item.to"
+          :data-test="item.test"
+          class="nav-link"
+        >
+          <span class="mk" />
+          {{ item.label }}
+        </RouterLink>
+
+        <p class="nav-title nav-title-sys mn-label">System</p>
+        <RouterLink
+          v-for="item in SYSTEM_NAV"
           :key="item.to"
           :to="item.to"
           :data-test="item.test"
@@ -253,6 +269,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 }
 .nav-title {
   padding: 0 var(--space-3) var(--space-2);
+}
+.nav-title-sys {
+  padding-top: var(--space-4);
 }
 .nav-link {
   display: flex;

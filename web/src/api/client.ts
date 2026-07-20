@@ -80,5 +80,6 @@ async function apiSend<T>(method: string, path: string, body?: unknown): Promise
   return (await res.json()) as T
 }
 
+export const apiPost = <T>(path: string, body?: unknown): Promise<T> => apiSend<T>('POST', path, body)
 export const apiPut = <T>(path: string, body: unknown): Promise<T> => apiSend<T>('PUT', path, body)
 export const apiDelete = (path: string): Promise<void> => apiSend<void>('DELETE', path)

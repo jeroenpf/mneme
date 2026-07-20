@@ -35,6 +35,7 @@ function makeRouter(): Router {
       { path: '/env', component: Blank },
       { path: '/bundle', component: Blank },
       { path: '/search', component: Blank },
+      { path: '/embeddings', component: Blank },
     ],
   })
 }
@@ -67,6 +68,7 @@ const NAV = [
   ['to-solutions', '/solutions'],
   ['to-env', '/env'],
   ['to-bundle', '/bundle'],
+  ['to-embeddings', '/embeddings'],
 ] as const
 
 describe('AppShell', () => {

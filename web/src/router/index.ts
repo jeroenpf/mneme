@@ -58,6 +58,11 @@ const routes: RouteRecordRaw[] = [
     name: 'search',
     component: () => import('@/pages/SearchView.vue'),
   },
+  {
+    path: '/embeddings',
+    name: 'embeddings',
+    component: () => import('@/pages/EmbeddingsView.vue'),
+  },
 ]
 
 export const router = createRouter({

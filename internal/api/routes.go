@@ -74,6 +74,13 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		statusH := &SearchStatusHandler{Store: st, Enabled: client != nil}
 		if client != nil {
 			statusH.Model = client.Model()
+			statusH.Provider = "voyage"
+		}
+		// The enqueuer is the concrete embedding worker when enabled; expose its
+		// live queue/reconcile signals and manual retry to the status endpoint.
+		// A NopEnqueuer (disabled) does not satisfy EmbedRuntime → Runtime stays nil.
+		if rt, ok := enq.(EmbedRuntime); ok {
+			statusH.Runtime = rt
 		}
 
 		r.Route("/api/v1", func(r chi.Router) {
@@ -97,6 +104,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 			r.Get("/bundle", bundleH.Get)
 			r.Get("/search", searchH.Get)
 			r.Get("/search/status", statusH.Get)
+			r.Post("/search/reindex-failed", statusH.Retry)
 		})
 
 		if mcpHandler != nil {

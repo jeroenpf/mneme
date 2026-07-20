@@ -47,7 +47,11 @@ beforeEach(() => {
   vi.mocked(search).mockReset().mockResolvedValue(hits)
   vi.mocked(searchStatus).mockReset().mockResolvedValue({
     enabled: true,
-    items: [{ type: 'documents', embedded: 3, total: 5 }],
+    provider: { name: 'voyage', model: 'voyage-4-large', enabled: true },
+    queue_depth: 0,
+    items: [
+      { type: 'documents', total: 5, embedded: 3, reconciled: 3, missing: 2, stale: 0, orphaned: 0, failed: 0 },
+    ],
   })
   vi.mocked(listProjects)
     .mockReset()
