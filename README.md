@@ -17,10 +17,37 @@ line, never copies. Full rationale:
 To wire Mneme into another project so its coding agent uses it, see
 [`docs/using-mneme.md`](docs/using-mneme.md).
 
-> **Just want to try it?** Mneme also ships as a **single self-contained binary** — no Docker,
-> no Postgres, storage in a local SQLite file. Grab it (or `make build-portable`), then
-> `mneme init` → `mneme server`. See [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md).
-> The Docker Compose setup below is the **maintainer's** dev loop (Postgres + live reload).
+## Install (macOS)
+
+Mneme ships as a **single self-contained binary** — no Docker, no Postgres, no Go toolchain.
+Storage is a local SQLite file and the web UI is embedded. Install it from the Homebrew tap:
+
+```bash
+brew install jeroenpf/tap/mneme
+```
+
+Then set it up and start it:
+
+```bash
+mneme init     # interactive wizard — pick SQLite + localhost (the zero-setup defaults)
+mneme server   # serves the REST API, the MCP endpoint at /mcp, and the embedded UI
+```
+
+Open **http://localhost:8765**, then point Claude Code at the MCP endpoint:
+
+```bash
+claude mcp add --transport http mneme http://localhost:8765/mcp
+```
+
+Upgrade later with `brew upgrade mneme`. macOS on Apple Silicon and Intel is supported today.
+The full walkthrough — configuration, optional embeddings, HTTPS mode, `mneme doctor` — is in
+[`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md).
+
+---
+
+The rest of this README is the **maintainer loop**: the full Docker Compose stack (Postgres +
+Go live-reload + Vite) for developing Mneme itself. If you only want to *use* Mneme, the
+install above is everything you need.
 
 ## Requirements
 

@@ -4,8 +4,12 @@
 # .gitkeep in git), then a single CGO_ENABLED=0 build produces darwin amd64+arm64
 # archives + checksums.
 #
+# On a real release the `brews:` block below regenerates and pushes
+# Formula/mneme.rb to jeroenpf/homebrew-tap, so `brew install jeroenpf/tap/mneme`
+# installs the prebuilt binary (it never compiles from source).
+#
 # Local dry-run:  goreleaser release --snapshot --clean
-# (Phase 2 appends a `brews:` block; Phase 3 adds the release workflow + tag.)
+# (writes dist/homebrew/Formula/mneme.rb locally without pushing).
 version: 2
 
 before:
@@ -32,3 +36,27 @@ archives:
 
 checksum:
   name_template: "checksums.txt"
+
+# Homebrew Cask (not a formula): GoReleaser's `brews` formula generator was
+# deprecated in v2.10 and removal-flagged since v2.16 in favour of casks, which
+# are the modern channel for a prebuilt binary. `brew install jeroenpf/tap/mneme`
+# still resolves it; the tap gets Casks/mneme.rb. The post-install hook strips the
+# macOS quarantine xattr so a downloaded binary runs without a Gatekeeper prompt.
+homebrew_casks:
+  - name: mneme
+    repository:
+      owner: jeroenpf
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/jeroenpf/mneme"
+    description: "Local AI dev knowledge service (MCP) — a single self-contained binary"
+    binaries:
+      - mneme
+    url:
+      verified: "github.com/jeroenpf/mneme"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/mneme"]
+          end

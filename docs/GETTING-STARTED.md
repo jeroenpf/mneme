@@ -4,18 +4,20 @@ Mneme ships as a **single self-contained binary** — no Docker, no Postgres, no
 services. Storage is a local SQLite file; everything the UI needs is embedded. This is the
 path for trying Mneme on your own machine.
 
-The whole flow is three steps: **download → `mneme init` → `mneme server`.**
+The whole flow is three steps: **install → `mneme init` → `mneme server`.**
 
-## 1. Get the binary
+## 1. Install
 
-Grab the `mneme` binary for your machine (or build it yourself — see
-[Building from source](#building-from-source)). It is pure Go: one file, nothing to install
-alongside it.
+On macOS, install from the Homebrew tap — this puts `mneme` on your `PATH`:
 
 ```bash
-chmod +x mneme
-./mneme --help
+brew install jeroenpf/tap/mneme
+mneme --help
 ```
+
+Prefer not to use Homebrew, or on another OS? Build the binary yourself — see
+[Building from source](#building-from-source) — then run it as `./mneme` from the repo root.
+It is pure Go: one file, nothing to install alongside it.
 
 ## 2. `mneme init`
 
@@ -23,7 +25,7 @@ Run the setup wizard. It asks a few questions and writes `~/.mneme/settings.toml
 `0600`):
 
 ```bash
-./mneme init
+mneme init
 ```
 
 - **Data** — a **SQLite file** (default `~/.mneme/mneme.db`) or an existing PostgreSQL DSN.
@@ -46,7 +48,7 @@ The wizard finishes by offering to start the server immediately.
 Start the service (this is also the default the wizard offers to run for you):
 
 ```bash
-./mneme server
+mneme server
 ```
 
 It applies migrations to the SQLite file on first run, then serves the REST API, the MCP
@@ -60,7 +62,7 @@ Stop it with `Ctrl-C` — it drains connections and shuts down cleanly.
 One command diagnoses the whole install and exits non-zero if anything is broken:
 
 ```bash
-./mneme doctor
+mneme doctor
 ```
 
 It scores configuration, the database + migrations, networking (certificate / hosts in HTTPS
@@ -88,9 +90,9 @@ Settings resolve highest-wins: **command flag → `MNEME_*` env var → `~/.mnem
 (for CI or advanced setups), and a flag beats everything:
 
 ```bash
-./mneme server --port 9000            # flag wins
-MNEME_DSN=sqlite:///data/x.db ./mneme server   # env overrides the file
-./mneme server --config /path/to/settings.toml # point at a different file
+mneme server --port 9000            # flag wins
+MNEME_DSN=sqlite:///data/x.db mneme server   # env overrides the file
+mneme server --config /path/to/settings.toml # point at a different file
 ```
 
 Key env vars: `MNEME_DSN`, `MNEME_HOST` (bind interface; defaults to loopback),
