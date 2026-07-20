@@ -39,6 +39,10 @@ Open **http://localhost:8765**, then point Claude Code at the MCP endpoint:
 claude mcp add --transport http mneme http://localhost:8765/mcp
 ```
 
+Once it's running, the in-app **Help** page (`http://localhost:8765/help`) has copy-paste setup
+for Claude Code, Codex, and Claude Desktop — pre-filled with your endpoint — plus how to enable
+semantic search and prompts that teach your agent to use mneme.
+
 Upgrade later with `brew upgrade mneme`. macOS on Apple Silicon and Intel is supported today.
 The full walkthrough — configuration, optional embeddings, HTTPS mode, `mneme doctor` — is in
 [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md).

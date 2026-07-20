@@ -80,6 +80,10 @@ claude mcp add --transport http mneme http://localhost:8765/mcp
 claude mcp add --transport http mneme https://mneme.dev:8443/mcp
 ```
 
+The running app's **Help** page (`/help`) has the same steps for Codex and Claude Desktop —
+pre-filled with your endpoint — plus how to enable semantic search later and snippets to teach
+your agent to use mneme.
+
 Then register your project once (`create_project`) and follow
 [Using Mneme in a project](using-mneme.md).
 
