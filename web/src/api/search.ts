@@ -5,6 +5,10 @@ import { apiGet, buildQuery } from './client'
 export interface SearchHit {
   type: string
   id: string
+  // Prefixed public id (doc_/dec_/snip_/sol_/jrnl_) — the stable, copyable
+  // reference used for deep-linking and RefChip. Empty for memory (keyed by
+  // its title) and any type without one.
+  public_id?: string
   title: string
   excerpt: string
   project?: string

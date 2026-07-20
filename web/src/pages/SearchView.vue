@@ -2,7 +2,11 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { search, searchStatus, type SearchHit, type SearchStatus } from '@/api/search'
+import { listProjects } from '@/api/projects'
 import { tryOpenRef } from '@/lib/openRef'
+import RefChip from '@/components/RefChip.vue'
+import type { Kind } from '@/lib/mnemeRef'
+import type { ProjectStats } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,6 +15,19 @@ const loading = ref(false)
 const error = ref<Error | null>(null)
 
 const q = computed(() => String(route.query.q ?? '').trim())
+// Project scope lives in the URL (like the registry filters) so a scoped search
+// is shareable and survives back/forward. Empty string = all projects.
+const project = computed(() => String(route.query.project ?? ''))
+
+const projects = ref<ProjectStats[]>([])
+listProjects()
+  .then((p) => (projects.value = p))
+  .catch(() => {})
+
+function onProject(e: Event) {
+  const val = (e.target as HTMLSelectElement).value
+  router.replace({ query: { ...route.query, project: val || undefined } })
+}
 
 // Embedding coverage line — non-blocking. Search works regardless of whether
 // this resolves; a failure just hides the line.
@@ -39,7 +56,7 @@ const grouped = computed(() => {
   return g
 })
 
-async function run(query: string) {
+async function run(query: string, proj: string) {
   if (!query) {
     hits.value = []
     return
@@ -47,7 +64,7 @@ async function run(query: string) {
   loading.value = true
   error.value = null
   try {
-    hits.value = await search(query)
+    hits.value = await search(query, { project: proj || undefined })
   } catch (err) {
     error.value = err instanceof Error ? err : new Error(String(err))
     hits.value = []
@@ -58,36 +75,51 @@ async function run(query: string) {
 
 // A mneme:// reference (or bare public id) that lands in ?q= opens its target
 // instead of running a full-text search for the literal reference string.
+// Re-runs whenever the query or the project scope changes.
 watch(
-  q,
-  (query) => {
+  [q, project],
+  ([query, proj]) => {
     if (query && tryOpenRef(router, query)) return
-    run(query)
+    run(query, proj)
   },
   { immediate: true },
 )
 
 // Deep-link every result type to its actual viewer with the entity flagged
 // for highlight. Documents open their own page; the list-backed types open
-// their list with ?flash=<id>, which useDeepLinkFlash scrolls to and flashes.
-// Memory rows flash on their key (the hit title), not the uuid.
+// their list with ?flash=<public_id>, matching the row's data-ref-id so
+// useDeepLinkFlash scrolls to and flashes it. Memory has no public id — it
+// flashes on its key (the hit title).
+function flashLink(base: string, h: SearchHit): string {
+  return `${base}?flash=${encodeURIComponent(h.public_id || h.id)}`
+}
 function linkFor(h: SearchHit): string | null {
   switch (h.type) {
     case 'documents':
       return `/doc/${h.id}`
     case 'decisions':
-      return `/decisions?flash=${encodeURIComponent(h.id)}`
+      return flashLink('/decisions', h)
     case 'snippets':
-      return `/snippets?flash=${encodeURIComponent(h.id)}`
+      return flashLink('/snippets', h)
     case 'solutions':
-      return `/solutions?flash=${encodeURIComponent(h.id)}`
+      return flashLink('/solutions', h)
     case 'journal':
-      return `/journal?flash=${encodeURIComponent(h.id)}`
+      return flashLink('/journal', h)
     case 'memory':
       return `/memory?flash=${encodeURIComponent(h.title)}`
     default:
       return null
   }
+}
+
+// Result type → reference kind, so a hit carrying a public id gets a copyable
+// mneme:// reference chip. Memory (no public id) has no entry.
+const REF_KIND: Record<string, Kind> = {
+  documents: 'document',
+  decisions: 'decision',
+  snippets: 'snippet',
+  solutions: 'solution',
+  journal: 'journal',
 }
 
 // ts_headline marks matches with <<…>>; render them as <mark> after escaping.
@@ -108,6 +140,19 @@ function renderExcerpt(raw: string): string {
       </p>
       <p v-if="coverage" class="mn-mono-sm coverage" data-test="coverage">{{ coverage }}</p>
 
+      <div class="filters">
+        <select
+          class="filter mn-mono-sm"
+          aria-label="scope to project"
+          data-test="project-filter"
+          :value="project"
+          @change="onProject"
+        >
+          <option value="">all projects</option>
+          <option v-for="p in projects" :key="p.slug" :value="p.slug">{{ p.name }}</option>
+        </select>
+      </div>
+
       <p v-if="loading" class="mn-mono-sm py-8 text-center">searching…</p>
       <div v-else-if="error" class="error-box mn-body-sm" data-test="error">
         could not search: {{ error.message }}
@@ -118,8 +163,17 @@ function renderExcerpt(raw: string): string {
           <h2 class="mn-label group-head">{{ type }} <span class="count">{{ items.length }}</span></h2>
           <ul class="hits">
             <li v-for="h in items" :key="h.id" class="hit">
-              <RouterLink v-if="linkFor(h)" :to="linkFor(h)!" class="hit-title">{{ h.title }}</RouterLink>
-              <span v-else class="hit-title">{{ h.title }}</span>
+              <div class="hit-head">
+                <RouterLink v-if="linkFor(h)" :to="linkFor(h)!" class="hit-title">{{ h.title }}</RouterLink>
+                <span v-else class="hit-title">{{ h.title }}</span>
+                <RefChip
+                  v-if="h.public_id && REF_KIND[h.type]"
+                  compact
+                  class="hit-ref"
+                  :public-id="h.public_id"
+                  :kind="REF_KIND[h.type]"
+                />
+              </div>
               <span v-if="h.project" class="hit-project mn-mono-sm">{{ h.project }}</span>
               <p class="hit-excerpt mn-body-sm" v-html="renderExcerpt(h.excerpt)"></p>
             </li>
@@ -141,6 +195,12 @@ function renderExcerpt(raw: string): string {
 }
 .intro { color: var(--text-muted); margin-top: calc(-1 * var(--space-2)); }
 .coverage { color: var(--text-faint); margin-top: calc(-1 * var(--space-4)); }
+.filters { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.filter {
+  color: var(--text-primary); background: var(--bg-elevated);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 8px;
+}
+.filter:focus { outline: none; box-shadow: var(--shadow-focus); }
 .group { display: flex; flex-direction: column; gap: var(--space-3); }
 .group-head { text-transform: uppercase; }
 .count { color: var(--text-muted); }
@@ -150,8 +210,11 @@ function renderExcerpt(raw: string): string {
   padding: var(--space-4); background: var(--bg-surface);
   display: flex; flex-direction: column; gap: var(--space-2);
 }
-.hit-title { color: var(--text-primary); text-decoration: none; font-weight: 600; }
+.hit-head { display: flex; align-items: center; gap: var(--space-2); justify-content: space-between; }
+.hit-title { color: var(--text-primary); text-decoration: none; font-weight: 600; min-width: 0; }
 a.hit-title:hover { color: var(--accent); }
+.hit-ref { flex: none; opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); }
+.hit:hover .hit-ref, .hit:focus-within .hit-ref { opacity: 1; }
 .hit-project { color: var(--text-muted); }
 .hit-excerpt { color: var(--text-secondary); margin: 0; }
 /* :deep() — the <mark> is injected via v-html, which scoped CSS can't
