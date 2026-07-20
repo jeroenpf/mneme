@@ -1,4 +1,4 @@
-# Mneme dev orchestration. See .architecture/specs/2026-05-26-vue-foundation-design.md.
+# Mneme dev orchestration. See docs/specs/2026-05-26-vue-foundation-design.md.
 #
 # Run `make help` (or bare `make`) to list targets.
 

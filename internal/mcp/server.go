@@ -27,7 +27,7 @@ var implementation = &sdk.Implementation{
 // instructions is surfaced to MCP clients (Claude Code et al.) on connect.
 // Tells the LLM what Mneme is for and which tools to reach for first.
 // Kept terse on purpose — every token here lives in the client's context.
-const instructions = `Mneme is the source of truth for plans, specs, and ongoing project knowledge — anything under ` + "`.architecture/`" + ` or that evolves between sessions.
+const instructions = `Mneme is the source of truth for plans, specs, and ongoing project knowledge that evolves between sessions.
 
 When editing a plan or spec, prefer structured tools (tick_task, update_task, add_task, update_section, add_section, advance_phase) over push_document. They address blocks by stable ID, are server-validated, and cost ~100× fewer tokens than re-emitting the document.
 
@@ -55,7 +55,7 @@ At the end of a work session, record what happened with append_journal (summary 
 
 Before debugging a non-obvious or environment-specific error, call find_solution(query) to check for a known fix; after solving one, record it with log_solution (error_description + solution) so the next session finds it instead of re-debugging.
 
-Repo-tracked files (CLAUDE.md, ADRs, READMEs, .architecture/specs/*.md) are not in Mneme; read those from disk.`
+Repo-tracked files (CLAUDE.md, ADRs, READMEs, docs/specs/*.md) are not in Mneme; read those from disk.`
 
 // Server holds the SDK Server plus the dependencies its tool handlers
 // close over. It's safe to share across requests — the SDK manages

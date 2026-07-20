@@ -24,3 +24,6 @@ internal/web/dist/*
 
 # IDE stuff
 .idea/
+
+# Local architecture scratch — plans/journals live in Mneme, not the repo
+.architecture/
