@@ -2,6 +2,7 @@
 import { computed, nextTick, toRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BlockRenderer from '@/blocks/BlockRenderer.vue'
+import DocHistory from '@/components/DocHistory.vue'
 import MetaHeader from '@/components/MetaHeader.vue'
 import PhaseTracker from '@/components/PhaseTracker.vue'
 import SectionNav from '@/components/SectionNav.vue'
@@ -95,7 +96,10 @@ watch(
       </aside>
 
       <main class="content">
-        <MetaHeader :doc="doc" />
+        <div class="head-group">
+          <MetaHeader :doc="doc" />
+          <DocHistory :doc-id="doc.id" :current-revision="doc.revision" @restored="refresh({ silent: true })" />
+        </div>
         <BlockRenderer :blocks="blocks" />
       </main>
     </div>
@@ -130,6 +134,13 @@ watch(
      the old 32px read as cramped. Sections group at ~3× their internal gap. */
   gap: var(--space-12);
   min-width: 0;
+}
+/* Keep the history bar tight under the masthead; the big content gap applies
+   between this group and the body blocks. */
+.head-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .error {

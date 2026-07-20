@@ -89,6 +89,8 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 			r.Get("/documents/{id}", docs.Get)
 			r.Patch("/documents/{id}", docs.Update)
 			r.Post("/documents/{id}/archive", docs.Archive)
+			r.Get("/documents/{id}/revisions", docs.Revisions)
+			r.Post("/documents/{id}/restore", docs.Restore)
 			r.Get("/projects", projects.List)
 			r.Post("/projects", projects.Create)
 			r.Get("/memory", memory.List)

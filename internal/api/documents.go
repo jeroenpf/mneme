@@ -176,14 +176,20 @@ func (h *DocumentsHandler) createWithSlug(ctx context.Context, doc *models.Docum
 	return fmt.Errorf("could not allocate slug for %q after %d attempts", base, maxSlugAttempts)
 }
 
+// resolveDoc loads a document by slug or, failing that, by doc_ public id — so
+// a pasted mneme://document/doc_… reference resolves without the caller having
+// to map it back to the slug first.
+func (h *DocumentsHandler) resolveDoc(ctx context.Context, id string) (*models.Document, error) {
+	doc, err := h.Store.GetDocument(ctx, id)
+	if errors.Is(err, store.ErrNotFound) && ids.ValidFor(ids.KindDocument, id) {
+		return h.Store.GetDocumentByPublicID(ctx, id)
+	}
+	return doc, err
+}
+
 func (h *DocumentsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	doc, err := h.Store.GetDocument(r.Context(), id)
-	// Accept a doc_ public id too, so a pasted mneme://document/doc_… reference
-	// opens /doc/doc_… without the UI having to map it back to the slug first.
-	if errors.Is(err, store.ErrNotFound) && ids.ValidFor(ids.KindDocument, id) {
-		doc, err = h.Store.GetDocumentByPublicID(r.Context(), id)
-	}
+	doc, err := h.resolveDoc(r.Context(), id)
 	if err != nil {
 		writeStoreError(w, err)
 		return

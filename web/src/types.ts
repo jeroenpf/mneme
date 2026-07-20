@@ -22,6 +22,7 @@ export interface Document {
   phase_total?: number
   meta: Record<string, unknown>
   body: Record<string, unknown>
+  revision?: number
   created_at: string
   updated_at: string
 }
