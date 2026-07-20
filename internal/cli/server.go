@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -101,6 +103,11 @@ func RunServer(ctx context.Context, cfg *config.Config) error {
 		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client, hub, enq, info),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+
+	// Human-friendly boot summary to stdout — where to open it, where data
+	// lives, and how to connect an agent. The slog "listening" line below stays
+	// for machine logs.
+	fmt.Fprint(os.Stdout, renderStartup(info))
 
 	errCh := make(chan error, 1)
 	go func() {
