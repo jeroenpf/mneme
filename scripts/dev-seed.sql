@@ -13,7 +13,7 @@ INSERT INTO documents
    phase_current, phase_total, meta, body, created_at, updated_at)
 VALUES
   ('repo-vs-mneme-delineation', 'Repo vs Mneme delineation', 'mneme', 'spec', 'complete',
-   NULL, 'jeroenpfeil/mneme', '{architecture,docs}', NULL, NULL,
+   NULL, 'jeroenpf/mneme', '{architecture,docs}', NULL, NULL,
    '{"description": "Decision record for what lives in git versus Mneme: the repo owns durable present-tense docs about the artifact, Mneme owns evolving work docs. Pointers across the line, never copies."}',
    '{"sections": []}', now() - interval '20 days', now() - interval '1 day'),
 
@@ -23,7 +23,7 @@ VALUES
    '{"sections": []}', now() - interval '10 days', now() - interval '6 days'),
 
   ('hyperion-presence-detection-adr', 'Room presence detection approach', 'hyperion', 'adr', 'blocked',
-   'HYP-198', 'jeroenpfeil/hyperion', '{presence,architecture}', NULL, NULL,
+   'HYP-198', 'jeroenpf/hyperion', '{presence,architecture}', NULL, NULL,
    '{"description": "Choosing between mmWave sensors, BLE beacons, and camera-based detection for room-level presence. Blocked on mmWave sensor availability before a bench comparison can run."}',
    '{"sections": []}', now() - interval '30 days', now() - interval '12 days'),
 
@@ -51,7 +51,7 @@ INSERT INTO documents
    phase_current, phase_total, meta, body, created_at, updated_at)
 VALUES
   ('mneme-implementation', 'Mneme implementation', 'mneme', 'plan', 'in-progress',
-   NULL, 'jeroenpfeil/mneme', '{go,vue,postgres}', 6, 9,
+   NULL, 'jeroenpf/mneme', '{go,vue,postgres}', 6, 9,
    $$
    {
      "description": "Phase plan for the core service: Go REST plus MCP server, Vue registry and viewer, trusted local TLS. Sub-phases 1.1 through 1.6 are done; the document viewer is in flight.",
@@ -156,7 +156,7 @@ VALUES
    now() - interval '50 days', now() - interval '2 hours'),
 
   ('hyperion-zigbee-migration', 'Zigbee2MQTT migration', 'hyperion', 'plan', 'in-progress',
-   'HYP-231', 'jeroenpfeil/hyperion', '{zigbee,mqtt}', 2, 6,
+   'HYP-231', 'jeroenpf/hyperion', '{zigbee,mqtt}', 2, 6,
    $$
    {
      "description": "Move all 40-plus devices off the aging deCONZ stack onto zigbee2mqtt: inventory, coordinator swap, room-by-room re-pairing, automation rewrites, deCONZ decommission.",

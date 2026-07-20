@@ -27,3 +27,8 @@ internal/web/dist/*
 
 # IDE stuff
 .idea/
+
+# Local-only working dirs (kept in Mneme / agent tooling, not the repo)
+.architecture/
+.codex/
+.playwright-mcp/

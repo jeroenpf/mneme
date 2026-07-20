@@ -12,7 +12,7 @@ function makeDoc(overrides: Partial<Document> = {}): Document {
     type: 'plan',
     status: 'in-progress',
     ticket: 'MN-1',
-    repo: 'jeroenpfeil/mneme',
+    repo: 'jeroenpf/mneme',
     tags: ['go', 'vue'],
     phase_current: 6,
     phase_total: 9,
@@ -33,7 +33,7 @@ describe('MetaHeader', () => {
     expect(w.find('h1').html()).toContain('<strong>implementation</strong>')
     expect(w.text()).toContain('plan')
     expect(w.text()).toContain('MN-1')
-    expect(w.text()).toContain('jeroenpfeil/mneme')
+    expect(w.text()).toContain('jeroenpf/mneme')
     expect(w.text()).toContain('#go')
     expect(w.text()).toContain('Phase plan for the core service.')
   })
