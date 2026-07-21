@@ -35,6 +35,25 @@ func TestRenderStartupLocalhost(t *testing.T) {
 	}
 }
 
+func TestRenderStartupDrawsOutlinedBox(t *testing.T) {
+	info := appinfo.Info{
+		URL:         "http://localhost:8901",
+		MCPEndpoint: "http://localhost:8901/mcp",
+		DB:          appinfo.DBInfo{Driver: "sqlite", Path: "/x/mneme.db"},
+	}
+	out := renderStartup(info)
+
+	for _, want := range []string{"╭", "╰", "│", "Mneme is running.", "connect Claude Code", "Stop with Ctrl-C."} {
+		if !strings.Contains(out, want) {
+			t.Errorf("startup box missing %q:\n%s", want, out)
+		}
+	}
+	// The Ctrl-C hint lives outside the box; the last border row must close it.
+	if strings.Index(out, "Stop with Ctrl-C.") < strings.Index(out, "╰") {
+		t.Errorf("Ctrl-C hint should follow the box, not sit inside it:\n%s", out)
+	}
+}
+
 func TestRenderStartupSemanticNamesModel(t *testing.T) {
 	info := appinfo.Info{
 		URL:         "http://localhost:8901",

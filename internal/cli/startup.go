@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -12,10 +11,15 @@ import (
 
 // renderStartup is the human-facing summary printed when `mneme server` boots:
 // where to open it, where data lives, the search mode, and where to wire up an
-// agent. It mirrors the init wizard's summary style and uses the friendly URL
+// agent, drawn as an outlined box in the app accent. It uses the friendly URL
 // from appinfo — never the 127.0.0.1 bind address.
 func renderStartup(info appinfo.Info) string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#2f5d80"))
+	accent := lipgloss.Color("#2f5d80")
+	dim := lipgloss.Color("#626262")
+
+	title := lipgloss.NewStyle().Bold(true).Foreground(accent)
+	label := lipgloss.NewStyle().Bold(true).Foreground(accent).Width(10)
+	hint := lipgloss.NewStyle().Foreground(dim)
 
 	search := "lexical only (FTS, local)"
 	if info.Embeddings.Enabled {
@@ -27,24 +31,24 @@ func renderStartup(info appinfo.Info) string {
 		storage = abbreviateHome(info.DB.Path) + "  (" + info.DB.Driver + ")"
 	}
 
-	return fmt.Sprintf(`
-%s
-
-  open       %s
-  storage    %s
-  search     %s
-  MCP        %s
-  help       %s   -> connect Claude Code, Codex, ...
-
-  Stop with Ctrl-C.
-`,
+	rows := []string{
 		title.Render("Mneme is running."),
-		info.URL,
-		storage,
-		search,
-		info.MCPEndpoint,
-		info.URL+"/help",
-	)
+		"",
+		label.Render("open") + info.URL,
+		label.Render("storage") + storage,
+		label.Render("search") + search,
+		label.Render("MCP") + info.MCPEndpoint,
+		label.Render("help") + info.URL + "/help",
+		label.Render("") + hint.Render("└─ connect Claude Code, Codex, ..."),
+	}
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(accent).
+		Padding(0, 1).
+		Render(strings.Join(rows, "\n"))
+
+	return "\n" + box + "\n  " + hint.Render("Stop with Ctrl-C.") + "\n"
 }
 
 // abbreviateHome shortens the user's home directory to ~ for display. A path
