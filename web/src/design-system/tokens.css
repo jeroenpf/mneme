@@ -2,14 +2,15 @@
    Mneme — Colors & Type
    The single source of truth for visual tokens.
 
-   Three reading-first themes, selected by [data-theme] on <html>:
-     • paper — warm editorial light (the default, defined on :root)
-     • slate — cool modern light
-     • ink   — warm dark (not pure black), a night option
+   Four reading-first themes, selected by [data-theme] on <html>:
+     • paper    — warm editorial light (the default, defined on :root)
+     • slate    — cool modern light
+     • ink      — warm dark (not pure black), a night option
+     • graphite — cool dark, Slate's night sibling
 
    Structure: :root holds the theme-INVARIANT tokens (spacing, type scale,
    tracking, motion, layout, shadows) plus the Paper palette as the default.
-   :root[data-theme="slate"|"ink"] override only the palette, fonts, and radii.
+   :root[data-theme="…"] blocks override only the palette, fonts, and radii.
    Components read tokens exclusively (var(--…)) — never hardcode a color.
    ───────────────────────────────────────────────────────────────────── */
 
@@ -68,10 +69,11 @@
   --radius-pill: 999px;
 
   /* ── Theme swatch previews — each theme's bg, constant across themes
-        (ThemePicker dots preview all three regardless of the active one) ── */
-  --swatch-paper: #faf8f3;
-  --swatch-slate: #f6f8fb;
-  --swatch-ink:   #1a1918;
+        (ThemePicker dots preview every theme regardless of the active one) ── */
+  --swatch-paper:    #faf8f3;
+  --swatch-slate:    #f6f8fb;
+  --swatch-ink:      #1a1918;
+  --swatch-graphite: #15181d;
 
   /* ── Status roles — resolve against the active theme's semantic palette ── */
   --status-done:    var(--green);
@@ -209,6 +211,51 @@
   --radius:    5px;
   --radius-md: 6px;
   --radius-lg: 8px;
+
+  --mermaid-dark: 1;
+  color-scheme: dark;
+}
+
+/* ═══ GRAPHITE — cool dark: blue-grey charcoal, teal accent, Slate's night sibling ═══ */
+:root[data-theme="graphite"] {
+  --bg:            #15181d;
+  --bg-surface:    #1a1e24;
+  --bg-elevated:   #20252c;
+  --bg-hover:      #242a32;
+  --bg-overlay:    #2a313a;
+
+  --border:        #2a3038;
+  --border-soft:   #22272e;
+  --border-strong: #3a424d;
+
+  --text-primary:   #e3e7ec;
+  --text-secondary: #a5adb8;
+  --text-muted:     #78818d;
+  --text-faint:     #525a66;
+
+  --accent:        #3fc1b2;
+  --accent-hover:  #5cd3c5;
+  --accent-press:  #2ba899;
+  --accent-dim:    rgba(63, 193, 178, 0.12);
+  --accent-border: rgba(63, 193, 178, 0.30);
+  --accent-glow:   rgba(63, 193, 178, 0.20);
+  --eyebrow:       #3fc1b2;
+
+  --green:  #5cc08e; --green-dim:  rgba(92, 192, 142, 0.12);  --green-border:  rgba(92, 192, 142, 0.28);
+  --yellow: #d4b45e; --yellow-dim: rgba(212, 180, 94, 0.12);  --yellow-border: rgba(212, 180, 94, 0.28);
+  --red:    #e08a8a; --red-dim:    rgba(224, 138, 138, 0.12); --red-border:    rgba(224, 138, 138, 0.28);
+  --blue:   #6ea8e0; --blue-dim:   rgba(110, 168, 224, 0.12); --blue-border:   rgba(110, 168, 224, 0.28);
+  --purple: #a89ae8; --purple-dim: rgba(168, 154, 232, 0.12); --purple-border: rgba(168, 154, 232, 0.28);
+  --red-text: #e08a8a;
+
+  /* Mirrors Slate's Inter display + rounded corners, tempered for dark */
+  --font-display: 'Inter', system-ui, sans-serif;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius:    8px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
 
   --mermaid-dark: 1;
   color-scheme: dark;

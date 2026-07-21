@@ -8,71 +8,86 @@ const swatch = (t: Theme) => `var(--swatch-${t})`
 </script>
 
 <template>
-  <div class="seg" role="group" aria-label="Theme">
-    <button
-      v-for="t in THEMES"
-      :key="t"
-      type="button"
-      class="seg-btn mn-mono-sm"
-      :data-test="`theme-${t}`"
-      :aria-pressed="current === t ? 'true' : 'false'"
-      @click="setTheme(t)"
-    >
-      <i class="dot" :style="{ background: swatch(t) }" />
-      {{ label(t) }}
-    </button>
+  <div class="picker" role="group" aria-label="Theme">
+    <div class="dots">
+      <button
+        v-for="t in THEMES"
+        :key="t"
+        type="button"
+        class="dot-btn"
+        :data-test="`theme-${t}`"
+        :title="label(t)"
+        :aria-label="label(t)"
+        :aria-pressed="current === t ? 'true' : 'false'"
+        @click="setTheme(t)"
+      >
+        <i class="dot" :style="{ background: swatch(t) }" />
+      </button>
+    </div>
+    <span class="name mn-mono-sm" data-test="theme-name">{{ label(current) }}</span>
   </div>
 </template>
 
 <style scoped>
-/* Fills the rail's inner width so the three options never overflow the
-   224px rail (they used to spill past its right edge at inline-flex's
-   natural width). Buttons flex to share the width evenly. */
-.seg {
+/* One swatch dot per theme, active name at the right — scales to any theme
+   count inside the 224px rail: the dot row wraps, the name yields (ellipsis)
+   rather than pushing the row past the rail's inner width. */
+.picker {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   width: 100%;
-  padding: 3px;
-  gap: 2px;
+  padding: 3px 8px 3px 3px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
-.seg-btn {
-  flex: 1 1 0;
-  min-width: 0;
+.dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+}
+.dot-btn {
   appearance: none;
   border: 0;
   cursor: pointer;
-  color: var(--text-muted);
   background: transparent;
-  padding: 6px 2px;
-  border-radius: var(--radius-sm);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--radius-pill);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  white-space: nowrap;
-  transition:
-    color var(--duration-fast),
-    background var(--duration-fast);
 }
-.seg-btn:hover {
-  color: var(--text-primary);
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  transition: box-shadow var(--duration-fast);
 }
-.seg-btn[aria-pressed='true'] {
-  color: var(--text-primary);
-  background: var(--bg-elevated);
-  font-weight: 600;
+.dot-btn:hover .dot {
+  box-shadow:
+    inset 0 0 0 1px var(--border-strong),
+    0 0 0 2px var(--bg-hover);
 }
-.seg-btn:focus-visible {
+.dot-btn[aria-pressed='true'] .dot {
+  box-shadow:
+    inset 0 0 0 1px var(--border-strong),
+    0 0 0 1.5px var(--bg-surface),
+    0 0 0 3px var(--accent);
+}
+.dot-btn:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
 }
-.dot {
-  width: 9px;
-  height: 9px;
-  flex: none;
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
 }
 </style>

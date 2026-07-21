@@ -22,8 +22,14 @@ function stubPrefersDark(dark: boolean) {
 }
 
 describe('useTheme', () => {
-  it('exposes the three themes', () => {
-    expect(useTheme().THEMES).toEqual(['paper', 'slate', 'ink'])
+  it('exposes the four themes', () => {
+    expect(useTheme().THEMES).toEqual(['paper', 'slate', 'ink', 'graphite'])
+  })
+
+  it('setTheme applies graphite', () => {
+    useTheme().setTheme('graphite')
+    expect(document.documentElement.dataset.theme).toBe('graphite')
+    expect(localStorage.getItem('mneme.theme')).toBe('graphite')
   })
 
   it('setTheme writes documentElement.dataset.theme and localStorage', () => {

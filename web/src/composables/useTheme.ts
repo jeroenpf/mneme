@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-export const THEMES = ['paper', 'slate', 'ink'] as const
+export const THEMES = ['paper', 'slate', 'ink', 'graphite'] as const
 export type Theme = (typeof THEMES)[number]
 
 const KEY = 'mneme.theme'
