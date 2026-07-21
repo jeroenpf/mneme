@@ -8,7 +8,38 @@ import (
 	"testing"
 
 	"github.com/jeroenpf/mneme/internal/appinfo"
+	"github.com/jeroenpf/mneme/internal/config"
 )
+
+func TestRouterAutoAllowsServedLoopbackOrigin(t *testing.T) {
+	// No CORSOrigins configured (a raw `mneme server`): the loopback origin for
+	// the served port must still be accepted so the browser UI works, while a
+	// foreign origin is refused.
+	cfg := &config.Config{Port: "8901"}
+	srv := httptest.NewServer(Router(cfg, nil, nil, nil, nil, nil, nil, appinfo.Info{Version: "x"}))
+	defer srv.Close()
+
+	get := func(origin string) int {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/install", nil)
+		req.Header.Set("Origin", origin)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if code := get("http://localhost:8901"); code != http.StatusOK {
+		t.Errorf("served loopback origin should pass: got %d", code)
+	}
+	if code := get("http://127.0.0.1:8901"); code != http.StatusOK {
+		t.Errorf("served 127.0.0.1 origin should pass: got %d", code)
+	}
+	if code := get("http://evil.example"); code != http.StatusForbidden {
+		t.Errorf("foreign origin should be blocked: got %d", code)
+	}
+}
 
 func TestInstallHandlerServesInfo(t *testing.T) {
 	info := appinfo.Info{

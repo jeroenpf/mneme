@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -102,6 +103,12 @@ func RunServer(ctx context.Context, cfg *config.Config) error {
 		Addr:              cfg.ListenAddr(),
 		Handler:           api.Router(cfg, st, mcpSrv.Handler(), web.Handler(), client, hub, enq, info),
 		ReadHeaderTimeout: 5 * time.Second,
+		// Parent every request context on the lifecycle ctx so long-lived
+		// streams (the /api/events SSE loop, MCP hanging GETs) terminate on
+		// shutdown. Shutdown alone never cancels in-flight requests — with an
+		// open stream it would wait out its full deadline and surface
+		// "context deadline exceeded" on every Ctrl-C.
+		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 
 	// Human-friendly boot summary to stdout — where to open it, where data

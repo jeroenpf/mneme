@@ -84,3 +84,20 @@ func TestSummarizePostgresHidesCredentials(t *testing.T) {
 		t.Errorf("db path must not leak credentials: %q", got.DB.Path)
 	}
 }
+
+func TestSummarizePublicURLOverridesDerived(t *testing.T) {
+	// Behind a proxy/port-remap the bound host:port isn't reachable; PublicURL
+	// wins for the advertised URL + MCP endpoint (trailing slash trimmed).
+	cfg := &config.Config{
+		Host: "127.0.0.1", Port: "8080", DSN: "sqlite:///d/mneme.db",
+		PublicURL: "https://mneme.example.com/",
+	}
+	got := Summarize(cfg, "0.1.2", false)
+
+	if got.URL != "https://mneme.example.com" {
+		t.Errorf("url: got %q, want https://mneme.example.com", got.URL)
+	}
+	if got.MCPEndpoint != "https://mneme.example.com/mcp" {
+		t.Errorf("mcp: got %q", got.MCPEndpoint)
+	}
+}

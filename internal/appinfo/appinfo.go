@@ -42,6 +42,12 @@ func Summarize(cfg *config.Config, version string, embeddingsEnabled bool) Info 
 		scheme, host, mode = "https", "mneme.dev", "mnemedev"
 	}
 	url := scheme + "://" + host + ":" + cfg.Port
+	// Behind a proxy/port-remap the bound host:port isn't how clients reach the
+	// server; the operator's advertised URL wins. Mode stays TLS-derived (it
+	// tracks the local mkcert setup, not the advertised scheme).
+	if cfg.PublicURL != "" {
+		url = strings.TrimRight(cfg.PublicURL, "/")
+	}
 
 	info := Info{
 		Version:     version,

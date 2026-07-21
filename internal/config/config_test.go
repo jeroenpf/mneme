@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -48,6 +49,54 @@ func TestLoadFromEnv(t *testing.T) {
 	want := []string{"http://a.example", "http://b.example", "http://c.example"}
 	if !reflect.DeepEqual(c.CORSOrigins, want) {
 		t.Errorf("CORSOrigins: got %v, want %v (trimming + empty-skip)", c.CORSOrigins, want)
+	}
+}
+
+func TestLoadPublicURL(t *testing.T) {
+	isolateConfig(t)
+	t.Setenv("MNEME_DSN", "sqlite:///tmp/t.db")
+	t.Setenv("MNEME_PUBLIC_URL", "https://mneme.example.com")
+
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.PublicURL != "https://mneme.example.com" {
+		t.Errorf("PublicURL: got %q", c.PublicURL)
+	}
+}
+
+func TestAllowedOriginsAddsServedLoopback(t *testing.T) {
+	// A raw `mneme server` with no wizard config must still accept the loopback
+	// origins for the port it serves, so the browser UI isn't a blank page.
+	c := &Config{Port: "8901", CORSOrigins: []string{"http://configured.example"}}
+	got := c.AllowedOrigins()
+	for _, want := range []string{"http://configured.example", "http://localhost:8901", "http://127.0.0.1:8901"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("AllowedOrigins missing %q: %v", want, got)
+		}
+	}
+}
+
+func TestAllowedOriginsIncludesPublicURLOrigin(t *testing.T) {
+	c := &Config{Port: "8080", PublicURL: "https://mneme.dev:8443/ignored/path"}
+	got := c.AllowedOrigins()
+	if !slices.Contains(got, "https://mneme.dev:8443") {
+		t.Errorf("AllowedOrigins missing public-url origin: %v", got)
+	}
+}
+
+func TestAllowedOriginsDedupes(t *testing.T) {
+	c := &Config{Port: "8901", CORSOrigins: []string{"http://localhost:8901"}}
+	got := c.AllowedOrigins()
+	n := 0
+	for _, o := range got {
+		if o == "http://localhost:8901" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("http://localhost:8901 appears %d times: %v", n, got)
 	}
 }
 
