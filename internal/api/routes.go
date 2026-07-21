@@ -24,11 +24,15 @@ import (
 // FTS-only, enabled=false.
 func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Handler, client embed.Client, hub *live.Hub, enq embed.Enqueuer, installInfo appinfo.Info) http.Handler {
 	r := chi.NewRouter()
+	// Effective Origin allow-list: configured origins + the served loopback
+	// origins + MNEME_PUBLIC_URL's origin (see config.AllowedOrigins), so a raw
+	// `mneme server` and proxied setups both work without a blank page.
+	allowedOrigins := cfg.AllowedOrigins()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   cfg.CORSOrigins,
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowedHeaders:   []string{"Accept", "Content-Type"},
 		AllowCredentials: false,
@@ -39,7 +43,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 	// route. No-Origin requests (native MCP clients, curl, healthchecks, page
 	// navigations) pass. This is stronger than CORS, which only withholds
 	// response headers rather than refusing the request.
-	r.Use(OriginGuard(cfg.CORSOrigins))
+	r.Use(OriginGuard(allowedOrigins))
 
 	// SSE lives OUTSIDE the request-timeout group: the stream is
 	// deliberately long-lived and a 30s Timeout would sever it.
