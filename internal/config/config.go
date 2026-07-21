@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -31,8 +32,13 @@ type Config struct {
 	Port string
 	Env  string
 	CORSOrigins []string
-	TLSCert     string
-	TLSKey      string
+	// PublicURL (MNEME_PUBLIC_URL) is the externally-reachable base URL, for
+	// reverse-proxy / port-remap setups where the bound host:port differs from
+	// how clients reach the server. It overrides the advertised URL and its
+	// origin is allow-listed. Empty ⇒ derive from Host/Port/TLS.
+	PublicURL string
+	TLSCert   string
+	TLSKey    string
 	VoyageKey   string
 	VoyageModel string
 	VoyageRPM   int // optional proactive throttle; 0 = off (rely on 429 backoff)
@@ -141,6 +147,7 @@ func fromViper(v *viper.Viper) (*Config, error) {
 		VoyageRPM:   v.GetInt(keyVoyageRPM),
 		// Internal knobs: env-only, preserving the safe parse-fallback behaviour.
 		Env:               getenv("MNEME_ENV", "development"),
+		PublicURL:         getenv("MNEME_PUBLIC_URL", ""),
 		ReconcileEveryMin: getenvInt("MNEME_RECONCILE_INTERVAL_MIN", 15),
 		SearchMaxDist:     getenvFloat("MNEME_SEARCH_MAX_DIST", 0.65),
 	}
@@ -176,6 +183,45 @@ func (c *Config) TLSEnabled() bool {
 		}
 	}
 	return true
+}
+
+// AllowedOrigins is the effective browser-Origin allow-list the server enforces:
+// the configured origins, plus the loopback origins for the port actually being
+// served (so a raw `mneme server` with no wizard config still works in a
+// browser, not a blank page), plus the origin of PublicURL when set. Deduped,
+// first-seen order preserved.
+func (c *Config) AllowedOrigins() []string {
+	origins := append([]string{}, c.CORSOrigins...)
+
+	scheme := "http"
+	if c.TLSEnabled() {
+		scheme = "https"
+	}
+	origins = append(origins,
+		scheme+"://localhost:"+c.Port,
+		scheme+"://127.0.0.1:"+c.Port,
+	)
+
+	if c.PublicURL != "" {
+		if u, err := url.Parse(c.PublicURL); err == nil && u.Host != "" {
+			origins = append(origins, u.Scheme+"://"+u.Host)
+		}
+	}
+
+	return dedupeStrings(origins)
+}
+
+func dedupeStrings(xs []string) []string {
+	seen := make(map[string]struct{}, len(xs))
+	out := make([]string, 0, len(xs))
+	for _, x := range xs {
+		if _, ok := seen[x]; ok {
+			continue
+		}
+		seen[x] = struct{}{}
+		out = append(out, x)
+	}
+	return out
 }
 
 func getenv(key, def string) string {
