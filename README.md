@@ -12,7 +12,7 @@ the evolving work docs (plans, journals, notes). Mneme is **local-only and is no
 substitute for version control** — anything durable or shareable belongs in git. Work is
 born in Mneme and graduates to the repo as markdown when it hardens; only pointers cross the
 line, never copies. Full rationale:
-[`.architecture/specs/2026-07-11-repo-vs-mneme-delineation.md`](.architecture/specs/2026-07-11-repo-vs-mneme-delineation.md).
+[`docs/specs/2026-07-11-repo-vs-mneme-delineation.md`](docs/specs/2026-07-11-repo-vs-mneme-delineation.md).
 
 To wire Mneme into another project so its coding agent uses it, see
 [`docs/using-mneme.md`](docs/using-mneme.md).
@@ -133,4 +133,4 @@ https://mneme.dev:8443
   `mcp` (the MCP tool surface), `bundle` (the session-start context bundle), `migrations`,
   `models`, `embed` (Voyage embeddings for hybrid search).
 - `web/` — the Vue 3 SPA (embedded into the Go binary at build time).
-- `.architecture/` — plans and specs (the durable, graduated ones; live work lives in Mneme).
+- `docs/` — user guides; `docs/specs/` holds the accepted specs and ADRs (start with [`architecture.md`](docs/specs/architecture.md)). Live plans and journals live in Mneme, not the repo.
