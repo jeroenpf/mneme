@@ -32,6 +32,7 @@ const NAV = [
 const SYSTEM_NAV = [
   { to: '/embeddings', label: 'Search index', test: 'to-embeddings' },
   { to: '/help', label: 'Help', test: 'to-help' },
+  { to: '/about', label: 'About', test: 'to-about' },
 ] as const
 
 // Global search (lifted from Topbar). A local ref — deliberately NOT wired to

@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { defineComponent, h, ref } from 'vue'
 import App from './App.vue'
-import { useTheme } from '@/composables/useTheme'
+import { THEMES, useTheme } from '@/composables/useTheme'
 
 // AppShell (in the rail) opens the shared live stream in setup; stub it since
 // jsdom has no EventSource. Its behaviour is covered by useEventStream.test.ts.
@@ -56,6 +56,6 @@ describe('App', () => {
     const w = await mountApp()
     expect(w.find('.theme-picker-float').exists()).toBe(false)
     // ThemePicker is mounted exactly once — in the rail.
-    expect(w.findAll('button[data-test^="theme-"]')).toHaveLength(3)
+    expect(w.findAll('button[data-test^="theme-"]')).toHaveLength(THEMES.length)
   })
 })

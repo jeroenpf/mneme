@@ -65,6 +65,17 @@ describe('HelpView', () => {
     expect(codeContents(w).some((c) => c.includes('get_context_bundle'))).toBe(true)
   })
 
+  it('offers the workflow-port prompt, pre-filled with the live endpoints', async () => {
+    const w = await mountView()
+    expect(w.find('[data-test="port"]').exists()).toBe(true)
+    const port = codeContents(w).find((c) => c.includes('inventory the current workflow'))
+    expect(port).toBeDefined()
+    expect(port).toContain('http://localhost:8901/mcp')
+    expect(port).toContain('http://localhost:8901/help')
+    // The migration step must stay gated on the user.
+    expect(port).toContain('wait for my explicit confirmation')
+  })
+
   it('shows how to enable Voyage when embeddings are off', async () => {
     const w = await mountView()
     expect(codeContents(w).some((c) => c.includes('MNEME_VOYAGE_API_KEY'))).toBe(true)

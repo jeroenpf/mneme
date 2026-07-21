@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { defineComponent, h, ref, type Ref } from 'vue'
 import AppShell from './AppShell.vue'
-import { useTheme } from '@/composables/useTheme'
+import { THEMES, useTheme } from '@/composables/useTheme'
 
 // AppShell opens the shared live stream in setup — mock it (jsdom has no
 // EventSource) and drive the status through a holder so the connection dot is
@@ -69,6 +69,8 @@ const NAV = [
   ['to-env', '/env'],
   ['to-bundle', '/bundle'],
   ['to-embeddings', '/embeddings'],
+  ['to-help', '/help'],
+  ['to-about', '/about'],
 ] as const
 
 describe('AppShell', () => {
@@ -94,7 +96,7 @@ describe('AppShell', () => {
 
   it('mounts the ThemePicker in the rail', async () => {
     const w = await mountShell(makeRouter())
-    expect(w.findAll('button[data-test^="theme-"]')).toHaveLength(3)
+    expect(w.findAll('button[data-test^="theme-"]')).toHaveLength(THEMES.length)
   })
 
   // Active state comes from vue-router's router-link-active classes (real

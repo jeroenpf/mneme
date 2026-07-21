@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useInstallInfo } from '@/composables/useInstallInfo'
+import { buildPortPrompt } from '@/content/portPrompt'
 import MCode from '@/blocks/MCode.vue'
 
 const { info, loading, error, refresh } = useInstallInfo()
@@ -35,6 +36,8 @@ const claudeDesktopJson = computed(
 
 const settingsToml = `[embeddings]
 voyage_api_key = "pa-..."`
+
+const portPrompt = computed(() => buildPortPrompt({ url: url.value, mcpEndpoint: mcp.value }))
 
 const agentsSnippet = `## Mneme (project knowledge)
 At session start, call get_context_bundle("<project>"). Before assuming
@@ -176,6 +179,18 @@ update_task, advance_phase) over rewriting whole documents.`
             <li>“Log that decision in mneme with <span class="mn-code-inline">log_decision</span>, and append a journal entry when we're done.”</li>
             <li>“Update my <span class="mn-code-inline">AGENTS.md</span> so future sessions always check mneme first and push plans there.”</li>
           </ul>
+
+          <div data-test="port">
+            <h3 class="mn-h3">Port an existing workflow</h3>
+            <p class="mn-body-sm">
+              Already planning through superpowers, a <span class="mn-code-inline">docs/</span>
+              folder, Notion, or another system? This one-time prompt briefs an agent on what
+              mneme is, has it inventory the repo's current workflow, rewrite the instruction
+              files, and propose a migration it may only perform after you confirm. Run it once,
+              inside the target repo — it is pre-filled with <em>your</em> endpoint:
+            </p>
+            <MCode lang="markdown" filename="port-to-mneme.md" :content="portPrompt" />
+          </div>
         </section>
       </template>
     </main>
