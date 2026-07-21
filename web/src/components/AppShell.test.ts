@@ -69,6 +69,8 @@ const NAV = [
   ['to-env', '/env'],
   ['to-bundle', '/bundle'],
   ['to-embeddings', '/embeddings'],
+  ['to-help', '/help'],
+  ['to-about', '/about'],
 ] as const
 
 describe('AppShell', () => {
