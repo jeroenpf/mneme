@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import DocCard from '@/components/DocCard.vue'
+import DocListRow from '@/components/DocListRow.vue'
 import FilterToolbar from '@/components/FilterToolbar.vue'
 import StatsRow from '@/components/StatsRow.vue'
 import { useDebounced } from '@/composables/useDebounced'
 import { useDocuments } from '@/composables/useDocuments'
 import { useLiveRefresh } from '@/composables/useLiveRefresh'
+import { useNow } from '@/composables/useNow'
 import { aggregateCounts, useProjects } from '@/composables/useProjects'
+import { useViewMode } from '@/composables/useViewMode'
 import {
   DEFAULT_STATUSES,
   PILL_STATUSES,
@@ -17,6 +20,12 @@ import {
 const { state, apiFilter, update } = useRegistryFilters()
 const { items, loading, error, refresh } = useDocuments(apiFilter)
 const { items: projects, refresh: refreshProjects } = useProjects()
+
+// Card grid vs list rows — a display preference, not a filter, so it lives
+// in localStorage (like the theme) instead of the URL.
+const { view, setView, init: initView } = useViewMode()
+initView()
+const now = useNow()
 
 const counts = computed(() => aggregateCounts(projects.value))
 
@@ -93,7 +102,13 @@ function showAll() {
         />
       </div>
 
-      <FilterToolbar :state="state" :projects="projects" @change="update" />
+      <FilterToolbar
+        :state="state"
+        :projects="projects"
+        :view="view"
+        @change="update"
+        @view-change="setView"
+      />
 
       <p v-if="loading" class="mn-mono-sm py-8 text-center">loading registry…</p>
 
@@ -124,8 +139,12 @@ function showAll() {
           <template v-else>nothing here yet — push a document over MCP</template>
         </p>
 
-        <div v-else-if="active.length" class="doc-grid" data-test="grid">
+        <div v-else-if="active.length && view === 'cards'" class="doc-grid" data-test="grid">
           <DocCard v-for="d in active" :key="d.id" :doc="d" :data-flash-id="d.id" />
+        </div>
+
+        <div v-else-if="active.length" class="doc-list" data-test="list">
+          <DocListRow v-for="d in active" :key="d.id" :doc="d" :now="now" :data-flash-id="d.id" />
         </div>
 
         <section v-if="archived.length">
@@ -136,8 +155,19 @@ function showAll() {
           >
             {{ showArchived ? '▾' : '▸' }} archived ({{ archived.length }})
           </button>
-          <div v-if="showArchived" class="doc-grid archived-grid mt-3" data-test="archived-grid">
+          <div
+            v-if="showArchived && view === 'cards'"
+            class="doc-grid archived-grid mt-3"
+            data-test="archived-grid"
+          >
             <DocCard v-for="d in archived" :key="d.id" :doc="d" :data-flash-id="d.id" />
+          </div>
+          <div
+            v-else-if="showArchived"
+            class="doc-list archived-list mt-3"
+            data-test="archived-list"
+          >
+            <DocListRow v-for="d in archived" :key="d.id" :doc="d" :now="now" :data-flash-id="d.id" />
           </div>
         </section>
       </template>
@@ -187,10 +217,28 @@ function showAll() {
   gap: var(--space-3);
 }
 
+/* The container owns the 7 shared column tracks; each row subgrids into
+   them so cells align across rows regardless of content width. */
+.doc-list {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr) max-content max-content max-content max-content;
+  column-gap: var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
 .archived-grid :deep(.doc-card) {
   opacity: 0.55;
 }
 .archived-grid :deep(.doc-card:hover) {
+  opacity: 0.85;
+}
+.archived-list :deep(.doc-row) {
+  opacity: 0.55;
+}
+.archived-list :deep(.doc-row:hover) {
   opacity: 0.85;
 }
 
