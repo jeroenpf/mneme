@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import PhasePips from '@/components/PhasePips.vue'
 import type { Document } from '@/types'
 
 const props = defineProps<{ doc: Document }>()
@@ -7,16 +8,6 @@ const props = defineProps<{ doc: Document }>()
 const description = computed(() => {
   const d = props.doc.meta?.description
   return typeof d === 'string' ? d : ''
-})
-
-// phase_current is the phase in flight (1-based): phases below it are
-// done, it is the active segment, the rest are todo.
-const pips = computed(() => {
-  const total = props.doc.phase_total ?? 0
-  const current = props.doc.phase_current ?? 0
-  return Array.from({ length: total }, (_, i) =>
-    i + 1 < current ? 'done' : i + 1 === current ? 'wip' : 'todo',
-  )
 })
 
 // Tags stay on one line; overflow is clipped. The full set surfaces via the
@@ -60,10 +51,11 @@ onBeforeUnmount(() => ro?.disconnect())
 
     <p v-if="description" class="mn-body-sm line-clamp-2">{{ description }}</p>
 
-    <div v-if="pips.length" class="flex items-center gap-1" data-test="pips">
-      <span v-for="(p, i) in pips" :key="i" class="pip" :class="`pip-${p}`" />
-      <span class="mn-mono-sm ml-1">{{ doc.phase_current }}/{{ doc.phase_total }}</span>
-    </div>
+    <PhasePips
+      v-if="doc.phase_total"
+      :current="doc.phase_current ?? 0"
+      :total="doc.phase_total"
+    />
 
     <div
       v-if="doc.tags.length"
@@ -138,15 +130,6 @@ onBeforeUnmount(() => ro?.disconnect())
 .status-complete    { background: var(--status-done); }
 .status-blocked     { background: var(--status-blocked); }
 .status-archived    { background: var(--status-archived); }
-
-.pip {
-  width: 14px;
-  height: 4px;
-  border-radius: 1px;
-  background: var(--bg-overlay);
-}
-.pip-done { background: var(--accent); }
-.pip-wip  { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent-border); }
 
 .doc-card__tags {
   margin-top: auto;
