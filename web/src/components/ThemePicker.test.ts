@@ -14,7 +14,14 @@ beforeEach(() => {
 describe('ThemePicker', () => {
   it('renders one swatch per theme', () => {
     const w = mount(ThemePicker)
-    expect(w.findAll('button[data-test^="theme-"]')).toHaveLength(4)
+    expect(w.findAll('button[data-test^="theme-"]')).toHaveLength(7)
+  })
+
+  it('applies a Nightshade theme when its swatch is clicked', async () => {
+    const w = mount(ThemePicker)
+    await w.find('[data-test="theme-nebula"]').trigger('click')
+    expect(document.documentElement.dataset.theme).toBe('nebula')
+    expect(localStorage.getItem('mneme.theme')).toBe('nebula')
   })
 
   it('applies and persists the theme when a swatch is clicked', async () => {
