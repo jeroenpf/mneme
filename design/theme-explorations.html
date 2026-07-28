@@ -201,11 +201,62 @@ body {
   --shadow:0 2px 10px rgba(0,0,0,.35);
   --mono-labels:1;
 }
+.viewport[data-theme="nebula"] {
+  --bg:#0b0e17; --surface:#10141f; --elevated:#151a29; --hover:#1a2031;
+  --ink:#e9eaf5; --ink-2:#a9aec8; --ink-3:#7b819c; --ink-4:#555b75;
+  --line:#232a44; --line-2:#354064;
+  --accent:#a99ef7; --accent-2:#bfb6fa; --accent-soft:rgba(169,158,247,.12); --accent-line:rgba(169,158,247,.32);
+  --eyebrow:#e0a35c;
+  --good:#5fc491; --good-bg:rgba(95,196,145,.12); --good-line:rgba(95,196,145,.28);
+  --warn:#dcb45f; --warn-bg:rgba(220,180,95,.12); --warn-line:rgba(220,180,95,.28);
+  --bad:#ee8f8f;  --bad-bg:rgba(238,143,143,.12); --bad-line:rgba(238,143,143,.28);
+  --info:#74a9ee; --info-bg:rgba(116,169,238,.12); --info-line:rgba(116,169,238,.28);
+  --radius:9px; --radius-lg:14px;
+  --font-display:"Inter"; --font-body:"Inter"; --font-mono:"IBM Plex Mono";
+  --code-bg:#0a0d15; --code-k:#ee8f8f; --code-s:#5fc491; --code-c:#555b75; --code-fn:#74a9ee; --code-n:#dcb45f;
+  --shadow:0 2px 12px rgba(0,0,0,.45);
+  --mono-labels:0;
+  --bg-grad:radial-gradient(1100px 700px at 50% -20%, rgba(122,108,255,.13), transparent 60%), radial-gradient(900px 600px at 100% 110%, rgba(64,78,180,.10), transparent 55%);
+}
+.viewport[data-theme="ultraviolet"] {
+  --bg:#0e0a16; --surface:#140f20; --elevated:#1a142a; --hover:#211a34;
+  --ink:#ede9f8; --ink-2:#b1a8cb; --ink-3:#847b9f; --ink-4:#5c5478;
+  --line:#2b2145; --line-2:#413264;
+  --accent:#9469f8; --accent-2:#ab8afc; --accent-soft:rgba(148,105,248,.13); --accent-line:rgba(148,105,248,.34);
+  --eyebrow:#e879f9;
+  --good:#5ec98f; --good-bg:rgba(94,201,143,.12); --good-line:rgba(94,201,143,.28);
+  --warn:#dfb45e; --warn-bg:rgba(223,180,94,.12); --warn-line:rgba(223,180,94,.28);
+  --bad:#ef8d96;  --bad-bg:rgba(239,141,150,.12); --bad-line:rgba(239,141,150,.28);
+  --info:#7ba4f0; --info-bg:rgba(123,164,240,.12); --info-line:rgba(123,164,240,.28);
+  --radius:9px; --radius-lg:14px;
+  --font-display:"Inter"; --font-body:"Inter"; --font-mono:"IBM Plex Mono";
+  --code-bg:#0c0913; --code-k:#ef8d96; --code-s:#5ec98f; --code-c:#5c5478; --code-fn:#7ba4f0; --code-n:#dfb45e;
+  --shadow:0 2px 12px rgba(0,0,0,.45);
+  --mono-labels:0;
+  --bg-grad:radial-gradient(1000px 650px at 15% -15%, rgba(168,85,247,.16), transparent 58%), radial-gradient(900px 600px at 110% 110%, rgba(217,70,239,.09), transparent 55%);
+}
+.viewport[data-theme="aurora"] {
+  --bg:#090d1a; --surface:#0e1324; --elevated:#131a30; --hover:#18203a;
+  --ink:#e7ebf7; --ink-2:#a6aeca; --ink-3:#78819f; --ink-4:#525b78;
+  --line:#20294a; --line-2:#303e6b;
+  --accent:#818cf8; --accent-2:#9aa4fa; --accent-soft:rgba(129,140,248,.13); --accent-line:rgba(129,140,248,.33);
+  --eyebrow:#45d0c2;
+  --good:#55c795; --good-bg:rgba(85,199,149,.12); --good-line:rgba(85,199,149,.28);
+  --warn:#d8b360; --warn-bg:rgba(216,179,96,.12); --warn-line:rgba(216,179,96,.28);
+  --bad:#ec8d92;  --bad-bg:rgba(236,141,146,.12); --bad-line:rgba(236,141,146,.28);
+  --info:#6fabf2; --info-bg:rgba(111,171,242,.12); --info-line:rgba(111,171,242,.28);
+  --radius:9px; --radius-lg:14px;
+  --font-display:"Inter"; --font-body:"Inter"; --font-mono:"IBM Plex Mono";
+  --code-bg:#070b15; --code-k:#ec8d92; --code-s:#55c795; --code-c:#525b78; --code-fn:#6fabf2; --code-n:#d8b360;
+  --shadow:0 2px 12px rgba(0,0,0,.45);
+  --mono-labels:0;
+  --bg-grad:radial-gradient(1100px 700px at 30% -20%, rgba(99,112,241,.14), transparent 60%), radial-gradient(900px 550px at 105% 115%, rgba(45,212,191,.07), transparent 55%);
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    THE APPLICATION — styled entirely through theme tokens
    ═══════════════════════════════════════════════════════════════════ */
-.viewport { background: var(--bg); color: var(--ink); font-family: var(--font-body), sans-serif; }
+.viewport { background: var(--bg); background-image: var(--bg-grad, none); color: var(--ink); font-family: var(--font-body), sans-serif; }
 .app { display: grid; min-height: 660px; }
 .app--doc      { grid-template-columns: 210px 198px minmax(0,1fr); }
 .app--registry { grid-template-columns: 210px minmax(0,1fr); }
@@ -274,7 +325,7 @@ body {
   font-size: 11px; z-index: 1; background: var(--bg);
 }
 .phase.done .node { background: var(--good); color: #fff; box-shadow: 0 0 0 3px var(--bg); }
-.viewport[data-theme="ink"] .phase.done .node { color: #10231a; }
+.viewport[data-theme="ink"] .phase.done .node, .viewport[data-theme="nebula"] .phase.done .node, .viewport[data-theme="ultraviolet"] .phase.done .node, .viewport[data-theme="aurora"] .phase.done .node { color: #10231a; }
 .phase.current .node {
   background: var(--accent); box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent-line);
 }
@@ -347,7 +398,7 @@ code.inl {
   background: var(--elevated); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 1px 5px; color: var(--accent-2);
 }
-.viewport[data-theme="ink"] code.inl { color: var(--accent); }
+.viewport[data-theme="ink"] code.inl, .viewport[data-theme="nebula"] code.inl, .viewport[data-theme="ultraviolet"] code.inl, .viewport[data-theme="aurora"] code.inl { color: var(--accent); }
 
 /* bulleted list */
 ul.clean { margin: 0 0 16px; padding-left: 0; list-style: none; }
@@ -370,7 +421,7 @@ ul.clean li::before { content:""; position: absolute; left: 2px; top: 10px; widt
 .call.warn .tag{ color: var(--warn); }
 .call.decision { background: var(--accent-soft); border-color: var(--accent); }
 .call.decision .tag{ color: var(--accent-2); }
-.viewport[data-theme="ink"] .call.decision .tag { color: var(--accent); }
+.viewport[data-theme="ink"] .call.decision .tag, .viewport[data-theme="nebula"] .call.decision .tag, .viewport[data-theme="ultraviolet"] .call.decision .tag, .viewport[data-theme="aurora"] .call.decision .tag { color: var(--accent); }
 
 /* task list */
 .tasks { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 8px; }
@@ -379,9 +430,9 @@ ul.clean li::before { content:""; position: absolute; left: 2px; top: 10px; widt
 .chk { width: 17px; height: 17px; border-radius: 5px; margin-top: 1px; display: grid; place-items: center; font-size: 10px; flex: none; }
 .viewport[data-theme="paper"] .chk, .viewport[data-theme="ink"] .chk { border-radius: 4px; }
 .task.done .chk { background: var(--good); color: #fff; }
-.viewport[data-theme="ink"] .task.done .chk { color: #10231a; }
+.viewport[data-theme="ink"] .task.done .chk, .viewport[data-theme="nebula"] .task.done .chk, .viewport[data-theme="ultraviolet"] .task.done .chk, .viewport[data-theme="aurora"] .task.done .chk { color: #10231a; }
 .task.wip  .chk { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent-2); }
-.viewport[data-theme="ink"] .task.wip .chk { color: var(--accent); }
+.viewport[data-theme="ink"] .task.wip .chk, .viewport[data-theme="nebula"] .task.wip .chk, .viewport[data-theme="ultraviolet"] .task.wip .chk, .viewport[data-theme="aurora"] .task.wip .chk { color: var(--accent); }
 .task.todo .chk { background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line-2); }
 .t-txt { font-size: 14.5px; line-height: 1.45; color: var(--ink); }
 .task.done .t-txt { color: var(--ink-3); }
@@ -390,7 +441,7 @@ ul.clean li::before { content:""; position: absolute; left: 2px; top: 10px; widt
   font-size: 10px; letter-spacing: .04em; color: var(--ink-4); text-transform: uppercase;
 }
 .task.wip .t-meta { color: var(--accent-2); }
-.viewport[data-theme="ink"] .task.wip .t-meta { color: var(--accent); }
+.viewport[data-theme="ink"] .task.wip .t-meta, .viewport[data-theme="nebula"] .task.wip .t-meta, .viewport[data-theme="ultraviolet"] .task.wip .t-meta, .viewport[data-theme="aurora"] .task.wip .t-meta { color: var(--accent); }
 
 /* key-value */
 .kv { border: 1px solid var(--line-2); border-radius: var(--radius); overflow: hidden; margin: 20px 0; }
@@ -403,7 +454,7 @@ ul.clean li::before { content:""; position: absolute; left: 2px; top: 10px; widt
 }
 .kv-v { padding: 11px 15px; font-size: 13.5px; color: var(--ink); }
 .kv-v code { font-family: var(--font-mono), monospace; font-size: 12.5px; color: var(--accent-2); }
-.viewport[data-theme="ink"] .kv-v code { color: var(--accent); }
+.viewport[data-theme="ink"] .kv-v code, .viewport[data-theme="nebula"] .kv-v code, .viewport[data-theme="ultraviolet"] .kv-v code, .viewport[data-theme="aurora"] .kv-v code { color: var(--accent); }
 
 /* table */
 .tbl-wrap { overflow-x: auto; margin: 20px 0; border: 1px solid var(--line-2); border-radius: var(--radius); }
@@ -419,7 +470,7 @@ tr:last-child td { border-bottom: 0; }
 .pill { font-family: var(--font-mono), monospace; font-size: 9.5px; font-weight: 600; letter-spacing: .04em; padding: 3px 8px; border-radius: 100px; text-transform: uppercase; white-space: nowrap; }
 .pill.target { background: var(--good-bg); color: var(--good); border: 1px solid var(--good-line); }
 .pill.ship   { background: var(--accent-soft); color: var(--accent-2); border: 1px solid var(--accent-line); }
-.viewport[data-theme="ink"] .pill.ship { color: var(--accent); }
+.viewport[data-theme="ink"] .pill.ship, .viewport[data-theme="nebula"] .pill.ship, .viewport[data-theme="ultraviolet"] .pill.ship, .viewport[data-theme="aurora"] .pill.ship { color: var(--accent); }
 .pill.weak   { background: var(--bad-bg); color: var(--bad); border: 1px solid var(--bad-line); }
 
 /* code */
@@ -519,6 +570,9 @@ tr:last-child td { border-bottom: 0; }
         <button data-theme="paper" aria-pressed="true"><i class="swatch-dot" style="background:#faf8f3"></i>Paper</button>
         <button data-theme="slate" aria-pressed="false"><i class="swatch-dot" style="background:#f6f8fb"></i>Slate</button>
         <button data-theme="ink" aria-pressed="false"><i class="swatch-dot" style="background:#1a1918"></i>Ink</button>
+        <button data-theme="nebula" aria-pressed="false"><i class="swatch-dot" style="background:#0b0e17"></i>Nebula</button>
+        <button data-theme="ultraviolet" aria-pressed="false"><i class="swatch-dot" style="background:#0e0a16"></i>Ultraviolet</button>
+        <button data-theme="aurora" aria-pressed="false"><i class="swatch-dot" style="background:#090d1a"></i>Aurora</button>
       </div>
     </div>
     <div class="ctl-group">
@@ -568,6 +622,45 @@ tr:last-child td { border-bottom: 0; }
       <div class="pal"><i style="background:#e6975a"></i><span>gold</span></div>
       <div class="pal"><i style="background:#63b98a"></i><span>green</span></div>
       <div class="pal"><i style="background:#78a6de"></i><span>blue</span></div>
+    </div>
+  </div>
+  <div class="readout" data-for="nebula">
+    <div>
+      <p class="readout-name">Nebula <span>lavender on navy · night</span></p>
+      <p class="readout-desc">The faithful take on the reference: near-black navy under a faint indigo bloom, periwinkle-lavender carrying links and actions, amber section markers as the warm counterpoint. <b>Sentry's auth page, made Mneme's own.</b></p>
+    </div>
+    <div class="palette">
+      <div class="pal"><i style="background:#0b0e17"></i><span>navy</span></div>
+      <div class="pal"><i style="background:#e9eaf5"></i><span>ink</span></div>
+      <div class="pal"><i style="background:#a99ef7"></i><span>lavender</span></div>
+      <div class="pal"><i style="background:#e0a35c"></i><span>amber</span></div>
+      <div class="pal"><i style="background:#5fc491"></i><span>green</span></div>
+    </div>
+  </div>
+  <div class="readout" data-for="ultraviolet">
+    <div>
+      <p class="readout-name">Ultraviolet <span>electric violet · night</span></p>
+      <p class="readout-desc">The punchy one: purple-tinted black with a magenta-leaning corner glow, electric violet actions, fuchsia section markers. <b>Most saturated of the three</b> — accent tuned up from #8b5cf6 to #9469f8 so links keep contrast on the near-black.</p>
+    </div>
+    <div class="palette">
+      <div class="pal"><i style="background:#0e0a16"></i><span>void</span></div>
+      <div class="pal"><i style="background:#ede9f8"></i><span>ink</span></div>
+      <div class="pal"><i style="background:#9469f8"></i><span>violet</span></div>
+      <div class="pal"><i style="background:#e879f9"></i><span>fuchsia</span></div>
+      <div class="pal"><i style="background:#5ec98f"></i><span>green</span></div>
+    </div>
+  </div>
+  <div class="readout" data-for="aurora">
+    <div>
+      <p class="readout-name">Aurora <span>indigo + teal · night</span></p>
+      <p class="readout-desc">The cool one: the bluest navy under a two-tone indigo-and-teal glow, periwinkle actions, teal section markers. <b>Northern lights over a developer tool.</b></p>
+    </div>
+    <div class="palette">
+      <div class="pal"><i style="background:#090d1a"></i><span>navy</span></div>
+      <div class="pal"><i style="background:#e7ebf7"></i><span>ink</span></div>
+      <div class="pal"><i style="background:#818cf8"></i><span>indigo</span></div>
+      <div class="pal"><i style="background:#45d0c2"></i><span>teal</span></div>
+      <div class="pal"><i style="background:#55c795"></i><span>green</span></div>
     </div>
   </div>
 
