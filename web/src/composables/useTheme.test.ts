@@ -22,8 +22,10 @@ function stubPrefersDark(dark: boolean) {
 }
 
 describe('useTheme', () => {
-  it('exposes the four themes', () => {
-    expect(useTheme().THEMES).toEqual(['paper', 'slate', 'ink', 'graphite'])
+  it('exposes the seven themes', () => {
+    expect(useTheme().THEMES).toEqual([
+      'paper', 'slate', 'ink', 'graphite', 'nebula', 'ultraviolet', 'aurora',
+    ])
   })
 
   it('setTheme applies graphite', () => {
