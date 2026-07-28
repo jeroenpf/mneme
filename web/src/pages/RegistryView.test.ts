@@ -62,6 +62,7 @@ async function mountView(router: Router) {
 }
 
 beforeEach(() => {
+  localStorage.clear()
   vi.mocked(listDocuments).mockReset().mockResolvedValue({
     items: [
       doc('alpha', { status: 'in-progress' }),
@@ -168,6 +169,37 @@ describe('RegistryView', () => {
     await flushPromises()
     // "all" reveals every non-archived doc: alpha (in-progress) + beta (complete).
     expect(w.find('[data-test="grid"]').findAll('.doc-card')).toHaveLength(2)
+  })
+
+  it('defaults to the card grid with no list present', async () => {
+    const w = await mountView(makeRouter())
+    expect(w.find('[data-test="grid"]').exists()).toBe(true)
+    expect(w.find('[data-test="list"]').exists()).toBe(false)
+  })
+
+  it('switches to list rows on toggle and persists the choice', async () => {
+    const w = await mountView(makeRouter())
+    await w.find('[data-test="view-list"]').trigger('click')
+    expect(w.find('[data-test="grid"]').exists()).toBe(false)
+    const rows = w.find('[data-test="list"]').findAll('.doc-row')
+    expect(rows).toHaveLength(1) // alpha (in-progress); beta hidden by default trio
+    expect(rows[0]!.attributes('data-flash-id')).toBe('alpha')
+    expect(localStorage.getItem('mneme.registry-view')).toBe('list')
+  })
+
+  it('starts in list view when the preference is stored', async () => {
+    localStorage.setItem('mneme.registry-view', 'list')
+    const w = await mountView(makeRouter())
+    expect(w.find('[data-test="grid"]').exists()).toBe(false)
+    expect(w.find('[data-test="list"]').exists()).toBe(true)
+  })
+
+  it('renders archived docs as rows in list view', async () => {
+    const w = await mountView(makeRouter())
+    await w.find('[data-test="view-list"]').trigger('click')
+    await w.find('[data-test="archived-toggle"]').trigger('click')
+    expect(w.find('[data-test="archived-grid"]').exists()).toBe(false)
+    expect(w.find('[data-test="archived-list"]').findAll('.doc-row')).toHaveLength(1)
   })
 
   it('offers clear filters when a filtered view is empty', async () => {

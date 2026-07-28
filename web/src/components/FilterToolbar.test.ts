@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import type { ProjectStats } from '@/types'
 import type { RegistryFilterState } from '@/composables/useRegistryFilters'
+import type { ViewMode } from '@/composables/useViewMode'
 import FilterToolbar from './FilterToolbar.vue'
 
 const projects: ProjectStats[] = [
@@ -14,9 +15,9 @@ const projects: ProjectStats[] = [
   },
 ]
 
-function mountToolbar(state: Partial<RegistryFilterState> = {}) {
+function mountToolbar(state: Partial<RegistryFilterState> = {}, view: ViewMode = 'cards') {
   return mount(FilterToolbar, {
-    props: { state: { sort: 'updated', statuses: [], ...state }, projects },
+    props: { state: { sort: 'updated', statuses: [], ...state }, projects, view },
   })
 }
 
@@ -69,5 +70,23 @@ describe('FilterToolbar', () => {
     expect(w.emitted('change')?.[0]).toEqual([{ type: 'adr' }])
     await w.find('select[aria-label="Sort by"]').setValue('title')
     expect(w.emitted('change')?.[1]).toEqual([{ sort: 'title' }])
+  })
+
+  it('marks the active view button from the view prop', () => {
+    const cards = mountToolbar({}, 'cards')
+    expect(cards.find('[data-test="view-cards"]').classes()).toContain('active')
+    expect(cards.find('[data-test="view-list"]').classes()).not.toContain('active')
+
+    const list = mountToolbar({}, 'list')
+    expect(list.find('[data-test="view-list"]').classes()).toContain('active')
+    expect(list.find('[data-test="view-cards"]').classes()).not.toContain('active')
+  })
+
+  it('emits viewChange with the clicked mode', async () => {
+    const w = mountToolbar({}, 'cards')
+    await w.find('[data-test="view-list"]').trigger('click')
+    expect(w.emitted('viewChange')?.[0]).toEqual(['list'])
+    await w.find('[data-test="view-cards"]').trigger('click')
+    expect(w.emitted('viewChange')?.[1]).toEqual(['cards'])
   })
 })
