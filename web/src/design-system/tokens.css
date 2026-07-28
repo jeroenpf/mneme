@@ -2,11 +2,15 @@
    Mneme — Colors & Type
    The single source of truth for visual tokens.
 
-   Four reading-first themes, selected by [data-theme] on <html>:
-     • paper    — warm editorial light (the default, defined on :root)
-     • slate    — cool modern light
-     • ink      — warm dark (not pure black), a night option
-     • graphite — cool dark, Slate's night sibling
+   Seven reading-first themes, selected by [data-theme] on <html>:
+     • paper       — warm editorial light (the default, defined on :root)
+     • slate       — cool modern light
+     • ink         — warm dark (not pure black), a night option
+     • graphite    — cool dark, Slate's night sibling
+     • nebula      — Nightshade: near-black navy, lavender accent, amber eyebrow
+     • ultraviolet — Nightshade: purple-black, electric violet, fuchsia eyebrow
+     • aurora      — Nightshade: bluest navy, indigo accent, teal eyebrow
+   The Nightshade trio adds a subtle page glow via --bg-gradient (none elsewhere).
 
    Structure: :root holds the theme-INVARIANT tokens (spacing, type scale,
    tracking, motion, layout, shadows) plus the Paper palette as the default.
@@ -66,14 +70,20 @@
   --shadow-focus: 0 0 0 1px var(--accent-border), 0 0 0 3px var(--accent-glow);
   --inset-top:  inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
 
+  /* Page glow — Nightshade themes override with radial stacks; others stay flat */
+  --bg-gradient: none;
+
   --radius-pill: 999px;
 
   /* ── Theme swatch previews — each theme's bg, constant across themes
         (ThemePicker dots preview every theme regardless of the active one) ── */
-  --swatch-paper:    #faf8f3;
-  --swatch-slate:    #f6f8fb;
-  --swatch-ink:      #1a1918;
-  --swatch-graphite: #15181d;
+  --swatch-paper:       #faf8f3;
+  --swatch-slate:       #f6f8fb;
+  --swatch-ink:         #1a1918;
+  --swatch-graphite:    #15181d;
+  --swatch-nebula:      #0b0e17;
+  --swatch-ultraviolet: #0e0a16;
+  --swatch-aurora:      #090d1a;
 
   /* ── Status roles — resolve against the active theme's semantic palette ── */
   --status-done:    var(--green);
@@ -256,6 +266,153 @@
   --radius:    8px;
   --radius-md: 9px;
   --radius-lg: 12px;
+
+  --mermaid-dark: 1;
+  color-scheme: dark;
+}
+
+/* ═══ NIGHTSHADE FAMILY — three decorative darks: navy + violet accents,
+   subtle page glow via --bg-gradient. Reading surfaces stay flat. ═══ */
+
+/* ═══ NEBULA — near-black navy, periwinkle-lavender accent, amber eyebrow ═══ */
+:root[data-theme="nebula"] {
+  --bg:            #0b0e17;
+  --bg-surface:    #10141f;
+  --bg-elevated:   #151a29;
+  --bg-hover:      #1a2031;
+  --bg-overlay:    #212840;
+
+  --border:        #232a44;
+  --border-soft:   #1a2033;
+  --border-strong: #354064;
+
+  --text-primary:   #e9eaf5;
+  --text-secondary: #a9aec8;
+  --text-muted:     #7b819c;
+  --text-faint:     #555b75;
+
+  --accent:        #a99ef7;
+  --accent-hover:  #bfb6fa;
+  --accent-press:  #9186ec;
+  --accent-dim:    rgba(169, 158, 247, 0.12);
+  --accent-border: rgba(169, 158, 247, 0.32);
+  --accent-glow:   rgba(169, 158, 247, 0.22);
+  --eyebrow:       #e0a35c;
+
+  --green:  #5fc491; --green-dim:  rgba(95, 196, 145, 0.12);  --green-border:  rgba(95, 196, 145, 0.28);
+  --yellow: #dcb45f; --yellow-dim: rgba(220, 180, 95, 0.12);  --yellow-border: rgba(220, 180, 95, 0.28);
+  --red:    #ee8f8f; --red-dim:    rgba(238, 143, 143, 0.12); --red-border:    rgba(238, 143, 143, 0.28);
+  --blue:   #74a9ee; --blue-dim:   rgba(116, 169, 238, 0.12); --blue-border:   rgba(116, 169, 238, 0.28);
+  --purple: #b9a7f9; --purple-dim: rgba(185, 167, 249, 0.12); --purple-border: rgba(185, 167, 249, 0.28);
+  --red-text: #ee8f8f;
+
+  --font-display: 'Inter', system-ui, sans-serif;
+
+  --radius-xs: 5px;
+  --radius-sm: 7px;
+  --radius:    9px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --bg-gradient:
+    radial-gradient(1100px 700px at 50% -20%, rgba(122, 108, 255, 0.13), transparent 60%),
+    radial-gradient(900px 600px at 100% 110%, rgba(64, 78, 180, 0.10), transparent 55%);
+
+  --mermaid-dark: 1;
+  color-scheme: dark;
+}
+
+/* ═══ ULTRAVIOLET — purple-black, electric violet accent, fuchsia eyebrow ═══ */
+:root[data-theme="ultraviolet"] {
+  --bg:            #0e0a16;
+  --bg-surface:    #140f20;
+  --bg-elevated:   #1a142a;
+  --bg-hover:      #211a34;
+  --bg-overlay:    #292043;
+
+  --border:        #2b2145;
+  --border-soft:   #201933;
+  --border-strong: #413264;
+
+  --text-primary:   #ede9f8;
+  --text-secondary: #b1a8cb;
+  --text-muted:     #847b9f;
+  --text-faint:     #5c5478;
+
+  --accent:        #9469f8;
+  --accent-hover:  #ab8afc;
+  --accent-press:  #7f4ff0;
+  --accent-dim:    rgba(148, 105, 248, 0.13);
+  --accent-border: rgba(148, 105, 248, 0.34);
+  --accent-glow:   rgba(148, 105, 248, 0.24);
+  --eyebrow:       #e879f9;
+
+  --green:  #5ec98f; --green-dim:  rgba(94, 201, 143, 0.12);  --green-border:  rgba(94, 201, 143, 0.28);
+  --yellow: #dfb45e; --yellow-dim: rgba(223, 180, 94, 0.12);  --yellow-border: rgba(223, 180, 94, 0.28);
+  --red:    #ef8d96; --red-dim:    rgba(239, 141, 150, 0.12); --red-border:    rgba(239, 141, 150, 0.28);
+  --blue:   #7ba4f0; --blue-dim:   rgba(123, 164, 240, 0.12); --blue-border:   rgba(123, 164, 240, 0.28);
+  --purple: #b79df9; --purple-dim: rgba(183, 157, 249, 0.12); --purple-border: rgba(183, 157, 249, 0.28);
+  --red-text: #ef8d96;
+
+  --font-display: 'Inter', system-ui, sans-serif;
+
+  --radius-xs: 5px;
+  --radius-sm: 7px;
+  --radius:    9px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --bg-gradient:
+    radial-gradient(1000px 650px at 15% -15%, rgba(168, 85, 247, 0.16), transparent 58%),
+    radial-gradient(900px 600px at 110% 110%, rgba(217, 70, 239, 0.09), transparent 55%);
+
+  --mermaid-dark: 1;
+  color-scheme: dark;
+}
+
+/* ═══ AURORA — bluest navy, indigo-periwinkle accent, teal eyebrow ═══ */
+:root[data-theme="aurora"] {
+  --bg:            #090d1a;
+  --bg-surface:    #0e1324;
+  --bg-elevated:   #131a30;
+  --bg-hover:      #18203a;
+  --bg-overlay:    #1e2848;
+
+  --border:        #20294a;
+  --border-soft:   #171f38;
+  --border-strong: #303e6b;
+
+  --text-primary:   #e7ebf7;
+  --text-secondary: #a6aeca;
+  --text-muted:     #78819f;
+  --text-faint:     #525b78;
+
+  --accent:        #818cf8;
+  --accent-hover:  #9aa4fa;
+  --accent-press:  #6a76ee;
+  --accent-dim:    rgba(129, 140, 248, 0.13);
+  --accent-border: rgba(129, 140, 248, 0.33);
+  --accent-glow:   rgba(129, 140, 248, 0.22);
+  --eyebrow:       #45d0c2;
+
+  --green:  #55c795; --green-dim:  rgba(85, 199, 149, 0.12);  --green-border:  rgba(85, 199, 149, 0.28);
+  --yellow: #d8b360; --yellow-dim: rgba(216, 179, 96, 0.12);  --yellow-border: rgba(216, 179, 96, 0.28);
+  --red:    #ec8d92; --red-dim:    rgba(236, 141, 146, 0.12); --red-border:    rgba(236, 141, 146, 0.28);
+  --blue:   #6fabf2; --blue-dim:   rgba(111, 171, 242, 0.12); --blue-border:   rgba(111, 171, 242, 0.28);
+  --purple: #a795f4; --purple-dim: rgba(167, 149, 244, 0.12); --purple-border: rgba(167, 149, 244, 0.28);
+  --red-text: #ec8d92;
+
+  --font-display: 'Inter', system-ui, sans-serif;
+
+  --radius-xs: 5px;
+  --radius-sm: 7px;
+  --radius:    9px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --bg-gradient:
+    radial-gradient(1100px 700px at 30% -20%, rgba(99, 112, 241, 0.14), transparent 60%),
+    radial-gradient(900px 550px at 105% 115%, rgba(45, 212, 191, 0.07), transparent 55%);
 
   --mermaid-dark: 1;
   color-scheme: dark;
