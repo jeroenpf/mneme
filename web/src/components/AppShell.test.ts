@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { defineComponent, h, ref, type Ref } from 'vue'
 import AppShell from './AppShell.vue'
 import { THEMES, useTheme } from '@/composables/useTheme'
+import { getInstall, type InstallInfo } from '@/api/install'
 
 // AppShell opens the shared live stream in setup — mock it (jsdom has no
 // EventSource) and drive the status through a holder so the connection dot is
@@ -16,6 +17,17 @@ vi.mock('@/composables/useEventStream', () => ({
     onReconnect: () => () => {},
   }),
 }))
+
+// The rail-foot version badge fetches install info on shell mount.
+vi.mock('@/api/install', () => ({ getInstall: vi.fn() }))
+const install: InstallInfo = {
+  version: '0.2.0',
+  mode: 'localhost',
+  url: 'http://localhost:8901',
+  mcp_endpoint: 'http://localhost:8901/mcp',
+  db: { driver: 'sqlite', path: '/home/u/.mneme/mneme.db' },
+  embeddings: { enabled: false, model: '' },
+}
 
 const Blank = defineComponent({ render: () => h('div') })
 
@@ -36,6 +48,8 @@ function makeRouter(): Router {
       { path: '/bundle', component: Blank },
       { path: '/search', component: Blank },
       { path: '/embeddings', component: Blank },
+      { path: '/help', component: Blank },
+      { path: '/about', component: Blank },
     ],
   })
 }
@@ -56,6 +70,7 @@ beforeEach(() => {
   useTheme().setTheme('paper')
   localStorage.clear()
   holder.status = ref('open')
+  vi.mocked(getInstall).mockReset().mockResolvedValue(install)
 })
 
 // The primary destinations, in the rail's order (matches the mockup).
@@ -97,6 +112,21 @@ describe('AppShell', () => {
   it('mounts the ThemePicker in the rail', async () => {
     const w = await mountShell(makeRouter())
     expect(w.findAll('button[data-test^="theme-"]')).toHaveLength(THEMES.length)
+  })
+
+  it('shows the build version quietly in the rail foot, linking to About', async () => {
+    const w = await mountShell(makeRouter())
+    await flushPromises()
+    const badge = w.get('[data-test="version"]')
+    expect(badge.text()).toBe('v0.2.0')
+    expect(badge.attributes('href')).toBe('/about')
+  })
+
+  it('hides the version badge when install info is unavailable', async () => {
+    vi.mocked(getInstall).mockRejectedValue(new Error('boom'))
+    const w = await mountShell(makeRouter())
+    await flushPromises()
+    expect(w.find('[data-test="version"]').exists()).toBe(false)
   })
 
   // Active state comes from vue-router's router-link-active classes (real

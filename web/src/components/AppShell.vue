@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useEventStream } from '@/composables/useEventStream'
+import { useInstallInfo } from '@/composables/useInstallInfo'
 import { tryOpenRef } from '@/lib/openRef'
 import ThemePicker from './ThemePicker.vue'
 import ToastHost from './ToastHost.vue'
@@ -34,6 +35,14 @@ const SYSTEM_NAV = [
   { to: '/help', label: 'Help', test: 'to-help' },
   { to: '/about', label: 'About', test: 'to-about' },
 ] as const
+
+// A quiet build identifier at the foot of the rail. Hidden until install info
+// arrives; release builds show "v0.2.0", dev builds show "dev".
+const { info } = useInstallInfo()
+const versionLabel = computed(() => {
+  const v = info.value?.version
+  return v ? (/^\d/.test(v) ? `v${v}` : v) : ''
+})
 
 // Global search (lifted from Topbar). A local ref — deliberately NOT wired to
 // registry filtering; Enter routes to the global /search page for the query.
@@ -128,6 +137,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       <div class="rail-foot">
         <p class="nav-title mn-label">Theme</p>
         <ThemePicker />
+        <RouterLink
+          v-if="versionLabel"
+          to="/about"
+          class="version mn-mono-sm"
+          data-test="version"
+          title="About mneme"
+        >{{ versionLabel }}</RouterLink>
       </div>
     </aside>
 
@@ -331,6 +347,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 }
 .rail-foot .nav-title {
   padding: 0 0 var(--space-2);
+}
+.version {
+  display: inline-block;
+  margin-top: var(--space-3);
+  color: var(--text-faint);
+  text-decoration: none;
+}
+.version:hover {
+  color: var(--text-muted);
 }
 .content {
   min-width: 0;
