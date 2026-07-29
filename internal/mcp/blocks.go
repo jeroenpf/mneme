@@ -135,9 +135,12 @@ var (
 // detectBlockStructure returns a human label for the first list, heading,
 // or fenced-code construct in s — block markdown that maps to a distinct
 // typed block and cannot render inside a prose field — or "" when none.
+// A string with no newline is never a list: a lone leading "1. " or "- "
+// renders literally in both inline and paragraph modes, so flagging it is
+// a false positive (a numbered title, not a list).
 func detectBlockStructure(s string) string {
 	switch {
-	case reList.MatchString(s) || reOrdered.MatchString(s):
+	case strings.Contains(s, "\n") && (reList.MatchString(s) || reOrdered.MatchString(s)):
 		return "a list"
 	case reHeading.MatchString(s):
 		return "a heading"
