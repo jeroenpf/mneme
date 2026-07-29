@@ -47,7 +47,8 @@ func newPostgresConformanceStore(t *testing.T) store.Store {
 	t.Cleanup(pool.Close)
 	if _, err := pool.Exec(ctx,
 		`TRUNCATE documents, projects, decisions, snippets, journal_entries,
-		         solutions, memories, env_entries, embeddings, embed_failures
+		         solutions, memories, env_entries, embeddings, embed_failures,
+		         relations
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
@@ -1200,6 +1201,98 @@ func TestConformanceProjects(t *testing.T) {
 		}
 		if stats[0].Counts.Total != 1 || stats[0].Counts.InProgress != 1 {
 			t.Errorf("counts: %+v", stats[0].Counts)
+		}
+	})
+}
+
+// Relations are the polymorphic edges table (spec-relations): auto mention
+// rows are wholesale-replaced per source doc, explicit rows are only ever
+// touched by Create/DeleteExplicit, and incoming matches resolve dangling
+// wikilink refs at query time via to_ref.
+func TestConformanceRelations(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, st store.Store) {
+		ctx := context.Background()
+
+		auto := []*models.Relation{
+			{FromID: "doc_aaa", ToRef: "doc_bbb", ToID: ptr("doc_bbb"), RelType: "mentions", Origin: "auto"},
+			{FromID: "doc_aaa", ToRef: "future-doc", RelType: "mentions", Origin: "auto"},
+		}
+		if err := st.ReplaceAutoMentions(ctx, "doc_aaa", auto); err != nil {
+			t.Fatalf("ReplaceAutoMentions: %v", err)
+		}
+		out, in, err := st.ListRelations(ctx, "doc_aaa", "plan-aaa")
+		if err != nil {
+			t.Fatalf("ListRelations: %v", err)
+		}
+		if len(out) != 2 || len(in) != 0 {
+			t.Fatalf("after insert: out=%d in=%d, want 2/0", len(out), len(in))
+		}
+
+		// Incoming by resolved to_id.
+		_, in, _ = st.ListRelations(ctx, "doc_bbb", "")
+		if len(in) != 1 || in[0].FromID != "doc_aaa" {
+			t.Fatalf("incoming by to_id: %+v", in)
+		}
+		// Incoming by dangling to_ref matching the caller's alt ref (doc slug).
+		_, in, _ = st.ListRelations(ctx, "doc_future", "future-doc")
+		if len(in) != 1 || in[0].ToID != nil {
+			t.Fatalf("incoming by dangling to_ref: %+v", in)
+		}
+
+		// Replace is wholesale for the source's auto rows.
+		if err := st.ReplaceAutoMentions(ctx, "doc_aaa", auto[:1]); err != nil {
+			t.Fatalf("ReplaceAutoMentions(replace): %v", err)
+		}
+		out, _, _ = st.ListRelations(ctx, "doc_aaa", "")
+		if len(out) != 1 || out[0].ToRef != "doc_bbb" {
+			t.Fatalf("after replace: %+v", out)
+		}
+
+		// Explicit edges: created with metadata, duplicates are silent no-ops.
+		rel := &models.Relation{FromID: "doc_aaa", ToRef: "dec_ccc", ToID: ptr("dec_ccc"), RelType: "implements", Origin: "explicit"}
+		if err := st.CreateRelation(ctx, rel); err != nil {
+			t.Fatalf("CreateRelation: %v", err)
+		}
+		if rel.ID == 0 || rel.CreatedAt.IsZero() {
+			t.Errorf("CreateRelation did not populate ID/CreatedAt: %+v", rel)
+		}
+		dup := &models.Relation{FromID: "doc_aaa", ToRef: "dec_ccc", ToID: ptr("dec_ccc"), RelType: "implements", Origin: "explicit"}
+		if err := st.CreateRelation(ctx, dup); err != nil {
+			t.Fatalf("CreateRelation duplicate must be a no-op, got: %v", err)
+		}
+		n, err := st.CountRelations(ctx)
+		if err != nil {
+			t.Fatalf("CountRelations: %v", err)
+		}
+		if n != 2 { // 1 auto + 1 explicit
+			t.Fatalf("CountRelations = %d, want 2", n)
+		}
+
+		// The scanner never touches explicit rows.
+		if err := st.ReplaceAutoMentions(ctx, "doc_aaa", nil); err != nil {
+			t.Fatalf("ReplaceAutoMentions(clear): %v", err)
+		}
+		out, _, _ = st.ListRelations(ctx, "doc_aaa", "")
+		if len(out) != 1 || out[0].Origin != "explicit" {
+			t.Fatalf("explicit row must survive auto replace: %+v", out)
+		}
+
+		// DeleteExplicitRelations removes only explicit rows for the pair.
+		if err := st.ReplaceAutoMentions(ctx, "doc_aaa", []*models.Relation{
+			{FromID: "doc_aaa", ToRef: "dec_ccc", ToID: ptr("dec_ccc"), RelType: "mentions", Origin: "auto"},
+		}); err != nil {
+			t.Fatalf("ReplaceAutoMentions(re-add): %v", err)
+		}
+		deleted, err := st.DeleteExplicitRelations(ctx, "doc_aaa", "dec_ccc", nil)
+		if err != nil {
+			t.Fatalf("DeleteExplicitRelations: %v", err)
+		}
+		if deleted != 1 {
+			t.Fatalf("deleted = %d, want 1", deleted)
+		}
+		out, _, _ = st.ListRelations(ctx, "doc_aaa", "")
+		if len(out) != 1 || out[0].Origin != "auto" {
+			t.Fatalf("auto row must survive explicit delete: %+v", out)
 		}
 	})
 }
