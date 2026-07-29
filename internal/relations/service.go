@@ -107,14 +107,26 @@ func (s *Service) Related(ctx context.Context, ref string) (*Bundle, error) {
 
 	b := &Bundle{Links: []Entry{}, Mentions: []Entry{}, MentionedBy: []Entry{}}
 	cache := map[string]*entity{e.publicID: e}
+	// A body can reference the same target twice — by slug and by public id —
+	// which is two edge rows but one relationship: dedup per endpoint,
+	// rel type, and direction.
+	seen := map[string]bool{}
+	add := func(list *[]Entry, entry Entry) {
+		key := entry.ID + "|" + entry.RelType + "|" + entry.Direction
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		*list = append(*list, entry)
+	}
 	for _, r := range out {
 		entry := s.targetEntry(ctx, cache, r)
 		entry.RelType = r.RelType
 		entry.Direction = "out"
 		if r.RelType == "mentions" {
-			b.Mentions = append(b.Mentions, entry)
+			add(&b.Mentions, entry)
 		} else {
-			b.Links = append(b.Links, entry)
+			add(&b.Links, entry)
 		}
 	}
 	for _, r := range in {
@@ -122,9 +134,9 @@ func (s *Service) Related(ctx context.Context, ref string) (*Bundle, error) {
 		entry.RelType = r.RelType
 		entry.Direction = "in"
 		if r.RelType == "mentions" {
-			b.MentionedBy = append(b.MentionedBy, entry)
+			add(&b.MentionedBy, entry)
 		} else {
-			b.Links = append(b.Links, entry)
+			add(&b.Links, entry)
 		}
 	}
 	return b, nil

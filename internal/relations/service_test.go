@@ -151,6 +151,40 @@ func TestServiceRelatedAndUnlink(t *testing.T) {
 	}
 }
 
+// A body that references the same target by slug AND public id produces two
+// edge rows, but the related view collapses them: one entry per endpoint,
+// rel type, and direction.
+func TestServiceRelatedDedupsSameEndpoint(t *testing.T) {
+	svc, st := newTestService(t)
+	ctx := context.Background()
+	a := seedDoc(t, st, "plan-a", "Plan A")
+	b := seedDoc(t, st, "plan-b", "Plan B")
+
+	if err := st.ReplaceAutoMentions(ctx, a.PublicID, MentionRows(&models.Document{
+		ID: a.ID, PublicID: a.PublicID,
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "text", "id": "p", "content": "[[plan-b]] aka " + b.PublicID},
+		}},
+	})); err != nil {
+		t.Fatalf("seed mentions: %v", err)
+	}
+
+	got, err := svc.Related(ctx, "plan-a")
+	if err != nil {
+		t.Fatalf("Related(a): %v", err)
+	}
+	if len(got.Mentions) != 1 || got.Mentions[0].ID != b.PublicID {
+		t.Fatalf("a.Mentions must dedup to one entry: %+v", got.Mentions)
+	}
+	got, err = svc.Related(ctx, "plan-b")
+	if err != nil {
+		t.Fatalf("Related(b): %v", err)
+	}
+	if len(got.MentionedBy) != 1 {
+		t.Fatalf("b.MentionedBy must dedup to one entry: %+v", got.MentionedBy)
+	}
+}
+
 func TestServiceResolveErrors(t *testing.T) {
 	svc, _ := newTestService(t)
 	ctx := context.Background()
