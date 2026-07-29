@@ -19,6 +19,7 @@ import (
 	"github.com/jeroenpf/mneme/internal/live"
 	"github.com/jeroenpf/mneme/internal/mcp"
 	"github.com/jeroenpf/mneme/internal/migrations"
+	"github.com/jeroenpf/mneme/internal/relations"
 	"github.com/jeroenpf/mneme/internal/store"
 	"github.com/jeroenpf/mneme/internal/web"
 )
@@ -68,6 +69,14 @@ func RunServer(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 	slog.Info("migrations applied")
+
+	// One-time relations backfill: populates mention edges for documents
+	// written before the relations table existed; no-op on every later start.
+	if scanned, err := relations.Backfill(ctx, st); err != nil {
+		return err
+	} else if scanned > 0 {
+		slog.Info("relations backfilled", "documents", scanned)
+	}
 
 	// Embedding is gated on a Voyage key: absent ⇒ nil client ⇒ no worker,
 	// no reconcile, and search stays FTS-only. Present ⇒ start the async
