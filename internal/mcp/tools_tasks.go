@@ -94,6 +94,9 @@ func (t *tools) updateTask(ctx context.Context, _ *sdk.CallToolRequest, in updat
 	for k, v := range in.Patch {
 		task[k] = v
 	}
+	if err := validateTaskInline(task, in.TaskID); err != nil {
+		return nil, nil, err
+	}
 
 	setSections(doc.Body, sections)
 	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: in.TaskID, Op: "update_task"}); err != nil {
@@ -143,6 +146,9 @@ func (t *tools) addTask(ctx context.Context, _ *sdk.CallToolRequest, in addTaskI
 		return nil, nil, err
 	}
 	if _, err := resolveIDs([]idNode{{node: in.Task, kind: ids.KindTask, path: "task"}}, taken); err != nil {
+		return nil, nil, err
+	}
+	if err := validateTaskInline(in.Task, "task"); err != nil {
 		return nil, nil, err
 	}
 
