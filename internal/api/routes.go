@@ -13,6 +13,7 @@ import (
 	"github.com/jeroenpf/mneme/internal/config"
 	"github.com/jeroenpf/mneme/internal/embed"
 	"github.com/jeroenpf/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/relations"
 	"github.com/jeroenpf/mneme/internal/store"
 )
 
@@ -66,7 +67,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 		if hub != nil {
 			bc = hub
 		}
-		docs := &DocumentsHandler{Store: st, Writer: command.NewDocuments(st, enq, bc)}
+		docs := &DocumentsHandler{Store: st, Writer: command.NewDocuments(st, enq, bc), Rel: &relations.Service{Store: st}}
 		projects := &ProjectsHandler{Store: st}
 		memory := &MemoryHandler{Store: st}
 		env := &EnvHandler{Store: st}
@@ -96,6 +97,7 @@ func Router(cfg *config.Config, st store.Store, mcpHandler, webHandler http.Hand
 			r.Patch("/documents/{id}", docs.Update)
 			r.Post("/documents/{id}/archive", docs.Archive)
 			r.Get("/documents/{id}/revisions", docs.Revisions)
+			r.Get("/documents/{id}/related", docs.Related)
 			r.Post("/documents/{id}/restore", docs.Restore)
 			r.Get("/projects", projects.List)
 			r.Post("/projects", projects.Create)

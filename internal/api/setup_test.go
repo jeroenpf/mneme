@@ -87,7 +87,7 @@ func newServer(t *testing.T) (*httptest.Server, *store.PostgresStore) {
 func resetDB(t *testing.T) {
 	t.Helper()
 	if _, err := testPool.Exec(context.Background(),
-		`TRUNCATE documents, document_revisions, projects, embeddings RESTART IDENTITY CASCADE`); err != nil {
+		`TRUNCATE documents, document_revisions, projects, embeddings, relations RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
