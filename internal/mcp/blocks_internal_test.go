@@ -204,6 +204,20 @@ func TestValidateBodyRejectsBlockMarkdownInCollections(t *testing.T) {
 		t.Errorf("task-list error must teach inline-only, got %q", err.Error())
 	}
 
+	// subphase: its tasks render identically to task-list tasks and must be
+	// scanned the same way (this was a gap — only task-list was checked).
+	err = validateBody(sectionBody(
+		map[string]any{"type": "subphase", "id": "sp", "num": "1", "title": "P", "tasks": []any{
+			map[string]any{"id": "y", "title": "ok", "content": "- one\n- two"},
+		}},
+	))
+	if err == nil {
+		t.Fatal("expected rejection of a list in a subphase task's content")
+	}
+	if !strings.Contains(err.Error(), "inline-only") {
+		t.Errorf("subphase task error must teach inline-only, got %q", err.Error())
+	}
+
 	// key-value: a value that is a bullet list.
 	err = validateBody(sectionBody(
 		map[string]any{"type": "key-value", "id": "kv", "data": map[string]any{

@@ -211,17 +211,12 @@ func validateInlineFields(b map[string]any, typ, path string) error {
 	}
 	// tasks and data are collections, not walked as children, so scan here.
 	switch typ {
-	case "task-list":
+	case "task-list", "subphase":
 		tasks, _ := b["tasks"].([]any)
 		for i, raw := range tasks {
 			task, _ := raw.(map[string]any)
-			for _, f := range []string{"title", "content"} {
-				s, _ := task[f].(string)
-				if sig := detectBlockMarkdown(s); sig != "" {
-					return fmt.Errorf("%s.tasks[%d].%s contains %s; task fields render "+
-						"inline-only — keep each task terse, or move detail into a "+
-						"text/callout child block.", path, i, f, sig)
-				}
+			if err := validateTaskInline(task, fmt.Sprintf("%s.tasks[%d]", path, i)); err != nil {
+				return err
 			}
 		}
 	case "key-value":
@@ -232,6 +227,20 @@ func validateInlineFields(b map[string]any, typ, path string) error {
 				return fmt.Errorf("%s.data[%q] contains %s; key-value values render "+
 					"inline-only. Use short values or a text block for prose.", path, k, sig)
 			}
+		}
+	}
+	return nil
+}
+
+// validateTaskInline rejects block markdown in a task's inline fields —
+// shared by body validation (task-list and subphase tasks) and the task
+// write tools (add_task, update_task).
+func validateTaskInline(task map[string]any, path string) error {
+	for _, f := range []string{"title", "content"} {
+		s, _ := task[f].(string)
+		if sig := detectBlockMarkdown(s); sig != "" {
+			return fmt.Errorf("%s.%s contains %s; task fields render inline-only — "+
+				"keep each task terse, or move detail into a text/callout child block.", path, f, sig)
 		}
 	}
 	return nil
