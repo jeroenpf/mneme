@@ -13,6 +13,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jeroenpf/mneme/internal/command"
+	"github.com/jeroenpf/mneme/internal/relations"
 	"github.com/jeroenpf/mneme/internal/embed"
 	"github.com/jeroenpf/mneme/internal/live"
 	"github.com/jeroenpf/mneme/internal/store"
@@ -82,7 +83,7 @@ func New(st store.Store, enq embed.Enqueuer, bc live.Broadcaster, client embed.C
 	}
 	s := &Server{
 		sdk:   sdk.NewServer(implementation, &sdk.ServerOptions{Instructions: instructions}),
-		tools: &tools{store: st, enq: enq, bc: bc, client: client, cmd: command.NewDocuments(st, enq, bc)},
+		tools: &tools{store: st, enq: enq, bc: bc, client: client, cmd: command.NewDocuments(st, enq, bc), rel: &relations.Service{Store: st}},
 	}
 	s.tools.register(s.sdk)
 	return s
@@ -109,6 +110,7 @@ type tools struct {
 	bc     live.Broadcaster
 	client embed.Client
 	cmd    *command.Documents // the single validated document write path
+	rel    *relations.Service // typed links + enriched related view
 }
 
 // addTool keeps the advertised output contract deliberately minimal. The
@@ -320,4 +322,19 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "lint_documents",
 		Description: "Read-only sweep of every stored document (all projects and statuses, archived included) for inline-only violations and structural problems (unknown types/fields) that predate write-path validation. Each hit carries doc_id, block_id, path, field, what was found, and an excerpt — doc_id+block_id feed update_section/update_task fixes. Changes nothing.",
 	}, t.lintDocuments)
+
+	addTool(s, &sdk.Tool{
+		Name:        "link",
+		Description: "Record an explicit typed relation between two entities (documents, decisions, snippets, solutions, journal entries): rel_type is one of relates-to, implements, supersedes, depends-on, blocks; directional from->to. Endpoints are public ids or document ids/slugs. Inline mentions register automatically on document writes — use link only for semantics a mention cannot carry. Duplicates are silent no-ops.",
+	}, t.link)
+
+	addTool(s, &sdk.Tool{
+		Name:        "unlink",
+		Description: "Remove explicit typed relations between two entities — one rel_type, or all of them when rel_type is omitted. Auto-registered mentions are scanner-owned and unaffected; edit the document prose to remove those.",
+	}, t.unlink)
+
+	addTool(s, &sdk.Tool{
+		Name:        "get_related",
+		Description: "Everything related to an entity: explicit typed links in both directions, outgoing mentions, and mentioned_by — the backlinks (who references this). Entries carry public id, kind, title, and document status, ready to use without further lookups. Ref accepts a public id or a document id/slug.",
+	}, t.getRelated)
 }

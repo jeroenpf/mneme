@@ -17,6 +17,7 @@ import (
 	"github.com/jeroenpf/mneme/internal/ids"
 	"github.com/jeroenpf/mneme/internal/live"
 	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/relations"
 	"github.com/jeroenpf/mneme/internal/slug"
 	"github.com/jeroenpf/mneme/internal/store"
 )
@@ -33,6 +34,8 @@ type DocumentsHandler struct {
 	// Writer is the shared command service — the single validated write path
 	// (revision bump, history snapshot, embedding enqueue, live broadcast).
 	Writer *command.Documents
+	// Rel serves the /related bundle: typed links, mentions, backlinks.
+	Rel *relations.Service
 }
 
 // documentListResponse is the wire shape for GET /documents.
@@ -354,4 +357,22 @@ func splitCSV(s string) []string {
 		}
 	}
 	return out
+}
+
+// Related returns the document's relations bundle — explicit typed links in
+// both directions, outgoing mentions, and the mentioned_by backlinks.
+// Resolution goes through resolveDoc so slug and public id both work and an
+// unknown document 404s consistently with GET /documents/{id}.
+func (h *DocumentsHandler) Related(w http.ResponseWriter, r *http.Request) {
+	doc, err := h.resolveDoc(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	bundle, err := h.Rel.Related(r.Context(), doc.PublicID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, bundle)
 }

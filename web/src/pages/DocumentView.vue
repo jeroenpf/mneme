@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import BlockRenderer from '@/blocks/BlockRenderer.vue'
 import DocHistory from '@/components/DocHistory.vue'
 import MetaHeader from '@/components/MetaHeader.vue'
+import RelatedPanel from '@/components/RelatedPanel.vue'
 import PhaseTracker from '@/components/PhaseTracker.vue'
 import SectionNav from '@/components/SectionNav.vue'
 import { useDocument } from '@/composables/useDocument'
@@ -101,6 +102,7 @@ watch(
           <DocHistory :doc-id="doc.id" :current-revision="doc.revision" @restored="refresh({ silent: true })" />
         </div>
         <BlockRenderer :blocks="blocks" />
+        <RelatedPanel :doc-id="doc.id" :revision="doc.revision" />
       </main>
     </div>
   </div>

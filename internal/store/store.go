@@ -194,6 +194,31 @@ type Store interface {
 	// Filter fields are AND-ed onto the query.
 	SearchDocuments(ctx context.Context, q string, f Filter) ([]*models.Document, error)
 
+	// Relations — the polymorphic edges table (spec-relations). Endpoints
+	// are public ids; to_ref keeps the reference as written so dangling
+	// wikilink refs resolve at query time.
+
+	// ReplaceAutoMentions atomically deletes fromID's origin='auto' rows and
+	// inserts the given mention rows. Explicit rows are never touched.
+	ReplaceAutoMentions(ctx context.Context, fromID string, mentions []*models.Relation) error
+
+	// CreateRelation inserts an explicit edge, populating rel.ID/CreatedAt.
+	// A duplicate (from_id, to_ref, rel_type) is a silent no-op.
+	CreateRelation(ctx context.Context, rel *models.Relation) error
+
+	// DeleteExplicitRelations removes explicit edges between the pair —
+	// all rel types when relType is nil — and reports how many were removed.
+	// origin='auto' rows are never touched.
+	DeleteExplicitRelations(ctx context.Context, fromID, toRef string, relType *string) (int64, error)
+
+	// ListRelations returns edges touching an entity: outgoing by from_id,
+	// incoming by resolved to_id or by raw to_ref matching publicID or the
+	// caller's alternate ref (a document's slug id; pass "" when none).
+	ListRelations(ctx context.Context, publicID, altRef string) (outgoing, incoming []*models.Relation, err error)
+
+	// CountRelations reports the total number of edges (backfill guard).
+	CountRelations(ctx context.Context) (int64, error)
+
 	// ListProjects returns every project with per-status document counts.
 	// Used by /api/v1/projects and the registry UI's stats row.
 	ListProjects(ctx context.Context) ([]*models.ProjectStats, error)

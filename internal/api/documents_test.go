@@ -461,3 +461,44 @@ func TestArchiveDocument(t *testing.T) {
 	requireStatus(t, resp, http.StatusNotFound)
 	resp.Body.Close()
 }
+
+// GET /documents/{id}/related returns the relations bundle; the mention edge
+// comes from the POST's command-path scanner, not manual seeding.
+func TestGetDocumentRelated(t *testing.T) {
+	srv, _ := newServer(t)
+	seedProject(t, "proj")
+
+	resp := doJSON(t, http.MethodPost, srv.URL+"/api/v1/documents", map[string]any{
+		"meta": map[string]any{"id": "plan-b", "title": "Plan B", "type": "plan", "project": "proj"},
+		"body": map[string]any{"sections": []any{}},
+	})
+	requireStatus(t, resp, http.StatusCreated)
+	resp = doJSON(t, http.MethodPost, srv.URL+"/api/v1/documents", map[string]any{
+		"meta": map[string]any{"id": "plan-a", "title": "Plan A", "type": "plan", "project": "proj"},
+		"body": map[string]any{"sections": []any{
+			map[string]any{"type": "text", "id": "p", "content": "builds on [[plan-b]]"},
+		}},
+	})
+	requireStatus(t, resp, http.StatusCreated)
+
+	resp = doJSON(t, http.MethodGet, srv.URL+"/api/v1/documents/plan-b/related", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("related status = %d", resp.StatusCode)
+	}
+	var bundle struct {
+		Links       []map[string]any `json:"links"`
+		Mentions    []map[string]any `json:"mentions"`
+		MentionedBy []map[string]any `json:"mentioned_by"`
+	}
+	decodeBody(t, resp, &bundle)
+	if len(bundle.MentionedBy) != 1 || bundle.MentionedBy[0]["title"] != "Plan A" {
+		t.Fatalf("mentioned_by: %+v", bundle.MentionedBy)
+	}
+
+	resp = doJSON(t, http.MethodGet, srv.URL+"/api/v1/documents/nope/related", nil)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown doc related status = %d, want 404", resp.StatusCode)
+	}
+}
