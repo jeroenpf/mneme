@@ -315,4 +315,9 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "restore_document_revision",
 		Description: "Restore a past revision's content (title/status/meta/body) onto the document. History is forward-only: this writes a NEW revision rather than rewriting the past. Returns the restored summary and new revision; pass return_doc for the full document.",
 	}, t.restoreDocumentRevision)
+
+	addTool(s, &sdk.Tool{
+		Name:        "lint_documents",
+		Description: "Read-only sweep of every stored document (all projects and statuses, archived included) for inline-only violations and structural problems (unknown types/fields) that predate write-path validation. Each hit carries doc_id, block_id, path, field, what was found, and an excerpt — doc_id+block_id feed update_section/update_task fixes. Changes nothing.",
+	}, t.lintDocuments)
 }
