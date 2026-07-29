@@ -17,6 +17,7 @@ func TestDetectBlockMarkdown(t *testing.T) {
 		"one\n\ntwo":  "multiple paragraphs",
 		"- a\n- b":    "a list",
 		"1. a\n2. b":  "a list",
+		"foo\n- bar":  "a list",
 		"# Heading":   "a heading",
 		"```\nx\n```": "a fenced code block",
 	}
@@ -29,6 +30,8 @@ func TestDetectBlockMarkdown(t *testing.T) {
 		"Inline **bold**, `code`, and a mid-line - dash.",
 		"Version 1.2 and item 3 stay inline.",
 		"A single\nnewline is fine.",
+		"1. config: PublicURL + AllowedOrigins()",
+		"- lone bullet title",
 	} {
 		if got := detectBlockMarkdown(safe); got != "" {
 			t.Errorf("detectBlockMarkdown(%q) = %q, want none", safe, got)
@@ -52,6 +55,12 @@ func TestDetectBlockStructure(t *testing.T) {
 	}
 	if got := detectBlockStructure("one\n\ntwo"); got != "" {
 		t.Errorf("detectBlockStructure(%q) = %q, want none (paragraphs are prose)", "one\n\ntwo", got)
+	}
+	// A lone leading marker on a single line renders literally — never a list.
+	for _, safe := range []string{"1. config: PublicURL", "- lone bullet title"} {
+		if got := detectBlockStructure(safe); got != "" {
+			t.Errorf("detectBlockStructure(%q) = %q, want none (single line)", safe, got)
+		}
 	}
 }
 
@@ -193,6 +202,20 @@ func TestValidateBodyRejectsBlockMarkdownInCollections(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "inline-only") {
 		t.Errorf("task-list error must teach inline-only, got %q", err.Error())
+	}
+
+	// subphase: its tasks render identically to task-list tasks and must be
+	// scanned the same way (this was a gap — only task-list was checked).
+	err = validateBody(sectionBody(
+		map[string]any{"type": "subphase", "id": "sp", "num": "1", "title": "P", "tasks": []any{
+			map[string]any{"id": "y", "title": "ok", "content": "- one\n- two"},
+		}},
+	))
+	if err == nil {
+		t.Fatal("expected rejection of a list in a subphase task's content")
+	}
+	if !strings.Contains(err.Error(), "inline-only") {
+		t.Errorf("subphase task error must teach inline-only, got %q", err.Error())
 	}
 
 	// key-value: a value that is a bullet list.
