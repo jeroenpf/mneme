@@ -13,6 +13,7 @@ import (
 	"github.com/jeroenpf/mneme/internal/embed"
 	"github.com/jeroenpf/mneme/internal/live"
 	"github.com/jeroenpf/mneme/internal/models"
+	"github.com/jeroenpf/mneme/internal/relations"
 	"github.com/jeroenpf/mneme/internal/store"
 )
 
@@ -83,6 +84,12 @@ func (d *Documents) afterWrite(ctx context.Context, doc *models.Document, w Writ
 	}
 	if err := d.store.AppendDocumentRevision(ctx, rev); err != nil {
 		return fmt.Errorf("record revision: %w", err)
+	}
+	// Re-sync the doc's auto-mention edges from its current body: since every
+	// document mutation funnels through this write path, the relations graph
+	// can never drift from the prose (spec-relations).
+	if err := d.store.ReplaceAutoMentions(ctx, doc.PublicID, relations.MentionRows(doc)); err != nil {
+		return fmt.Errorf("sync mentions: %w", err)
 	}
 	d.enq.Enqueue(embed.SourceRef{Type: "documents", ID: doc.ID})
 	if w.Event.Type != "" {

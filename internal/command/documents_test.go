@@ -18,6 +18,21 @@ type countStore struct {
 	creates, updates, appends int
 	rev                       int
 	updateErr                 error
+
+	mentionCalls    int
+	lastMentionFrom string
+	lastMentions    []*models.Relation
+	mentionErr      error
+}
+
+func (c *countStore) ReplaceAutoMentions(_ context.Context, fromID string, rows []*models.Relation) error {
+	if c.mentionErr != nil {
+		return c.mentionErr
+	}
+	c.mentionCalls++
+	c.lastMentionFrom = fromID
+	c.lastMentions = rows
+	return nil
 }
 
 func (c *countStore) CreateDocument(_ context.Context, doc *models.Document) error {
@@ -114,5 +129,42 @@ func TestUpdateStoreErrorSkipsSideEffects(t *testing.T) {
 	}
 	if st.appends != 0 || enq.n != 0 || bc.n != 0 {
 		t.Errorf("a failed persist must skip all side effects: appends=%d enq=%d bc=%d", st.appends, enq.n, bc.n)
+	}
+}
+
+// Every document write re-syncs the doc's auto-mention edges from its body —
+// the scanner half of spec-relations — and a sync failure fails the write.
+func TestWriteSyncsAutoMentions(t *testing.T) {
+	st := &countStore{}
+	d := NewDocuments(st, nil, nil)
+	doc := &models.Document{
+		ID: "plan-a", PublicID: "doc_aaa111bbb", Title: "A", Type: "plan", Status: "todo",
+		Body: map[string]any{"sections": []any{
+			map[string]any{"type": "text", "id": "p", "content": "see doc_abc123xyz"},
+		}},
+	}
+	if err := d.Create(context.Background(), doc, Write{Op: "push_document", Actor: "test"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if st.mentionCalls != 1 || st.lastMentionFrom != "doc_aaa111bbb" {
+		t.Fatalf("mention sync after Create: calls=%d from=%q", st.mentionCalls, st.lastMentionFrom)
+	}
+	if len(st.lastMentions) != 1 || st.lastMentions[0].ToRef != "doc_abc123xyz" {
+		t.Fatalf("mention rows after Create: %+v", st.lastMentions)
+	}
+
+	doc.Body = map[string]any{"sections": []any{
+		map[string]any{"type": "text", "id": "p", "content": "now [[other-doc]]"},
+	}}
+	if err := d.Update(context.Background(), doc, Write{Op: "update_section", Actor: "test"}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if st.mentionCalls != 2 || len(st.lastMentions) != 1 || st.lastMentions[0].ToRef != "other-doc" {
+		t.Fatalf("mention rows after Update: calls=%d rows=%+v", st.mentionCalls, st.lastMentions)
+	}
+
+	st.mentionErr = errors.New("boom")
+	if err := d.Update(context.Background(), doc, Write{Op: "update_section", Actor: "test"}); err == nil {
+		t.Fatal("mention sync error must propagate")
 	}
 }
