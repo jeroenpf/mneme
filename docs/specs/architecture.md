@@ -89,7 +89,10 @@ Every block has a stable, document-unique `id`. The surgical MCP tools (`tick_ta
 Beyond documents, Mneme stores cross-project **memory**, a **decision log**, a **snippet
 library**, a **dev journal**, an **error/solution DB**, and an **env registry**, and
 assembles a **context bundle** (one call returns a session-ready markdown digest). All are
-reachable through a single ranked `search(q, types?)`.
+reachable through a single ranked `search(q, types?)`. As of MCP surface v2 only
+documents, decisions, journal, memory, relations, and unified search are exposed over
+MCP; snippet, solution, and env data remains in storage pending Stage 2 unification
+(spec-mcp-surface-v2).
 
 ## Repo layout
 
