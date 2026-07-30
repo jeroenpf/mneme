@@ -124,93 +124,95 @@ func addTool[In, Out any](s *sdk.Server, tool *sdk.Tool, handler sdk.ToolHandler
 	sdk.AddTool(s, tool, handler)
 }
 
-// register installs every Phase 1.4 tool on the SDK server. Adding a
+// register installs every surface-v2 tool on the SDK server. Adding a
 // new tool means: define request/response structs, write the handler
-// method on *tools, and add one addTool line here.
+// method on *tools, and add one addTool line here. Descriptions stay one
+// sentence — cross-tool conventions live in the instructions const, paid
+// for once per session instead of per tool.
 func (t *tools) register(s *sdk.Server) {
 	addTool(s, &sdk.Tool{
 		Name:        "push_document",
-		Description: "Create or upsert a document by meta.id. Validates block types and prose content (body prose allows blank-line paragraphs; lists/headings/code fences must be child blocks). Mints stable ids for blocks/tasks that omit them and rejects duplicate ids (listed in 'created'). Returns a compact summary (no body); pass return_doc:true for the full stored document.",
+		Description: "Create or fully rewrite a document by meta.id (meta keys and body block shapes are in the server instructions); prefer the surgical block/task tools for edits.",
 	}, t.pushDocument)
 
 	addTool(s, &sdk.Tool{
 		Name:        "set_memory",
-		Description: "Upsert a memory key/value at a scope (global | project | area). project required for project/area scope; area required for area scope. Returns the stored entry.",
+		Description: "Upsert a memory key at a scope (global | project | area); an empty value deletes the key.",
 	}, t.setMemory)
 
 	addTool(s, &sdk.Tool{
 		Name:        "log_decision",
-		Description: "Record an architecture decision (ADR) — the mutable decision log Claude Code writes as a session side-effect. Omit id to create (title + decision required; project optional, omit for a global decision; status defaults to accepted). Pass id to update an existing decision, e.g. flip status proposed→accepted→deprecated. Returns the stored decision.",
+		Description: "Record a decision (title, decision, rationale, alternatives, consequences); pass id to update. Returns {public_id}.",
 	}, t.logDecision)
 
 	addTool(s, &sdk.Tool{
 		Name:        "append_journal",
-		Description: "Append a dev-journal entry — the per-session log of what was built, deferred, and changed. Omit id to create (summary required; project optional, omit for a global entry; session_ref is a free-text phase/session id). Pass id to refine the current session's entry as you go. Returns the stored entry.",
+		Description: "Append a dev-journal entry (summary, accomplished, deferred); pass id to refine this session's entry. Returns {public_id}.",
 	}, t.appendJournal)
 
 	addTool(s, &sdk.Tool{
 		Name:        "get_context_bundle",
-		Description: "Return the paste-ready markdown digest for starting a project session: merged memory, active-plan status, recent decisions, relevant snippets, and recent journal entries. Call this first in every session.",
+		Description: "Session-start digest: memory, active plan, recent decisions and journal. Call this first.",
 	}, t.getContextBundle)
 
 	addTool(s, &sdk.Tool{
 		Name:        "list_documents",
-		Description: "List documents, optionally filtered by project, type, or status. Body is omitted for compactness.",
+		Description: "List documents (no bodies), filtered by project, type, or status.",
 	}, t.listDocuments)
 
 	addTool(s, &sdk.Tool{
 		Name:        "get_document",
-		Description: "Fetch a single document including its body.",
+		Description: "Fetch one document including its body.",
 	}, t.getDocument)
 
 	addTool(s, &sdk.Tool{
 		Name:        "search",
-		Description: "Search documents, decisions, snippets, solutions, and journal in one ranked query when you do not know which content type holds the answer. Returns compact hits and is a superset of search_documents.",
+		Description: "One ranked query across all content types; websearch syntax (phrases, OR, -exclusion).",
 	}, t.search)
 
 	addTool(s, &sdk.Tool{
 		Name:        "resolve_reference",
-		Description: "Resolve a pasted mneme:// reference (or a bare public id like doc_…/dec_…) to its entity. Returns {kind, reference, target_id, document?, content}: the typed entity plus the ids a follow-up surgical tool needs — for a block or task, document.id is the doc_id argument for tick_task/update_task/update_section and target_id is the block/task id. Call this whenever the user pastes a mneme:// reference instead of guessing what it points to.",
+		Description: "Resolve a mneme:// reference or public id to its entity plus the ids the surgical tools need.",
 	}, t.resolveReference)
 
 	addTool(s, &sdk.Tool{
 		Name:        "tick_task",
-		Description: "Toggle a task's done flag. Returns {task_id, done}; pass return_doc for the full updated document.",
+		Description: "Toggle a task's done flag.",
 	}, t.tickTask)
 
 	addTool(s, &sdk.Tool{
 		Name:        "update_task",
-		Description: "Patch a task's title, content, done, or tags. Returns the updated task; pass return_doc for the full document.",
+		Description: "Patch a task's title, content, done, or tags.",
 	}, t.updateTask)
 
 	addTool(s, &sdk.Tool{
 		Name:        "add_task",
-		Description: "Append a task to a subphase or task-list block (after_task_id to position it). Generates the task id when omitted, and rejects a supplied id already used in the document. Returns the new task; pass return_doc for the full document.",
+		Description: "Append a task to a subphase or task-list block (after_task_id positions it).",
 	}, t.addTask)
 
 	addTool(s, &sdk.Tool{
 		Name:        "remove_task",
-		Description: "Remove a task from its subphase.",
+		Description: "Remove a task by id.",
 	}, t.removeTask)
 
 	addTool(s, &sdk.Tool{
 		Name:        "update_section",
-		Description: "Patch a section block's fields. Returns the patched block; pass return_doc for the full document.",
+		Description: "Patch a section block's title/content by id.",
 	}, t.updateSection)
 
 	addTool(s, &sdk.Tool{
 		Name:        "add_section",
-		Description: "Append any validated document block, including a section, code, Mermaid diagram, table, callout, key-value, task-list, or subphase. Exact shapes are documented by push_document.body. Mints ids for the block and any nested children/tasks that omit them (listed in 'created'). Returns the new block; pass return_doc for the full document.",
+		Description: "Append a validated block (section, code, diagram, table, callout, key-value, task-list, subphase); shapes are in the server instructions.",
 	}, t.addSection)
 
 	addTool(s, &sdk.Tool{
 		Name:        "remove_section",
-		Description: "Remove a section block from body.sections.",
+		Description: "Remove a block from body.sections by id.",
 	}, t.removeSection)
 
 	addTool(s, &sdk.Tool{
 		Name:        "advance_phase",
-		Description: "Flip the current meta.phases entry wip->done and the next todo->wip. Returns {completed_index, next_index, phase_current, phase_total, status}; pass return_doc for the full document. Falls back to bumping phase_current when meta.phases[] is absent.",
+		Description: "Complete the current plan phase and start the next.",
 	}, t.advancePhase)
 
 	addTool(s, &sdk.Tool{
@@ -220,21 +222,21 @@ func (t *tools) register(s *sdk.Server) {
 
 	addTool(s, &sdk.Tool{
 		Name:        "update_document_meta",
-		Description: "Replace a document's meta object (body untouched). Returns a compact summary; pass return_doc:true for the full document.",
+		Description: "Replace a document's meta, body untouched — send every key you want to keep.",
 	}, t.updateDocumentMeta)
 
 	addTool(s, &sdk.Tool{
 		Name:        "link",
-		Description: "Record an explicit typed relation between two entities (documents, decisions, snippets, solutions, journal entries): rel_type is one of relates-to, implements, supersedes, depends-on, blocks; directional from->to. Endpoints are public ids or document ids/slugs. Inline mentions register automatically on document writes — use link only for semantics a mention cannot carry. Duplicates are silent no-ops.",
+		Description: "Add a typed directed relation between two entities: relates-to, implements, supersedes, depends-on, or blocks.",
 	}, t.link)
 
 	addTool(s, &sdk.Tool{
 		Name:        "unlink",
-		Description: "Remove explicit typed relations between two entities — one rel_type, or all of them when rel_type is omitted. Auto-registered mentions are scanner-owned and unaffected; edit the document prose to remove those.",
+		Description: "Remove typed relations between two entities (one rel_type, or all when omitted).",
 	}, t.unlink)
 
 	addTool(s, &sdk.Tool{
 		Name:        "get_related",
-		Description: "Everything related to an entity: explicit typed links in both directions, outgoing mentions, and mentioned_by — the backlinks (who references this). Entries carry public id, kind, title, and document status, ready to use without further lookups. Ref accepts a public id or a document id/slug.",
+		Description: "Typed links, mentions, and backlinks for an entity.",
 	}, t.getRelated)
 }
