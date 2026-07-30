@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpf/mneme/internal/ids"
 	"github.com/jeroenpf/mneme/internal/models"
 	"github.com/jeroenpf/mneme/internal/store"
 )
@@ -20,7 +21,7 @@ type appendJournalInput struct {
 	Deferred     []string `json:"deferred,omitempty" jsonschema:"what was consciously left for later; on update pass [] to clear, omit to leave unchanged"`
 }
 
-func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in appendJournalInput) (*sdk.CallToolResult, *models.JournalEntry, error) {
+func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in appendJournalInput) (*sdk.CallToolResult, *idResult, error) {
 	project := strings.TrimSpace(in.Project)
 	var projectPtr *string
 	if project != "" {
@@ -28,9 +29,17 @@ func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in ap
 	}
 	sessionRef := strings.TrimSpace(in.SessionRef)
 
-	// Update path: id given -> load, apply provided fields, save.
+	// Update path: id given -> load, apply provided fields, save. The ack
+	// carries public ids only, so a jrnl_ public id is accepted alongside
+	// the internal id.
 	if id := strings.TrimSpace(in.ID); id != "" {
-		e, err := t.store.GetJournalEntry(ctx, id)
+		var e *models.JournalEntry
+		var err error
+		if ids.ValidFor(ids.KindJournal, id) {
+			e, err = t.store.GetJournalEntryByPublicID(ctx, id)
+		} else {
+			e, err = t.store.GetJournalEntry(ctx, id)
+		}
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				return nil, nil, errors.New("journal entry not found — omit id to append a new entry")
@@ -57,7 +66,7 @@ func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in ap
 			return nil, nil, translateStoreErr(err)
 		}
 		t.enqueue("journal", e.ID)
-		return nil, e, nil
+		return nil, &idResult{PublicID: e.PublicID}, nil
 	}
 
 	// Create path.
@@ -76,6 +85,6 @@ func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in ap
 		return nil, nil, translateStoreErr(err)
 	}
 	t.enqueue("journal", e.ID)
-	return nil, e, nil
+	return nil, &idResult{PublicID: e.PublicID}, nil
 }
 

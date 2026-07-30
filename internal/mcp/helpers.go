@@ -19,6 +19,12 @@ type okResult struct {
 	OK bool `json:"ok"`
 }
 
+// idResult is the lean ack for high-frequency write wrappers: the caller
+// already has the payload it sent; echoing it back doubles context cost.
+type idResult struct {
+	PublicID string `json:"public_id"`
+}
+
 // docSummary is the lightweight view of a document used by
 // list_documents and search_documents — body stripped.
 type docSummary struct {

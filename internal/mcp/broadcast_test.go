@@ -1,10 +1,12 @@
 package mcp_test
 
 import (
+	"context"
 	"sync"
 	"testing"
 
 	"github.com/jeroenpf/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // recordingBroadcaster captures the live events emitted by tool calls so a
@@ -57,15 +59,21 @@ func TestWritesBroadcastEvents(t *testing.T) {
 	cs := newClientWithBroadcaster(t, bc)
 	seedProject(t, "apollo")
 
-	// log_decision → decisions event (routed through enqueue).
+	// log_decision → decisions event (routed through enqueue). The ack
+	// carries the public id only; the event carries the internal id, so
+	// resolve it through the store.
 	var dec struct {
-		ID string `json:"id"`
+		PublicID string `json:"public_id"`
 	}
 	call(t, cs, "log_decision", map[string]any{
 		"title": "Use SSE", "decision": "SSE over WebSockets", "project": "apollo",
 	}, &dec)
-	if !bc.has(live.Event{Type: "decisions", ID: dec.ID}) {
-		t.Errorf("no decisions event for id %q; events=%+v", dec.ID, bc.snapshot())
+	stored, err := store.NewWithPool(testPool).GetDecisionByPublicID(context.Background(), dec.PublicID)
+	if err != nil {
+		t.Fatalf("load stored decision: %v", err)
+	}
+	if !bc.has(live.Event{Type: "decisions", ID: stored.ID}) {
+		t.Errorf("no decisions event for id %q; events=%+v", stored.ID, bc.snapshot())
 	}
 
 	// set_memory → memory event carrying the project.

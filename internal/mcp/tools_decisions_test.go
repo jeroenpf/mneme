@@ -1,15 +1,46 @@
 package mcp_test
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/jeroenpf/mneme/internal/store"
+)
+
+func TestLogDecisionReturnsID(t *testing.T) {
+	cs := newClient(t)
+
+	// Create acks with the public id alone — no echo of the payload.
+	var created map[string]any
+	call(t, cs, "log_decision", map[string]any{
+		"title": "Use pgx", "decision": "pgx/v5", "alternatives": "database/sql",
+	}, &created)
+	pub, _ := created["public_id"].(string)
+	if !strings.HasPrefix(pub, "dec_") {
+		t.Fatalf("create ack public_id: got %v", created)
+	}
+	if len(created) != 1 {
+		t.Errorf("create ack should be exactly {public_id}, got %v", created)
+	}
+
+	// Update accepts the public id and acks the same way.
+	var updated map[string]any
+	call(t, cs, "log_decision", map[string]any{"id": pub, "status": "deprecated"}, &updated)
+	if updated["public_id"] != pub {
+		t.Errorf("update ack: got %v, want public_id %s", updated, pub)
+	}
+	if len(updated) != 1 {
+		t.Errorf("update ack should be exactly {public_id}, got %v", updated)
+	}
+}
 
 func TestLogDecisionCreate(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
 
 	var created struct {
-		ID     string `json:"id"`
-		Title  string `json:"title"`
-		Status string `json:"status"`
+		PublicID string `json:"public_id"`
 	}
 	call(t, cs, "log_decision", map[string]any{
 		"title":     "Use pgx over database/sql",
@@ -17,11 +48,16 @@ func TestLogDecisionCreate(t *testing.T) {
 		"decision":  "Adopt jackc/pgx v5.",
 		"rationale": "Native Postgres types.",
 	}, &created)
-	if created.ID == "" {
-		t.Fatal("expected a generated id")
+	if created.PublicID == "" {
+		t.Fatal("expected a public id")
 	}
-	if created.Status != "accepted" { // default
-		t.Errorf("status: got %q, want accepted", created.Status)
+
+	d, err := store.NewWithPool(testPool).GetDecisionByPublicID(context.Background(), created.PublicID)
+	if err != nil {
+		t.Fatalf("load stored decision: %v", err)
+	}
+	if d.Title != "Use pgx over database/sql" || string(d.Status) != "accepted" {
+		t.Errorf("stored decision: title=%q status=%q", d.Title, d.Status)
 	}
 }
 
@@ -46,26 +82,23 @@ func TestLogDecisionMissingTitle(t *testing.T) {
 func TestLogDecisionUpsertStatus(t *testing.T) {
 	cs := newClient(t)
 	var created struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
+		PublicID string `json:"public_id"`
 	}
 	call(t, cs, "log_decision", map[string]any{
 		"title": "Presence detection", "decision": "mmWave.", "status": "proposed",
 	}, &created)
-	if created.Status != "proposed" {
-		t.Fatalf("initial status: %q", created.Status)
-	}
 
-	var updated struct {
-		Status string `json:"status"`
-		Title  string `json:"title"`
+	call(t, cs, "log_decision", map[string]any{"id": created.PublicID, "status": "deprecated"}, nil)
+
+	d, err := store.NewWithPool(testPool).GetDecisionByPublicID(context.Background(), created.PublicID)
+	if err != nil {
+		t.Fatalf("load stored decision: %v", err)
 	}
-	call(t, cs, "log_decision", map[string]any{"id": created.ID, "status": "deprecated"}, &updated)
-	if updated.Status != "deprecated" {
-		t.Errorf("status not updated: %q", updated.Status)
+	if string(d.Status) != "deprecated" {
+		t.Errorf("status not updated: %q", d.Status)
 	}
-	if updated.Title != "Presence detection" { // partial update preserves title
-		t.Errorf("title clobbered: %q", updated.Title)
+	if d.Title != "Presence detection" { // partial update preserves title
+		t.Errorf("title clobbered: %q", d.Title)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpf/mneme/internal/ids"
 	"github.com/jeroenpf/mneme/internal/models"
 	"github.com/jeroenpf/mneme/internal/store"
 )
@@ -22,16 +23,24 @@ type logDecisionInput struct {
 	Status       string `json:"status,omitempty" jsonschema:"proposed | accepted | deprecated (default accepted)"`
 }
 
-func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logDecisionInput) (*sdk.CallToolResult, *models.Decision, error) {
+func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logDecisionInput) (*sdk.CallToolResult, *idResult, error) {
 	project := strings.TrimSpace(in.Project)
 	var projectPtr *string
 	if project != "" {
 		projectPtr = &project
 	}
 
-	// Update path: id given -> load, apply provided fields, save.
+	// Update path: id given -> load, apply provided fields, save. The ack
+	// carries public ids only, so a dec_ public id is accepted alongside
+	// the internal id.
 	if id := strings.TrimSpace(in.ID); id != "" {
-		d, err := t.store.GetDecision(ctx, id)
+		var d *models.Decision
+		var err error
+		if ids.ValidFor(ids.KindDecision, id) {
+			d, err = t.store.GetDecisionByPublicID(ctx, id)
+		} else {
+			d, err = t.store.GetDecision(ctx, id)
+		}
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				return nil, nil, errors.New("decision not found — omit id to log a new decision")
@@ -67,7 +76,7 @@ func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logD
 			return nil, nil, translateStoreErr(err)
 		}
 		t.enqueue("decisions", d.ID)
-		return nil, d, nil
+		return nil, &idResult{PublicID: d.PublicID}, nil
 	}
 
 	// Create path.
@@ -99,6 +108,6 @@ func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logD
 		return nil, nil, translateStoreErr(err)
 	}
 	t.enqueue("decisions", d.ID)
-	return nil, d, nil
+	return nil, &idResult{PublicID: d.PublicID}, nil
 }
 
