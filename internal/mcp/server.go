@@ -22,41 +22,29 @@ import (
 // Implementation identifies this server in MCP handshakes.
 var implementation = &sdk.Implementation{
 	Name:    "mneme",
-	Version: "1.5.0",
+	Version: "2.0.0",
 }
 
 // instructions is surfaced to MCP clients (Claude Code et al.) on connect.
 // Tells the LLM what Mneme is for and which tools to reach for first.
 // Kept terse on purpose — every token here lives in the client's context.
-const instructions = `Mneme is the source of truth for plans, specs, and ongoing project knowledge that evolves between sessions.
+const instructions = `Mneme is the source of truth for plans, specs, and evolving project knowledge between sessions. Repo-tracked files (CLAUDE.md, ADRs, docs/specs/*.md) live on disk, not in Mneme.
 
-When editing a plan or spec, prefer structured tools (tick_task, update_task, add_task, update_section, add_section, advance_phase) over push_document. They address blocks by stable ID, are server-validated, and cost ~100× fewer tokens than re-emitting the document.
+Session start: call get_context_bundle(project) — memory, the active plan, recent decisions and journal in one digest. Session end: append_journal (summary + accomplished + deferred). Record decisions with log_decision as you make them. Store durable facts with set_memory; an empty value deletes the key.
 
-Typical workflow:
-1. list_documents (optionally filtered by project/type) to discover what exists.
-2. search_documents (websearch syntax: phrases, OR, -exclusion) before assuming something is missing.
-3. get_document only when you need the body.
-4. Mutate with the narrowest tool that fits the change.
+Finding things: search(q, types?) is one ranked query across every content type; websearch syntax (phrases, OR, -exclusion). list_documents filters by project/type/status. get_document only when you need a body. resolve_reference turns a mneme:// reference or bare public id (doc_…) into its entity plus the ids the surgical tools need — never guess what a reference points to.
 
-Use search(q, types?) for a single ranked query across every content type (documents, decisions, snippets, solutions, journal) instead of the per-type search tools when you don't know where an answer lives.
+Writing: push_document creates or fully rewrites by meta.id; pass project_create:true if meta.project does not exist yet. For edits prefer the surgical tools (tick_task, update_task, add_task, update_section, add_section, remove_section, remove_task, advance_phase) — they address blocks by stable id and cost ~100x less than re-pushing a document.
 
-Whenever the user pastes a mneme:// reference or a bare public id (doc_…, dec_…, snip_…, etc.), call resolve_reference to fetch the target — it returns the typed entity plus the ids surgical tools need (a block/task's owning document.id and target_id). Never guess what a reference points to.
+Meta keys: id (required stable slug), title (required), type (plan | report | spec | adr | brainstorm | journal), project, status (todo | in-progress | complete | blocked | archived; default todo), tags[], phase_current + phase_total (integers, plan progress), category, ticket, repo.
 
-push_document is upsert-by-meta.id — reserve it for new documents or full rewrites. A document's project must already exist; call create_project(slug, name) once to register a new project before pushing documents that reference it.
+Body is {sections:[blocks]}; every block has a type, ids are minted when omitted (returned in 'created'), unknown fields are rejected. Shapes: section {title, content?, children?[]}; text {content}; task-list {title?, tasks:[{id?, title, content?, done}]}; subphase {num, title, session?, description?, tasks[], children?[]} — phases are a flat top-level sequence, never nested in another subphase, nums unique and increasing; callout {variant: info|warn|success|danger|note, title?, content}; code {lang, filename?, content}; diagram {content: mermaid}; table {title?, cols[], rows[][]}; key-value {title?, data{}}.
 
-At the start of every session, call get_context_bundle(project, area?) — one call returns merged memory, the active plan's status, recent decisions, relevant snippets, and recent journal entries as a paste-ready markdown digest. Use the individual read tools only when you need more detail or history than the bundle contains.
+Prose rules: content/description fields hold inline-markdown paragraphs separated by blank lines; titles are single-line. Markdown lists, # headings, and code fences are rejected inside prose — use a child block (task-list, section, code, table, key-value). code and diagram content keep newlines verbatim.
 
-Use set_memory to record durable facts worth carrying across sessions. Use get_memory when you need to inspect a specific scope beyond the session bundle.
+Plan example: {"meta":{"id":"plan-x","title":"Plan: X","type":"plan","project":"p","phase_current":1,"phase_total":2},"body":{"sections":[{"type":"section","title":"Goal","content":"One sentence."},{"type":"subphase","num":1,"title":"Build","tasks":[{"title":"Write the failing test","done":false}]},{"type":"subphase","num":2,"title":"Ship","tasks":[{"title":"Verify and commit","done":false}]}]}}
 
-Record durable decisions with log_decision as you make them (tech/library choices, pattern selections, trade-off resolutions) so the "why" stays searchable via query_decisions. This is the mutable decision log — distinct from hardened ADRs that graduate to the repo as markdown.
-
-Save reusable code patterns and project conventions with save_snippet as you establish them, and consult get_snippets / search_snippets before re-implementing one so the codebase stays consistent.
-
-At the end of a work session, record what happened with append_journal (summary + what you accomplished + what you deferred). Use get_journal when you need history beyond the recent entries in the session bundle.
-
-Before debugging a non-obvious or environment-specific error, call find_solution(query) to check for a known fix; after solving one, record it with log_solution (error_description + solution) so the next session finds it instead of re-debugging.
-
-Repo-tracked files (CLAUDE.md, ADRs, READMEs, docs/specs/*.md) are not in Mneme; read those from disk.`
+Relations: link/unlink manage typed edges (relates-to, implements, supersedes, depends-on, blocks); get_related returns links, mentions, and backlinks. Inline [[mentions]] in document prose register automatically on writes.`
 
 // Server holds the SDK Server plus the dependencies its tool handlers
 // close over. It's safe to share across requests — the SDK manages
