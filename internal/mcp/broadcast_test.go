@@ -50,8 +50,8 @@ func (r *recordingBroadcaster) has(want live.Event) bool {
 }
 
 // TestWritesBroadcastEvents drives each broadcast choke point end-to-end
-// through the MCP client: enqueue-routed (log_decision), and the three
-// direct broadcasts (set_memory, set_env, archive_document).
+// through the MCP client: enqueue-routed (log_decision), and the two
+// direct broadcasts (set_memory, archive_document).
 func TestWritesBroadcastEvents(t *testing.T) {
 	bc := &recordingBroadcaster{}
 	cs := newClientWithBroadcaster(t, bc)
@@ -74,14 +74,6 @@ func TestWritesBroadcastEvents(t *testing.T) {
 	}, nil)
 	if !bc.has(live.Event{Type: "memory", ID: "stack", Project: "apollo"}) {
 		t.Errorf("no memory event; events=%+v", bc.snapshot())
-	}
-
-	// set_env → env event carrying the project (env view is project-scoped).
-	call(t, cs, "set_env", map[string]any{
-		"project": "apollo", "key": "API_PORT", "value": "8443",
-	}, nil)
-	if !bc.has(live.Event{Type: "env", ID: "API_PORT", Project: "apollo"}) {
-		t.Errorf("no env event; events=%+v", bc.snapshot())
 	}
 
 	// archive_document → documents event tagged with the op.

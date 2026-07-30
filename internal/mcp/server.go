@@ -154,21 +154,6 @@ func (t *tools) register(s *sdk.Server) {
 	}, t.deleteMemory)
 
 	addTool(s, &sdk.Tool{
-		Name:        "get_env",
-		Description: "Load a project's non-secret env registry as a flat {key: value} object — ports, service names, local URLs, Docker service names. Call this instead of asking \"what port does X run on?\". Never holds secrets.",
-	}, t.getEnv)
-
-	addTool(s, &sdk.Tool{
-		Name:        "set_env",
-		Description: "Upsert a non-secret env entry for a project (key + value, optional description) — ports, service names, local URLs. NEVER secrets/tokens/passwords. Returns the stored entry.",
-	}, t.setEnv)
-
-	addTool(s, &sdk.Tool{
-		Name:        "list_env",
-		Description: "List a project's env entries as full records including descriptions. Use get_env for a flat key/value map.",
-	}, t.listEnv)
-
-	addTool(s, &sdk.Tool{
 		Name:        "log_decision",
 		Description: "Record an architecture decision (ADR) — the mutable decision log Claude Code writes as a session side-effect. Omit id to create (title + decision required; project optional, omit for a global decision; status defaults to accepted). Pass id to update an existing decision, e.g. flip status proposed→accepted→deprecated. Returns the stored decision.",
 	}, t.logDecision)
@@ -184,21 +169,6 @@ func (t *tools) register(s *sdk.Server) {
 	}, t.queryDecisions)
 
 	addTool(s, &sdk.Tool{
-		Name:        "save_snippet",
-		Description: "Save a reusable code pattern or project convention — the snippet library that keeps Claude Code consistent without re-explaining. Omit id to create (title + content required; project optional, omit for a global snippet; language free-text like go/typescript/sql). Pass id to update an existing snippet (refine the pattern). Returns the stored snippet.",
-	}, t.saveSnippet)
-
-	addTool(s, &sdk.Tool{
-		Name:        "get_snippets",
-		Description: "List snippets newest-first, optionally filtered by project, language, and/or tag. Returns full records including content (default 20, max 100).",
-	}, t.getSnippets)
-
-	addTool(s, &sdk.Tool{
-		Name:        "search_snippets",
-		Description: "Full-text search snippets ranked by relevance — answers \"how do we do X in this project?\". Searches title, description, content. Optional project/language/tag filters (default 10, max 50).",
-	}, t.searchSnippets)
-
-	addTool(s, &sdk.Tool{
 		Name:        "append_journal",
 		Description: "Append a dev-journal entry — the per-session log of what was built, deferred, and changed. Omit id to create (summary required; project optional, omit for a global entry; session_ref is a free-text phase/session id). Pass id to refine the current session's entry as you go. Returns the stored entry.",
 	}, t.appendJournal)
@@ -207,16 +177,6 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "get_journal",
 		Description: "List dev-journal entries newest-first, optionally filtered by project and/or a since date (YYYY-MM-DD or RFC3339). Use limit for just the most recent few. Returns full entries (summary, accomplished, deferred) (default 20, max 100).",
 	}, t.getJournal)
-
-	addTool(s, &sdk.Tool{
-		Name:        "log_solution",
-		Description: "Log an error and the fix that worked — the searchable error/solution database. Omit id to create (error_description + solution required; project optional, omit for a global gotcha). Pass id to refine an existing entry. Returns the stored solution.",
-	}, t.logSolution)
-
-	addTool(s, &sdk.Tool{
-		Name:        "find_solution",
-		Description: "Search the error/solution database for a fix, ranked by relevance — call this BEFORE debugging to check whether an error has a known fix. Returns the top 3 matches by default (pass limit to widen). Optional project/tag filters.",
-	}, t.findSolution)
 
 	addTool(s, &sdk.Tool{
 		Name:        "get_context_bundle",
@@ -247,11 +207,6 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "resolve_reference",
 		Description: "Resolve a pasted mneme:// reference (or a bare public id like doc_…/dec_…) to its entity. Returns {kind, reference, target_id, document?, content}: the typed entity plus the ids a follow-up surgical tool needs — for a block or task, document.id is the doc_id argument for tick_task/update_task/update_section and target_id is the block/task id. Call this whenever the user pastes a mneme:// reference instead of guessing what it points to.",
 	}, t.resolveReference)
-
-	addTool(s, &sdk.Tool{
-		Name:        "retry_failed_embeddings",
-		Description: "Re-enqueue every source whose last embedding attempt failed terminally (the 'failed' count in search status). Use after fixing a transient outage. Returns how many sources were queued for retry.",
-	}, t.retryFailedEmbeddings)
 
 	addTool(s, &sdk.Tool{
 		Name:        "tick_task",
@@ -302,21 +257,6 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "update_document_meta",
 		Description: "Replace a document's meta object (body untouched). Returns a compact summary; pass return_doc:true for the full document.",
 	}, t.updateDocumentMeta)
-
-	addTool(s, &sdk.Tool{
-		Name:        "get_document_history",
-		Description: "List a document's revision history newest-first: each entry's revision, operation, actor, affected ids, title, status, and timestamp (no body). Use diff_document_revisions or restore_document_revision to work with a revision's content.",
-	}, t.getDocumentHistory)
-
-	addTool(s, &sdk.Tool{
-		Name:        "diff_document_revisions",
-		Description: "Report what changed between two revisions of a document without re-emitting them: the node ids added, removed, and modified, plus whether title or status changed. Pass from_revision (required) and to_revision (omit to compare against the current document).",
-	}, t.diffDocumentRevisions)
-
-	addTool(s, &sdk.Tool{
-		Name:        "restore_document_revision",
-		Description: "Restore a past revision's content (title/status/meta/body) onto the document. History is forward-only: this writes a NEW revision rather than rewriting the past. Returns the restored summary and new revision; pass return_doc for the full document.",
-	}, t.restoreDocumentRevision)
 
 	addTool(s, &sdk.Tool{
 		Name:        "lint_documents",
