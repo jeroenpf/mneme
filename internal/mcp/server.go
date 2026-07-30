@@ -134,11 +134,6 @@ func (t *tools) register(s *sdk.Server) {
 	}, t.pushDocument)
 
 	addTool(s, &sdk.Tool{
-		Name:        "create_project",
-		Description: "Register a new project (slug + human-friendly name, optional description) so documents can reference it. push_document errors on an unknown project; create it first. Returns the stored project (slug normalized to kebab-case).",
-	}, t.createProject)
-
-	addTool(s, &sdk.Tool{
 		Name:        "set_memory",
 		Description: "Upsert a memory key/value at a scope (global | project | area). project required for project/area scope; area required for area scope. Returns the stored entry.",
 	}, t.setMemory)
