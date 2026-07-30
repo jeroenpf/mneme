@@ -159,6 +159,11 @@ func (t *tools) addSection(ctx context.Context, _ *sdk.CallToolRequest, in addSe
 	sections[insertAt] = in.Section
 
 	setSections(doc.Body, sections)
+	// The block subtree was validated above; the merged body can still break
+	// the plan invariants (duplicate/decreasing subphase nums), so re-check.
+	if err := validatePlanStructure(doc.Body); err != nil {
+		return nil, nil, err
+	}
 	if err := t.saveDoc(ctx, doc, live.Event{Type: "documents", ID: doc.ID, BlockID: id, Op: "add_section"}); err != nil {
 		return nil, nil, err
 	}

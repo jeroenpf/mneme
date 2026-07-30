@@ -74,7 +74,57 @@ func validateBody(body map[string]any) error {
 	if !ok {
 		return fmt.Errorf("body.sections must be an array")
 	}
-	return walkBlocks(arr, "body.sections")
+	if err := walkBlocks(arr, "body.sections"); err != nil {
+		return err
+	}
+	return validatePlanStructure(body)
+}
+
+// validatePlanStructure enforces plan invariants: subphases form a flat
+// sequence (never nested inside another subphase) with unique, strictly
+// increasing nums in document order. Existing documents only re-validate
+// on their next full push, so increasing-not-consecutive keeps every
+// stored plan upsertable.
+func validatePlanStructure(body map[string]any) error {
+	var nums []int
+	var walk func(blocks []any, inSubphase bool, path string) error
+	walk = func(blocks []any, inSubphase bool, path string) error {
+		for i, raw := range blocks {
+			b, ok := raw.(map[string]any)
+			if !ok {
+				continue // walkBlocks already rejected non-objects
+			}
+			p := fmt.Sprintf("%s[%d]", path, i)
+			typ, _ := b["type"].(string)
+			if typ == "subphase" {
+				if inSubphase {
+					return fmt.Errorf("%s: a subphase cannot nest inside another subphase — phases are a flat sequence; use a section or task-list inside the phase", p)
+				}
+				if n, ok := b["num"].(float64); ok {
+					nums = append(nums, int(n))
+				}
+			}
+			if children, ok := b["children"].([]any); ok {
+				if err := walk(children, inSubphase || typ == "subphase", p+".children"); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	sections, _ := body["sections"].([]any)
+	if err := walk(sections, false, "body.sections"); err != nil {
+		return err
+	}
+	for i := 1; i < len(nums); i++ {
+		if nums[i] == nums[i-1] {
+			return fmt.Errorf("subphase num %d appears twice — nums must be unique", nums[i])
+		}
+		if nums[i] < nums[i-1] {
+			return fmt.Errorf("subphase nums must increase in document order; %d follows %d", nums[i], nums[i-1])
+		}
+	}
+	return nil
 }
 
 func walkBlocks(blocks []any, path string) error {
@@ -121,6 +171,31 @@ func validateBlockFields(b map[string]any, t, path string) error {
 			path, t, k, hint, strings.Join(allowed, ", "))
 	}
 	return nil
+}
+
+// countSubphases reports how many subphase blocks the body holds,
+// descending into children so a subphase wrapped in a section is still
+// counted. Used to keep meta.phase_total consistent with the body.
+func countSubphases(body map[string]any) int {
+	var count func(blocks []any) int
+	count = func(blocks []any) int {
+		n := 0
+		for _, raw := range blocks {
+			b, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			if typ, _ := b["type"].(string); typ == "subphase" {
+				n++
+			}
+			if children, ok := b["children"].([]any); ok {
+				n += count(children)
+			}
+		}
+		return n
+	}
+	sections, _ := body["sections"].([]any)
+	return count(sections)
 }
 
 // --- inline-only content validation ----------------------------------

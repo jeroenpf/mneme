@@ -106,6 +106,11 @@ func (t *tools) pushDocument(ctx context.Context, _ *sdk.CallToolRequest, in pus
 	if err := requireProjectForPlan(doc); err != nil {
 		return nil, nil, err
 	}
+	if doc.PhaseTotal != nil {
+		if n := countSubphases(in.Body); n > 0 && n != *doc.PhaseTotal {
+			return nil, nil, fmt.Errorf("phase_total %d but the body has %d subphases — keep meta.phase_total and the subphase blocks in agreement", *doc.PhaseTotal, n)
+		}
+	}
 	if doc.Project != nil && *doc.Project != "" {
 		if err := t.ensureProject(ctx, *doc.Project, in.ProjectCreate); err != nil {
 			return nil, nil, err

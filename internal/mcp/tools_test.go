@@ -216,6 +216,47 @@ func TestPushDocumentProjectExistingUnaffected(t *testing.T) {
 	}
 }
 
+func TestPushPlanPhaseTotalBodyMismatch(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+
+	msg := callExpectError(t, cs, "push_document", map[string]any{
+		"meta": map[string]any{
+			"id": "phased-plan", "title": "Phased Plan", "type": "plan",
+			"project": "apollo", "phase_current": 1, "phase_total": 3,
+		},
+		"body": map[string]any{"sections": []any{
+			map[string]any{"type": "subphase", "num": 1, "title": "Build", "tasks": []any{}},
+			map[string]any{"type": "subphase", "num": 2, "title": "Ship", "tasks": []any{}},
+		}},
+	})
+	if !strings.Contains(msg, "phase_total 3 but the body has 2 subphases") {
+		t.Errorf("expected phase_total/body mismatch error, got: %s", msg)
+	}
+}
+
+func TestAddSectionRejectsDuplicateSubphaseNum(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), nil)
+
+	call(t, cs, "add_section", map[string]any{
+		"doc_id": "vehicle-api",
+		"section": map[string]any{
+			"type": "subphase", "num": 2, "title": "Numbered", "tasks": []any{},
+		},
+	}, nil)
+	msg := callExpectError(t, cs, "add_section", map[string]any{
+		"doc_id": "vehicle-api",
+		"section": map[string]any{
+			"type": "subphase", "num": 2, "title": "Duplicate", "tasks": []any{},
+		},
+	})
+	if !strings.Contains(msg, "unique") {
+		t.Errorf("expected duplicate-num error, got: %s", msg)
+	}
+}
+
 func TestUpdateDocumentMetaInvalidStatusTeaches(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
