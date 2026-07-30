@@ -2,7 +2,7 @@ package mcp_test
 
 import "testing"
 
-func TestAppendJournalCreateAndGet(t *testing.T) {
+func TestAppendJournalCreate(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
 
@@ -19,16 +19,6 @@ func TestAppendJournalCreateAndGet(t *testing.T) {
 	}, &created)
 	if created.ID == "" {
 		t.Fatal("expected a generated id")
-	}
-
-	var listed struct {
-		Entries []struct {
-			Summary string `json:"summary"`
-		} `json:"entries"`
-	}
-	call(t, cs, "get_journal", map[string]any{"project": "apollo"}, &listed)
-	if len(listed.Entries) != 1 || listed.Entries[0].Summary != "Built the journal store" {
-		t.Fatalf("get_journal: %+v", listed.Entries)
 	}
 }
 
@@ -78,27 +68,3 @@ func TestAppendJournalUpsert(t *testing.T) {
 	}
 }
 
-func TestGetJournalSince(t *testing.T) {
-	cs := newClient(t)
-	call(t, cs, "append_journal", map[string]any{"summary": "an entry"}, nil)
-
-	var past struct {
-		Entries []struct {
-			Summary string `json:"summary"`
-		} `json:"entries"`
-	}
-	call(t, cs, "get_journal", map[string]any{"since": "2020-01-01"}, &past)
-	if len(past.Entries) != 1 {
-		t.Fatalf("since=past should include the entry, got %+v", past.Entries)
-	}
-
-	var future struct {
-		Entries []struct {
-			Summary string `json:"summary"`
-		} `json:"entries"`
-	}
-	call(t, cs, "get_journal", map[string]any{"since": "2099-01-01"}, &future)
-	if len(future.Entries) != 0 {
-		t.Fatalf("since=future should exclude the entry, got %+v", future.Entries)
-	}
-}

@@ -228,7 +228,7 @@ func TestCreateProjectRequiresName(t *testing.T) {
 	}
 }
 
-func TestSearchDocumentsRankAndOR(t *testing.T) {
+func TestSearchWebsearchRankAndOR(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
 
@@ -240,26 +240,20 @@ func TestSearchDocumentsRankAndOR(t *testing.T) {
 		"body": map[string]any{"sections": []any{}},
 	}, nil)
 
-	var hits struct {
-		Items []map[string]any `json:"items"`
+	var out struct {
+		Results []struct {
+			Title string `json:"title"`
+		} `json:"results"`
 	}
-	call(t, cs, "search_documents", map[string]any{"q": "vehicle"}, &hits)
-	if len(hits.Items) != 1 || hits.Items[0]["id"] != "vehicle-api" {
-		t.Errorf("simple search: %+v", hits.Items)
+	call(t, cs, "search", map[string]any{"q": "vehicle", "types": []string{"documents"}}, &out)
+	if len(out.Results) != 1 || out.Results[0].Title != "Vehicle Listing API" {
+		t.Errorf("simple search: %+v", out.Results)
 	}
 
 	// websearch OR.
-	call(t, cs, "search_documents", map[string]any{"q": "vehicle OR pricing"}, &hits)
-	if len(hits.Items) != 2 {
-		t.Errorf("OR search: got %d, want 2", len(hits.Items))
-	}
-}
-
-func TestSearchRequiresQuery(t *testing.T) {
-	cs := newClient(t)
-	msg := callExpectError(t, cs, "search_documents", map[string]any{})
-	if msg == "" {
-		t.Errorf("expected error for empty q")
+	call(t, cs, "search", map[string]any{"q": "vehicle OR pricing", "types": []string{"documents"}}, &out)
+	if len(out.Results) != 2 {
+		t.Errorf("OR search: got %d, want 2", len(out.Results))
 	}
 }
 

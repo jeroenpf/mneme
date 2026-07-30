@@ -139,19 +139,9 @@ func (t *tools) register(s *sdk.Server) {
 	}, t.createProject)
 
 	addTool(s, &sdk.Tool{
-		Name:        "get_memory",
-		Description: "Load persistent memory for a specific scope beyond the session bundle. Global, project, and area values are merged from least to most specific.",
-	}, t.getMemory)
-
-	addTool(s, &sdk.Tool{
 		Name:        "set_memory",
 		Description: "Upsert a memory key/value at a scope (global | project | area). project required for project/area scope; area required for area scope. Returns the stored entry.",
 	}, t.setMemory)
-
-	addTool(s, &sdk.Tool{
-		Name:        "delete_memory",
-		Description: "Delete a memory key at a scope. Same scope args as set_memory.",
-	}, t.deleteMemory)
 
 	addTool(s, &sdk.Tool{
 		Name:        "log_decision",
@@ -159,24 +149,9 @@ func (t *tools) register(s *sdk.Server) {
 	}, t.logDecision)
 
 	addTool(s, &sdk.Tool{
-		Name:        "get_decisions",
-		Description: "List decisions newest-first, optionally filtered by project and/or status. Returns full records (rationale, alternatives, consequences) (default 20, max 100).",
-	}, t.getDecisions)
-
-	addTool(s, &sdk.Tool{
-		Name:        "query_decisions",
-		Description: "Full-text search decisions ranked by relevance — answers \"why did we choose X?\". Searches title, decision, rationale, alternatives, consequences. Optional project scope (default 10, max 50).",
-	}, t.queryDecisions)
-
-	addTool(s, &sdk.Tool{
 		Name:        "append_journal",
 		Description: "Append a dev-journal entry — the per-session log of what was built, deferred, and changed. Omit id to create (summary required; project optional, omit for a global entry; session_ref is a free-text phase/session id). Pass id to refine the current session's entry as you go. Returns the stored entry.",
 	}, t.appendJournal)
-
-	addTool(s, &sdk.Tool{
-		Name:        "get_journal",
-		Description: "List dev-journal entries newest-first, optionally filtered by project and/or a since date (YYYY-MM-DD or RFC3339). Use limit for just the most recent few. Returns full entries (summary, accomplished, deferred) (default 20, max 100).",
-	}, t.getJournal)
 
 	addTool(s, &sdk.Tool{
 		Name:        "get_context_bundle",
@@ -192,11 +167,6 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "get_document",
 		Description: "Fetch a single document including its body.",
 	}, t.getDocument)
-
-	addTool(s, &sdk.Tool{
-		Name:        "search_documents",
-		Description: "Full-text search across documents. Returns ranked matches without bodies.",
-	}, t.searchDocuments)
 
 	addTool(s, &sdk.Tool{
 		Name:        "search",
@@ -257,11 +227,6 @@ func (t *tools) register(s *sdk.Server) {
 		Name:        "update_document_meta",
 		Description: "Replace a document's meta object (body untouched). Returns a compact summary; pass return_doc:true for the full document.",
 	}, t.updateDocumentMeta)
-
-	addTool(s, &sdk.Tool{
-		Name:        "lint_documents",
-		Description: "Read-only sweep of every stored document (all projects and statuses, archived included) for inline-only violations and structural problems (unknown types/fields) that predate write-path validation. Each hit carries doc_id, block_id, path, field, what was found, and an excerpt — doc_id+block_id feed update_section/update_task fixes. Changes nothing.",
-	}, t.lintDocuments)
 
 	addTool(s, &sdk.Tool{
 		Name:        "link",

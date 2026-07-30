@@ -147,37 +147,6 @@ func (t *tools) getDocument(ctx context.Context, _ *sdk.CallToolRequest, in getI
 	return nil, doc, nil
 }
 
-// --- search_documents -------------------------------------------------
-
-type searchInput struct {
-	Q       string `json:"q" jsonschema:"full-text query"`
-	Project string `json:"project,omitempty" jsonschema:"limit to a project slug"`
-	Type    string `json:"type,omitempty" jsonschema:"limit to a document type"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"max results; default 20, max 100"`
-}
-
-func (t *tools) searchDocuments(ctx context.Context, _ *sdk.CallToolRequest, in searchInput) (*sdk.CallToolResult, *listOutput, error) {
-	if in.Q == "" {
-		return nil, nil, errors.New("q is required")
-	}
-	f := store.Filter{Limit: clampLimit(in.Limit, 20, 100)}
-	if in.Project != "" {
-		f.Project = &in.Project
-	}
-	if in.Type != "" {
-		f.Type = &in.Type
-	}
-	docs, err := t.store.SearchDocuments(ctx, in.Q, f)
-	if err != nil {
-		return nil, nil, translateStoreErr(err)
-	}
-	out := &listOutput{Items: make([]docSummary, 0, len(docs))}
-	for _, d := range docs {
-		out.Items = append(out.Items, summarize(d))
-	}
-	return nil, out, nil
-}
-
 // --- archive_document -------------------------------------------------
 
 type archiveInput struct {

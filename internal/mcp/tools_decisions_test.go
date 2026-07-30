@@ -1,11 +1,8 @@
 package mcp_test
 
-import (
-	"fmt"
-	"testing"
-)
+import "testing"
 
-func TestLogDecisionCreateAndGet(t *testing.T) {
+func TestLogDecisionCreate(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
 
@@ -25,16 +22,6 @@ func TestLogDecisionCreateAndGet(t *testing.T) {
 	}
 	if created.Status != "accepted" { // default
 		t.Errorf("status: got %q, want accepted", created.Status)
-	}
-
-	var listed struct {
-		Decisions []struct {
-			Title string `json:"title"`
-		} `json:"decisions"`
-	}
-	call(t, cs, "get_decisions", map[string]any{"project": "apollo"}, &listed)
-	if len(listed.Decisions) != 1 || listed.Decisions[0].Title != "Use pgx over database/sql" {
-		t.Fatalf("get_decisions: %+v", listed.Decisions)
 	}
 }
 
@@ -82,41 +69,3 @@ func TestLogDecisionUpsertStatus(t *testing.T) {
 	}
 }
 
-func TestQueryDecisions(t *testing.T) {
-	cs := newClient(t)
-	call(t, cs, "log_decision", map[string]any{
-		"title": "Choose Sanctum for API auth", "decision": "Laravel Sanctum.",
-		"rationale": "Token auth without OAuth ceremony.",
-	}, nil)
-	call(t, cs, "log_decision", map[string]any{
-		"title": "Cursor pagination", "decision": "Keyset on id.",
-		"rationale": "Stable pages under inserts.",
-	}, nil)
-
-	var out struct {
-		Decisions []struct {
-			Title string `json:"title"`
-		} `json:"decisions"`
-	}
-	call(t, cs, "query_decisions", map[string]any{"query": "sanctum auth"}, &out)
-	if len(out.Decisions) == 0 || out.Decisions[0].Title != "Choose Sanctum for API auth" {
-		t.Fatalf("query_decisions ranking: %+v", out.Decisions)
-	}
-}
-
-func TestGetDecisionsDefaultCap(t *testing.T) {
-	cs := newClient(t)
-	seedProject(t, "apollo")
-	for i := range 25 {
-		call(t, cs, "log_decision", map[string]any{
-			"title": fmt.Sprintf("D%d", i), "decision": "x", "project": "apollo",
-		}, nil)
-	}
-	var out struct {
-		Decisions []map[string]any `json:"decisions"`
-	}
-	call(t, cs, "get_decisions", map[string]any{}, &out)
-	if len(out.Decisions) != 20 {
-		t.Errorf("default cap: got %d decisions, want 20", len(out.Decisions))
-	}
-}
