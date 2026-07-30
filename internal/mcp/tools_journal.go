@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpf/mneme/internal/ids"
 	"github.com/jeroenpf/mneme/internal/models"
 	"github.com/jeroenpf/mneme/internal/store"
 )
@@ -20,7 +21,7 @@ type appendJournalInput struct {
 	Deferred     []string `json:"deferred,omitempty" jsonschema:"what was consciously left for later; on update pass [] to clear, omit to leave unchanged"`
 }
 
-func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in appendJournalInput) (*sdk.CallToolResult, *models.JournalEntry, error) {
+func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in appendJournalInput) (*sdk.CallToolResult, *idResult, error) {
 	project := strings.TrimSpace(in.Project)
 	var projectPtr *string
 	if project != "" {
@@ -28,9 +29,17 @@ func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in ap
 	}
 	sessionRef := strings.TrimSpace(in.SessionRef)
 
-	// Update path: id given -> load, apply provided fields, save.
+	// Update path: id given -> load, apply provided fields, save. The ack
+	// carries public ids only, so a jrnl_ public id is accepted alongside
+	// the internal id.
 	if id := strings.TrimSpace(in.ID); id != "" {
-		e, err := t.store.GetJournalEntry(ctx, id)
+		var e *models.JournalEntry
+		var err error
+		if ids.ValidFor(ids.KindJournal, id) {
+			e, err = t.store.GetJournalEntryByPublicID(ctx, id)
+		} else {
+			e, err = t.store.GetJournalEntry(ctx, id)
+		}
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				return nil, nil, errors.New("journal entry not found — omit id to append a new entry")
@@ -57,7 +66,7 @@ func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in ap
 			return nil, nil, translateStoreErr(err)
 		}
 		t.enqueue("journal", e.ID)
-		return nil, e, nil
+		return nil, &idResult{PublicID: e.PublicID}, nil
 	}
 
 	// Create path.
@@ -76,34 +85,6 @@ func (t *tools) appendJournal(ctx context.Context, _ *sdk.CallToolRequest, in ap
 		return nil, nil, translateStoreErr(err)
 	}
 	t.enqueue("journal", e.ID)
-	return nil, e, nil
+	return nil, &idResult{PublicID: e.PublicID}, nil
 }
 
-type journalOutput struct {
-	Entries []*models.JournalEntry `json:"entries"`
-}
-
-type getJournalInput struct {
-	Project string `json:"project,omitempty" jsonschema:"filter to a project slug; omit for all entries incl. global"`
-	Since   string `json:"since,omitempty" jsonschema:"only entries on/after this ISO date (YYYY-MM-DD) or RFC3339 timestamp"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"max rows (newest first); default 20, max 100"`
-}
-
-func (t *tools) getJournal(ctx context.Context, _ *sdk.CallToolRequest, in getJournalInput) (*sdk.CallToolResult, *journalOutput, error) {
-	f := store.JournalFilter{Limit: clampLimit(in.Limit, 20, 100)}
-	if p := strings.TrimSpace(in.Project); p != "" {
-		f.Project = &p
-	}
-	if s := strings.TrimSpace(in.Since); s != "" {
-		since, err := models.ParseSince(s)
-		if err != nil {
-			return nil, nil, err
-		}
-		f.Since = &since
-	}
-	es, err := t.store.ListJournalEntries(ctx, f)
-	if err != nil {
-		return nil, nil, translateStoreErr(err)
-	}
-	return nil, &journalOutput{Entries: es}, nil
-}

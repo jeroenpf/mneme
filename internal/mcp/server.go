@@ -22,41 +22,29 @@ import (
 // Implementation identifies this server in MCP handshakes.
 var implementation = &sdk.Implementation{
 	Name:    "mneme",
-	Version: "1.5.0",
+	Version: "2.0.0",
 }
 
 // instructions is surfaced to MCP clients (Claude Code et al.) on connect.
 // Tells the LLM what Mneme is for and which tools to reach for first.
 // Kept terse on purpose — every token here lives in the client's context.
-const instructions = `Mneme is the source of truth for plans, specs, and ongoing project knowledge that evolves between sessions.
+const instructions = `Mneme is the source of truth for plans, specs, and evolving project knowledge between sessions. Repo-tracked files (CLAUDE.md, ADRs, docs/specs/*.md) live on disk, not in Mneme.
 
-When editing a plan or spec, prefer structured tools (tick_task, update_task, add_task, update_section, add_section, advance_phase) over push_document. They address blocks by stable ID, are server-validated, and cost ~100× fewer tokens than re-emitting the document.
+Session start: call get_context_bundle(project) — memory, the active plan, recent decisions and journal in one digest. Session end: append_journal (summary + accomplished + deferred). Record decisions with log_decision as you make them. Store durable facts with set_memory; an empty value deletes the key.
 
-Typical workflow:
-1. list_documents (optionally filtered by project/type) to discover what exists.
-2. search_documents (websearch syntax: phrases, OR, -exclusion) before assuming something is missing.
-3. get_document only when you need the body.
-4. Mutate with the narrowest tool that fits the change.
+Finding things: search(q, types?) is one ranked query across every content type; websearch syntax (phrases, OR, -exclusion). list_documents filters by project/type/status. get_document only when you need a body. resolve_reference turns a mneme:// reference or bare public id (doc_…) into its entity plus the ids the surgical tools need — never guess what a reference points to.
 
-Use search(q, types?) for a single ranked query across every content type (documents, decisions, snippets, solutions, journal) instead of the per-type search tools when you don't know where an answer lives.
+Writing: push_document creates or fully rewrites by meta.id; pass project_create:true if meta.project does not exist yet. For edits prefer the surgical tools (tick_task, update_task, add_task, update_section, add_section, remove_section, remove_task, advance_phase) — they address blocks by stable id and cost ~100x less than re-pushing a document.
 
-Whenever the user pastes a mneme:// reference or a bare public id (doc_…, dec_…, snip_…, etc.), call resolve_reference to fetch the target — it returns the typed entity plus the ids surgical tools need (a block/task's owning document.id and target_id). Never guess what a reference points to.
+Meta keys: id (required stable slug), title (required), type (plan | report | spec | adr | brainstorm | journal), project, status (todo | in-progress | complete | blocked | archived; default todo), tags[], phase_current + phase_total (integers, plan progress), category, ticket, repo.
 
-push_document is upsert-by-meta.id — reserve it for new documents or full rewrites. A document's project must already exist; call create_project(slug, name) once to register a new project before pushing documents that reference it.
+Body is {sections:[blocks]}; every block has a type, ids are minted when omitted (returned in 'created'), unknown fields are rejected. Shapes: section {title, content?, children?[]}; text {content}; task-list {title?, tasks:[{id?, title, content?, done}]}; subphase {num, title, session?, description?, tasks[], children?[]} — phases are a flat top-level sequence, never nested in another subphase, nums unique and increasing; callout {variant: info|warn|success|danger|note, title?, content}; code {lang, filename?, content}; diagram {content: mermaid}; table {title?, cols[], rows[][]}; key-value {title?, data{}}.
 
-At the start of every session, call get_context_bundle(project, area?) — one call returns merged memory, the active plan's status, recent decisions, relevant snippets, and recent journal entries as a paste-ready markdown digest. Use the individual read tools only when you need more detail or history than the bundle contains.
+Prose rules: content/description fields hold inline-markdown paragraphs separated by blank lines; titles are single-line. Markdown lists, # headings, and code fences are rejected inside prose — use a child block (task-list, section, code, table, key-value). code and diagram content keep newlines verbatim.
 
-Use set_memory to record durable facts worth carrying across sessions. Use get_memory when you need to inspect a specific scope beyond the session bundle.
+Plan example: {"meta":{"id":"plan-x","title":"Plan: X","type":"plan","project":"p","phase_current":1,"phase_total":2},"body":{"sections":[{"type":"section","title":"Goal","content":"One sentence."},{"type":"subphase","num":1,"title":"Build","tasks":[{"title":"Write the failing test","done":false}]},{"type":"subphase","num":2,"title":"Ship","tasks":[{"title":"Verify and commit","done":false}]}]}}
 
-Record durable decisions with log_decision as you make them (tech/library choices, pattern selections, trade-off resolutions) so the "why" stays searchable via query_decisions. This is the mutable decision log — distinct from hardened ADRs that graduate to the repo as markdown.
-
-Save reusable code patterns and project conventions with save_snippet as you establish them, and consult get_snippets / search_snippets before re-implementing one so the codebase stays consistent.
-
-At the end of a work session, record what happened with append_journal (summary + what you accomplished + what you deferred). Use get_journal when you need history beyond the recent entries in the session bundle.
-
-Before debugging a non-obvious or environment-specific error, call find_solution(query) to check for a known fix; after solving one, record it with log_solution (error_description + solution) so the next session finds it instead of re-debugging.
-
-Repo-tracked files (CLAUDE.md, ADRs, READMEs, docs/specs/*.md) are not in Mneme; read those from disk.`
+Relations: link/unlink manage typed edges (relates-to, implements, supersedes, depends-on, blocks); get_related returns links, mentions, and backlinks. Inline [[mentions]] in document prose register automatically on writes.`
 
 // Server holds the SDK Server plus the dependencies its tool handlers
 // close over. It's safe to share across requests — the SDK manages
@@ -124,173 +112,95 @@ func addTool[In, Out any](s *sdk.Server, tool *sdk.Tool, handler sdk.ToolHandler
 	sdk.AddTool(s, tool, handler)
 }
 
-// register installs every Phase 1.4 tool on the SDK server. Adding a
+// register installs every surface-v2 tool on the SDK server. Adding a
 // new tool means: define request/response structs, write the handler
-// method on *tools, and add one addTool line here.
+// method on *tools, and add one addTool line here. Descriptions stay one
+// sentence — cross-tool conventions live in the instructions const, paid
+// for once per session instead of per tool.
 func (t *tools) register(s *sdk.Server) {
 	addTool(s, &sdk.Tool{
 		Name:        "push_document",
-		Description: "Create or upsert a document by meta.id. Validates block types and prose content (body prose allows blank-line paragraphs; lists/headings/code fences must be child blocks). Mints stable ids for blocks/tasks that omit them and rejects duplicate ids (listed in 'created'). Returns a compact summary (no body); pass return_doc:true for the full stored document.",
+		Description: "Create or fully rewrite a document by meta.id (meta keys and body block shapes are in the server instructions); prefer the surgical block/task tools for edits.",
 	}, t.pushDocument)
 
 	addTool(s, &sdk.Tool{
-		Name:        "create_project",
-		Description: "Register a new project (slug + human-friendly name, optional description) so documents can reference it. push_document errors on an unknown project; create it first. Returns the stored project (slug normalized to kebab-case).",
-	}, t.createProject)
-
-	addTool(s, &sdk.Tool{
-		Name:        "get_memory",
-		Description: "Load persistent memory for a specific scope beyond the session bundle. Global, project, and area values are merged from least to most specific.",
-	}, t.getMemory)
-
-	addTool(s, &sdk.Tool{
 		Name:        "set_memory",
-		Description: "Upsert a memory key/value at a scope (global | project | area). project required for project/area scope; area required for area scope. Returns the stored entry.",
+		Description: "Upsert a memory key at a scope (global | project | area); an empty value deletes the key.",
 	}, t.setMemory)
 
 	addTool(s, &sdk.Tool{
-		Name:        "delete_memory",
-		Description: "Delete a memory key at a scope. Same scope args as set_memory.",
-	}, t.deleteMemory)
-
-	addTool(s, &sdk.Tool{
-		Name:        "get_env",
-		Description: "Load a project's non-secret env registry as a flat {key: value} object — ports, service names, local URLs, Docker service names. Call this instead of asking \"what port does X run on?\". Never holds secrets.",
-	}, t.getEnv)
-
-	addTool(s, &sdk.Tool{
-		Name:        "set_env",
-		Description: "Upsert a non-secret env entry for a project (key + value, optional description) — ports, service names, local URLs. NEVER secrets/tokens/passwords. Returns the stored entry.",
-	}, t.setEnv)
-
-	addTool(s, &sdk.Tool{
-		Name:        "list_env",
-		Description: "List a project's env entries as full records including descriptions. Use get_env for a flat key/value map.",
-	}, t.listEnv)
-
-	addTool(s, &sdk.Tool{
 		Name:        "log_decision",
-		Description: "Record an architecture decision (ADR) — the mutable decision log Claude Code writes as a session side-effect. Omit id to create (title + decision required; project optional, omit for a global decision; status defaults to accepted). Pass id to update an existing decision, e.g. flip status proposed→accepted→deprecated. Returns the stored decision.",
+		Description: "Record a decision (title, decision, rationale, alternatives, consequences); pass id to update. Returns {public_id}.",
 	}, t.logDecision)
 
 	addTool(s, &sdk.Tool{
-		Name:        "get_decisions",
-		Description: "List decisions newest-first, optionally filtered by project and/or status. Returns full records (rationale, alternatives, consequences) (default 20, max 100).",
-	}, t.getDecisions)
-
-	addTool(s, &sdk.Tool{
-		Name:        "query_decisions",
-		Description: "Full-text search decisions ranked by relevance — answers \"why did we choose X?\". Searches title, decision, rationale, alternatives, consequences. Optional project scope (default 10, max 50).",
-	}, t.queryDecisions)
-
-	addTool(s, &sdk.Tool{
-		Name:        "save_snippet",
-		Description: "Save a reusable code pattern or project convention — the snippet library that keeps Claude Code consistent without re-explaining. Omit id to create (title + content required; project optional, omit for a global snippet; language free-text like go/typescript/sql). Pass id to update an existing snippet (refine the pattern). Returns the stored snippet.",
-	}, t.saveSnippet)
-
-	addTool(s, &sdk.Tool{
-		Name:        "get_snippets",
-		Description: "List snippets newest-first, optionally filtered by project, language, and/or tag. Returns full records including content (default 20, max 100).",
-	}, t.getSnippets)
-
-	addTool(s, &sdk.Tool{
-		Name:        "search_snippets",
-		Description: "Full-text search snippets ranked by relevance — answers \"how do we do X in this project?\". Searches title, description, content. Optional project/language/tag filters (default 10, max 50).",
-	}, t.searchSnippets)
-
-	addTool(s, &sdk.Tool{
 		Name:        "append_journal",
-		Description: "Append a dev-journal entry — the per-session log of what was built, deferred, and changed. Omit id to create (summary required; project optional, omit for a global entry; session_ref is a free-text phase/session id). Pass id to refine the current session's entry as you go. Returns the stored entry.",
+		Description: "Append a dev-journal entry (summary, accomplished, deferred); pass id to refine this session's entry. Returns {public_id}.",
 	}, t.appendJournal)
 
 	addTool(s, &sdk.Tool{
-		Name:        "get_journal",
-		Description: "List dev-journal entries newest-first, optionally filtered by project and/or a since date (YYYY-MM-DD or RFC3339). Use limit for just the most recent few. Returns full entries (summary, accomplished, deferred) (default 20, max 100).",
-	}, t.getJournal)
-
-	addTool(s, &sdk.Tool{
-		Name:        "log_solution",
-		Description: "Log an error and the fix that worked — the searchable error/solution database. Omit id to create (error_description + solution required; project optional, omit for a global gotcha). Pass id to refine an existing entry. Returns the stored solution.",
-	}, t.logSolution)
-
-	addTool(s, &sdk.Tool{
-		Name:        "find_solution",
-		Description: "Search the error/solution database for a fix, ranked by relevance — call this BEFORE debugging to check whether an error has a known fix. Returns the top 3 matches by default (pass limit to widen). Optional project/tag filters.",
-	}, t.findSolution)
-
-	addTool(s, &sdk.Tool{
 		Name:        "get_context_bundle",
-		Description: "Return the paste-ready markdown digest for starting a project session: merged memory, active-plan status, recent decisions, relevant snippets, and recent journal entries. Call this first in every session.",
+		Description: "Session-start digest: memory, active plan, recent decisions and journal. Call this first.",
 	}, t.getContextBundle)
 
 	addTool(s, &sdk.Tool{
 		Name:        "list_documents",
-		Description: "List documents, optionally filtered by project, type, or status. Body is omitted for compactness.",
+		Description: "List documents (no bodies), filtered by project, type, or status.",
 	}, t.listDocuments)
 
 	addTool(s, &sdk.Tool{
 		Name:        "get_document",
-		Description: "Fetch a single document including its body.",
+		Description: "Fetch one document including its body.",
 	}, t.getDocument)
 
 	addTool(s, &sdk.Tool{
-		Name:        "search_documents",
-		Description: "Full-text search across documents. Returns ranked matches without bodies.",
-	}, t.searchDocuments)
-
-	addTool(s, &sdk.Tool{
 		Name:        "search",
-		Description: "Search documents, decisions, snippets, solutions, and journal in one ranked query when you do not know which content type holds the answer. Returns compact hits and is a superset of search_documents.",
+		Description: "One ranked query across all content types; websearch syntax (phrases, OR, -exclusion).",
 	}, t.search)
 
 	addTool(s, &sdk.Tool{
 		Name:        "resolve_reference",
-		Description: "Resolve a pasted mneme:// reference (or a bare public id like doc_…/dec_…) to its entity. Returns {kind, reference, target_id, document?, content}: the typed entity plus the ids a follow-up surgical tool needs — for a block or task, document.id is the doc_id argument for tick_task/update_task/update_section and target_id is the block/task id. Call this whenever the user pastes a mneme:// reference instead of guessing what it points to.",
+		Description: "Resolve a mneme:// reference or public id to its entity plus the ids the surgical tools need.",
 	}, t.resolveReference)
 
 	addTool(s, &sdk.Tool{
-		Name:        "retry_failed_embeddings",
-		Description: "Re-enqueue every source whose last embedding attempt failed terminally (the 'failed' count in search status). Use after fixing a transient outage. Returns how many sources were queued for retry.",
-	}, t.retryFailedEmbeddings)
-
-	addTool(s, &sdk.Tool{
 		Name:        "tick_task",
-		Description: "Toggle a task's done flag. Returns {task_id, done}; pass return_doc for the full updated document.",
+		Description: "Toggle a task's done flag.",
 	}, t.tickTask)
 
 	addTool(s, &sdk.Tool{
 		Name:        "update_task",
-		Description: "Patch a task's title, content, done, or tags. Returns the updated task; pass return_doc for the full document.",
+		Description: "Patch a task's title, content, done, or tags.",
 	}, t.updateTask)
 
 	addTool(s, &sdk.Tool{
 		Name:        "add_task",
-		Description: "Append a task to a subphase or task-list block (after_task_id to position it). Generates the task id when omitted, and rejects a supplied id already used in the document. Returns the new task; pass return_doc for the full document.",
+		Description: "Append a task to a subphase or task-list block (after_task_id positions it).",
 	}, t.addTask)
 
 	addTool(s, &sdk.Tool{
 		Name:        "remove_task",
-		Description: "Remove a task from its subphase.",
+		Description: "Remove a task by id.",
 	}, t.removeTask)
 
 	addTool(s, &sdk.Tool{
 		Name:        "update_section",
-		Description: "Patch a section block's fields. Returns the patched block; pass return_doc for the full document.",
+		Description: "Patch a section block's title/content by id.",
 	}, t.updateSection)
 
 	addTool(s, &sdk.Tool{
 		Name:        "add_section",
-		Description: "Append any validated document block, including a section, code, Mermaid diagram, table, callout, key-value, task-list, or subphase. Exact shapes are documented by push_document.body. Mints ids for the block and any nested children/tasks that omit them (listed in 'created'). Returns the new block; pass return_doc for the full document.",
+		Description: "Append a validated block (section, code, diagram, table, callout, key-value, task-list, subphase); shapes are in the server instructions.",
 	}, t.addSection)
 
 	addTool(s, &sdk.Tool{
 		Name:        "remove_section",
-		Description: "Remove a section block from body.sections.",
+		Description: "Remove a block from body.sections by id.",
 	}, t.removeSection)
 
 	addTool(s, &sdk.Tool{
 		Name:        "advance_phase",
-		Description: "Flip the current meta.phases entry wip->done and the next todo->wip. Returns {completed_index, next_index, phase_current, phase_total, status}; pass return_doc for the full document. Falls back to bumping phase_current when meta.phases[] is absent.",
+		Description: "Complete the current plan phase and start the next.",
 	}, t.advancePhase)
 
 	addTool(s, &sdk.Tool{
@@ -300,41 +210,21 @@ func (t *tools) register(s *sdk.Server) {
 
 	addTool(s, &sdk.Tool{
 		Name:        "update_document_meta",
-		Description: "Replace a document's meta object (body untouched). Returns a compact summary; pass return_doc:true for the full document.",
+		Description: "Replace a document's meta, body untouched — send every key you want to keep.",
 	}, t.updateDocumentMeta)
 
 	addTool(s, &sdk.Tool{
-		Name:        "get_document_history",
-		Description: "List a document's revision history newest-first: each entry's revision, operation, actor, affected ids, title, status, and timestamp (no body). Use diff_document_revisions or restore_document_revision to work with a revision's content.",
-	}, t.getDocumentHistory)
-
-	addTool(s, &sdk.Tool{
-		Name:        "diff_document_revisions",
-		Description: "Report what changed between two revisions of a document without re-emitting them: the node ids added, removed, and modified, plus whether title or status changed. Pass from_revision (required) and to_revision (omit to compare against the current document).",
-	}, t.diffDocumentRevisions)
-
-	addTool(s, &sdk.Tool{
-		Name:        "restore_document_revision",
-		Description: "Restore a past revision's content (title/status/meta/body) onto the document. History is forward-only: this writes a NEW revision rather than rewriting the past. Returns the restored summary and new revision; pass return_doc for the full document.",
-	}, t.restoreDocumentRevision)
-
-	addTool(s, &sdk.Tool{
-		Name:        "lint_documents",
-		Description: "Read-only sweep of every stored document (all projects and statuses, archived included) for inline-only violations and structural problems (unknown types/fields) that predate write-path validation. Each hit carries doc_id, block_id, path, field, what was found, and an excerpt — doc_id+block_id feed update_section/update_task fixes. Changes nothing.",
-	}, t.lintDocuments)
-
-	addTool(s, &sdk.Tool{
 		Name:        "link",
-		Description: "Record an explicit typed relation between two entities (documents, decisions, snippets, solutions, journal entries): rel_type is one of relates-to, implements, supersedes, depends-on, blocks; directional from->to. Endpoints are public ids or document ids/slugs. Inline mentions register automatically on document writes — use link only for semantics a mention cannot carry. Duplicates are silent no-ops.",
+		Description: "Add a typed directed relation between two entities: relates-to, implements, supersedes, depends-on, or blocks.",
 	}, t.link)
 
 	addTool(s, &sdk.Tool{
 		Name:        "unlink",
-		Description: "Remove explicit typed relations between two entities — one rel_type, or all of them when rel_type is omitted. Auto-registered mentions are scanner-owned and unaffected; edit the document prose to remove those.",
+		Description: "Remove typed relations between two entities (one rel_type, or all when omitted).",
 	}, t.unlink)
 
 	addTool(s, &sdk.Tool{
 		Name:        "get_related",
-		Description: "Everything related to an entity: explicit typed links in both directions, outgoing mentions, and mentioned_by — the backlinks (who references this). Entries carry public id, kind, title, and document status, ready to use without further lookups. Ref accepts a public id or a document id/slug.",
+		Description: "Typed links, mentions, and backlinks for an entity.",
 	}, t.getRelated)
 }

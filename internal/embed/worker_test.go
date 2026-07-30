@@ -124,6 +124,39 @@ func TestWorkerRetryFailed(t *testing.T) {
 	}
 }
 
+func TestWorkerRetryFailedNow(t *testing.T) {
+	s := newEmbedStore(t)
+	ctx := context.Background()
+	seedProject(t, s, "apollo")
+	mkSectionDoc(t, s, "retry-me")
+	if err := s.RecordEmbedFailure(ctx, "documents", "retry-me", "voyage down"); err != nil {
+		t.Fatal(err)
+	}
+	// A failure for a source deleted since: retry purges it and clears too.
+	if err := s.RecordEmbedFailure(ctx, "documents", "ghost", "voyage down"); err != nil {
+		t.Fatal(err)
+	}
+
+	w := embed.NewWorker(s, &fakeClient{}, 8, 0)
+	n, err := w.RetryFailedNow(ctx)
+	if err != nil {
+		t.Fatalf("RetryFailedNow: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("RetryFailedNow returned %d, want 2", n)
+	}
+	if got := w.QueueDepth(); got != 0 {
+		t.Fatalf("synchronous retry must not leave queued work: depth = %d", got)
+	}
+	refs, err := s.FailedSourceRefs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 0 {
+		t.Fatalf("failures not cleared after successful retry: %+v", refs)
+	}
+}
+
 func TestWorkerEmbedsAndPrunes(t *testing.T) {
 	s := newEmbedStore(t) // container-backed store, mirrors store.newStore
 	ctx := context.Background()

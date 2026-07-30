@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jeroenpf/mneme/internal/ids"
 	"github.com/jeroenpf/mneme/internal/models"
 	"github.com/jeroenpf/mneme/internal/store"
 )
@@ -22,16 +23,24 @@ type logDecisionInput struct {
 	Status       string `json:"status,omitempty" jsonschema:"proposed | accepted | deprecated (default accepted)"`
 }
 
-func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logDecisionInput) (*sdk.CallToolResult, *models.Decision, error) {
+func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logDecisionInput) (*sdk.CallToolResult, *idResult, error) {
 	project := strings.TrimSpace(in.Project)
 	var projectPtr *string
 	if project != "" {
 		projectPtr = &project
 	}
 
-	// Update path: id given -> load, apply provided fields, save.
+	// Update path: id given -> load, apply provided fields, save. The ack
+	// carries public ids only, so a dec_ public id is accepted alongside
+	// the internal id.
 	if id := strings.TrimSpace(in.ID); id != "" {
-		d, err := t.store.GetDecision(ctx, id)
+		var d *models.Decision
+		var err error
+		if ids.ValidFor(ids.KindDecision, id) {
+			d, err = t.store.GetDecisionByPublicID(ctx, id)
+		} else {
+			d, err = t.store.GetDecision(ctx, id)
+		}
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				return nil, nil, errors.New("decision not found — omit id to log a new decision")
@@ -67,7 +76,7 @@ func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logD
 			return nil, nil, translateStoreErr(err)
 		}
 		t.enqueue("decisions", d.ID)
-		return nil, d, nil
+		return nil, &idResult{PublicID: d.PublicID}, nil
 	}
 
 	// Create path.
@@ -99,56 +108,6 @@ func (t *tools) logDecision(ctx context.Context, _ *sdk.CallToolRequest, in logD
 		return nil, nil, translateStoreErr(err)
 	}
 	t.enqueue("decisions", d.ID)
-	return nil, d, nil
+	return nil, &idResult{PublicID: d.PublicID}, nil
 }
 
-type decisionsOutput struct {
-	Decisions []*models.Decision `json:"decisions"`
-}
-
-type getDecisionsInput struct {
-	Project string `json:"project,omitempty" jsonschema:"filter to a project slug; omit for all decisions incl. global"`
-	Status  string `json:"status,omitempty" jsonschema:"filter by status: proposed | accepted | deprecated"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"max rows (newest first); default 20, max 100"`
-}
-
-func (t *tools) getDecisions(ctx context.Context, _ *sdk.CallToolRequest, in getDecisionsInput) (*sdk.CallToolResult, *decisionsOutput, error) {
-	f := store.DecisionFilter{Limit: clampLimit(in.Limit, 20, 100)}
-	if p := strings.TrimSpace(in.Project); p != "" {
-		f.Project = &p
-	}
-	if s := strings.TrimSpace(in.Status); s != "" {
-		st := models.DecisionStatus(s)
-		if err := models.ValidateDecisionStatus(st); err != nil {
-			return nil, nil, err
-		}
-		f.Status = &st
-	}
-	ds, err := t.store.ListDecisions(ctx, f)
-	if err != nil {
-		return nil, nil, translateStoreErr(err)
-	}
-	return nil, &decisionsOutput{Decisions: ds}, nil
-}
-
-type queryDecisionsInput struct {
-	Query   string `json:"query" jsonschema:"natural-language search over title, decision, rationale, alternatives, consequences"`
-	Project string `json:"project,omitempty" jsonschema:"optional project slug to scope the search"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"max ranked results; default 10, max 50"`
-}
-
-func (t *tools) queryDecisions(ctx context.Context, _ *sdk.CallToolRequest, in queryDecisionsInput) (*sdk.CallToolResult, *decisionsOutput, error) {
-	q := strings.TrimSpace(in.Query)
-	if q == "" {
-		return nil, nil, errors.New("query is required")
-	}
-	f := store.DecisionFilter{Limit: clampLimit(in.Limit, 10, 50)}
-	if p := strings.TrimSpace(in.Project); p != "" {
-		f.Project = &p
-	}
-	ds, err := t.store.SearchDecisions(ctx, q, f)
-	if err != nil {
-		return nil, nil, translateStoreErr(err)
-	}
-	return nil, &decisionsOutput{Decisions: ds}, nil
-}

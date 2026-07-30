@@ -19,7 +19,7 @@ func TestLintBodyCollectsEveryViolationClass(t *testing.T) {
 		}},
 		map[string]any{"type": "key-value", "id": "kv", "data": map[string]any{"k": "- one\n- two"}},
 	)
-	want := []lintHit{
+	want := []LintHit{
 		{BlockID: "w", Path: "body.sections[0].children[0]", Field: "type", Found: `unknown block type "widget"`},
 		{BlockID: "c", Path: "body.sections[0].children[1]", Field: "theme", Found: "unknown field"},
 		{BlockID: "p", Path: "body.sections[0].children[2]", Field: "content", Found: "a list", Excerpt: "- a ⏎ - b"},

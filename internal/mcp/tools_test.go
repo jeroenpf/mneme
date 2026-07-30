@@ -1,6 +1,7 @@
 package mcp_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -166,69 +167,114 @@ func TestGetDocumentNotFound(t *testing.T) {
 	}
 }
 
-func TestCreateProjectUnblocksPush(t *testing.T) {
+func TestPushDocumentProjectUnknownTeaches(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	seedProject(t, "zephyr")
+
+	msg := callExpectError(t, cs, "push_document", samplePlan("vehicle-api", "tradegod"))
+	for _, want := range []string{"apollo", "zephyr", "project_create:true"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("teaching error missing %q: %s", want, msg)
+		}
+	}
+}
+
+func TestPushDocumentProjectCreate(t *testing.T) {
 	cs := newClient(t)
 
-	// Before the project exists, pushing a doc that references it fails
-	// with the "unknown project" affordance.
-	before := callExpectError(t, cs, "push_document", samplePlan("vehicle-api", "tradegod"))
-	if before == "" {
-		t.Fatal("expected unknown-project error before create_project")
+	plan := samplePlan("vehicle-api", "tradegod")
+	plan["project_create"] = true
+	var doc struct {
+		Project *string `json:"project"`
 	}
-
-	// create_project registers it, returning the stored row.
-	var proj models.Project
-	call(t, cs, "create_project", map[string]any{
-		"slug": "tradegod", "name": "TradeGod", "description": "Trading bot",
-	}, &proj)
-	if proj.Slug != "tradegod" || proj.Name != "TradeGod" {
-		t.Fatalf("got %+v, want tradegod/TradeGod", proj)
-	}
-	if proj.ID == "" || proj.CreatedAt.IsZero() {
-		t.Errorf("id/created_at not populated: %+v", proj)
-	}
-	if proj.Description == nil || *proj.Description != "Trading bot" {
-		t.Errorf("description: got %v", proj.Description)
-	}
-
-	// Now the same push succeeds.
-	var doc models.Document
-	call(t, cs, "push_document", samplePlan("vehicle-api", "tradegod"), &doc)
+	call(t, cs, "push_document", plan, &doc)
 	if doc.Project == nil || *doc.Project != "tradegod" {
 		t.Errorf("doc.project: got %v, want tradegod", doc.Project)
 	}
+
+	var stored string
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT slug FROM projects WHERE slug = 'tradegod'`).Scan(&stored); err != nil {
+		t.Fatalf("project row not created: %v", err)
+	}
+
+	// A later push referencing the now-existing project needs no flag.
+	call(t, cs, "push_document", samplePlan("pricing-engine", "tradegod"), nil)
 }
 
-func TestCreateProjectNormalizesSlug(t *testing.T) {
+func TestPushDocumentProjectExistingUnaffected(t *testing.T) {
 	cs := newClient(t)
-	var proj models.Project
-	call(t, cs, "create_project", map[string]any{"slug": "TradeGod Bot!", "name": "TradeGod"}, &proj)
-	if proj.Slug != "tradegod-bot" {
-		t.Errorf("slug not normalized: got %q, want tradegod-bot", proj.Slug)
+	seedProject(t, "apollo")
+
+	var doc struct {
+		Project *string `json:"project"`
 	}
-	if proj.Description != nil {
-		t.Errorf("omitted description should be nil, got %v", proj.Description)
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), &doc)
+	if doc.Project == nil || *doc.Project != "apollo" {
+		t.Errorf("doc.project: got %v, want apollo", doc.Project)
 	}
 }
 
-func TestCreateProjectDuplicate(t *testing.T) {
+func TestPushPlanPhaseTotalBodyMismatch(t *testing.T) {
 	cs := newClient(t)
-	call(t, cs, "create_project", map[string]any{"slug": "dup", "name": "Dup"}, nil)
-	msg := callExpectError(t, cs, "create_project", map[string]any{"slug": "dup", "name": "Dup"})
-	if msg == "" {
-		t.Error("expected 'already exists' error on duplicate slug")
+	seedProject(t, "apollo")
+
+	msg := callExpectError(t, cs, "push_document", map[string]any{
+		"meta": map[string]any{
+			"id": "phased-plan", "title": "Phased Plan", "type": "plan",
+			"project": "apollo", "phase_current": 1, "phase_total": 3,
+		},
+		"body": map[string]any{"sections": []any{
+			map[string]any{"type": "subphase", "num": 1, "title": "Build", "tasks": []any{}},
+			map[string]any{"type": "subphase", "num": 2, "title": "Ship", "tasks": []any{}},
+		}},
+	})
+	if !strings.Contains(msg, "phase_total 3 but the body has 2 subphases") {
+		t.Errorf("expected phase_total/body mismatch error, got: %s", msg)
 	}
 }
 
-func TestCreateProjectRequiresName(t *testing.T) {
+func TestAddSectionRejectsDuplicateSubphaseNum(t *testing.T) {
 	cs := newClient(t)
-	msg := callExpectError(t, cs, "create_project", map[string]any{"slug": "x"})
-	if msg == "" {
-		t.Error("expected name-required error")
+	seedProject(t, "apollo")
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), nil)
+
+	call(t, cs, "add_section", map[string]any{
+		"doc_id": "vehicle-api",
+		"section": map[string]any{
+			"type": "subphase", "num": 2, "title": "Numbered", "tasks": []any{},
+		},
+	}, nil)
+	msg := callExpectError(t, cs, "add_section", map[string]any{
+		"doc_id": "vehicle-api",
+		"section": map[string]any{
+			"type": "subphase", "num": 2, "title": "Duplicate", "tasks": []any{},
+		},
+	})
+	if !strings.Contains(msg, "unique") {
+		t.Errorf("expected duplicate-num error, got: %s", msg)
 	}
 }
 
-func TestSearchDocumentsRankAndOR(t *testing.T) {
+func TestUpdateDocumentMetaInvalidStatusTeaches(t *testing.T) {
+	cs := newClient(t)
+	seedProject(t, "apollo")
+	call(t, cs, "push_document", samplePlan("vehicle-api", "apollo"), nil)
+
+	msg := callExpectError(t, cs, "update_document_meta", map[string]any{
+		"id": "vehicle-api",
+		"meta": map[string]any{
+			"id": "vehicle-api", "title": "Vehicle Listing API", "type": "plan",
+			"project": "apollo", "status": "wip",
+		},
+	})
+	if !strings.Contains(msg, "must be one of") {
+		t.Errorf("expected teaching error naming the valid status set, got: %s", msg)
+	}
+}
+
+func TestSearchWebsearchRankAndOR(t *testing.T) {
 	cs := newClient(t)
 	seedProject(t, "apollo")
 
@@ -240,26 +286,20 @@ func TestSearchDocumentsRankAndOR(t *testing.T) {
 		"body": map[string]any{"sections": []any{}},
 	}, nil)
 
-	var hits struct {
-		Items []map[string]any `json:"items"`
+	var out struct {
+		Results []struct {
+			Title string `json:"title"`
+		} `json:"results"`
 	}
-	call(t, cs, "search_documents", map[string]any{"q": "vehicle"}, &hits)
-	if len(hits.Items) != 1 || hits.Items[0]["id"] != "vehicle-api" {
-		t.Errorf("simple search: %+v", hits.Items)
+	call(t, cs, "search", map[string]any{"q": "vehicle", "types": []string{"documents"}}, &out)
+	if len(out.Results) != 1 || out.Results[0].Title != "Vehicle Listing API" {
+		t.Errorf("simple search: %+v", out.Results)
 	}
 
 	// websearch OR.
-	call(t, cs, "search_documents", map[string]any{"q": "vehicle OR pricing"}, &hits)
-	if len(hits.Items) != 2 {
-		t.Errorf("OR search: got %d, want 2", len(hits.Items))
-	}
-}
-
-func TestSearchRequiresQuery(t *testing.T) {
-	cs := newClient(t)
-	msg := callExpectError(t, cs, "search_documents", map[string]any{})
-	if msg == "" {
-		t.Errorf("expected error for empty q")
+	call(t, cs, "search", map[string]any{"q": "vehicle OR pricing", "types": []string{"documents"}}, &out)
+	if len(out.Results) != 2 {
+		t.Errorf("OR search: got %d, want 2", len(out.Results))
 	}
 }
 

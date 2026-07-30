@@ -231,3 +231,69 @@ func TestValidateBodyRejectsBlockMarkdownInCollections(t *testing.T) {
 		t.Errorf("key-value error must teach inline-only, got %q", err.Error())
 	}
 }
+
+// planBody builds a body whose top-level sections are the given blocks —
+// used by the plan-structure invariant tests, where subphases must sit at
+// the top of the tree rather than wrapped in a section.
+func planBody(blocks ...any) map[string]any {
+	return map[string]any{"sections": blocks}
+}
+
+func subphase(num float64, id string, extra map[string]any) map[string]any {
+	b := map[string]any{"type": "subphase", "num": num, "id": id, "title": "P" + id}
+	for k, v := range extra {
+		b[k] = v
+	}
+	return b
+}
+
+func TestValidatePlanStructure(t *testing.T) {
+	t.Run("nested subphase rejected", func(t *testing.T) {
+		body := planBody(subphase(1, "a", map[string]any{
+			"children": []any{subphase(2, "b", nil)},
+		}))
+		err := validatePlanStructure(body)
+		if err == nil || !strings.Contains(err.Error(), "flat sequence") {
+			t.Fatalf("want flat-sequence error, got %v", err)
+		}
+	})
+
+	t.Run("subphase inside a section child of a subphase rejected", func(t *testing.T) {
+		body := planBody(subphase(1, "a", map[string]any{
+			"children": []any{map[string]any{
+				"type": "section", "id": "s", "title": "S",
+				"children": []any{subphase(2, "b", nil)},
+			}},
+		}))
+		err := validatePlanStructure(body)
+		if err == nil || !strings.Contains(err.Error(), "flat sequence") {
+			t.Fatalf("want flat-sequence error, got %v", err)
+		}
+	})
+
+	t.Run("duplicate num rejected", func(t *testing.T) {
+		err := validatePlanStructure(planBody(subphase(1, "a", nil), subphase(1, "b", nil)))
+		if err == nil || !strings.Contains(err.Error(), "unique") {
+			t.Fatalf("want duplicate-num error, got %v", err)
+		}
+	})
+
+	t.Run("decreasing num rejected", func(t *testing.T) {
+		err := validatePlanStructure(planBody(subphase(2, "a", nil), subphase(1, "b", nil)))
+		if err == nil || !strings.Contains(err.Error(), "increase") {
+			t.Fatalf("want decreasing-num error, got %v", err)
+		}
+	})
+
+	t.Run("consecutive nums ok", func(t *testing.T) {
+		if err := validatePlanStructure(planBody(subphase(1, "a", nil), subphase(2, "b", nil), subphase(3, "c", nil))); err != nil {
+			t.Fatalf("nums 1,2,3 should validate, got %v", err)
+		}
+	})
+
+	t.Run("increasing non-consecutive nums ok", func(t *testing.T) {
+		if err := validatePlanStructure(planBody(subphase(2, "a", nil), subphase(4, "b", nil), subphase(7, "c", nil))); err != nil {
+			t.Fatalf("nums 2,4,7 should validate, got %v", err)
+		}
+	})
+}

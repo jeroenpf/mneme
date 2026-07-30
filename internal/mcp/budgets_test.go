@@ -2,6 +2,7 @@ package mcp_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -38,7 +39,49 @@ const (
 	// regression bound (a missing index / full scan / hang), not a latency SLO —
 	// the FTS query is milliseconds, leaving ~100x headroom.
 	budgetSearchLatency = 2 * time.Second
+
+	// The definition-side cost (spec-mcp-surface-v2): tool definitions and
+	// instructions ride along with every API request in every connected
+	// session, so the surface itself is budgeted. If one of these trips,
+	// fix the surface — do not raise the ceiling.
+	budgetToolCount        = 22
+	budgetToolsListBytes   = 15 * 1024
+	budgetInstructionBytes = 4 * 1024
 )
+
+// TestToolSurfaceBudget pins the advertised surface: exactly 22 tools, the
+// tools/list JSON under its byte ceiling, and the instructions block under
+// its own. This is the regression tripwire for the v2 surface diet.
+func TestToolSurfaceBudget(t *testing.T) {
+	cs := newClient(t)
+
+	result, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	if len(result.Tools) != budgetToolCount {
+		names := make([]string, 0, len(result.Tools))
+		for _, tool := range result.Tools {
+			names = append(names, tool.Name)
+		}
+		t.Errorf("tool count = %d, want %d: %s", len(result.Tools), budgetToolCount, strings.Join(names, ", "))
+	}
+
+	raw, err := json.Marshal(result.Tools)
+	if err != nil {
+		t.Fatalf("marshal tools/list: %v", err)
+	}
+	t.Logf("tools/list = %d bytes (budget %d)", len(raw), budgetToolsListBytes)
+	if len(raw) > budgetToolsListBytes {
+		t.Errorf("tools/list JSON %d bytes exceeds budget %d — the definition diet regressed", len(raw), budgetToolsListBytes)
+	}
+
+	instructions := cs.InitializeResult().Instructions
+	t.Logf("instructions = %d bytes (budget %d)", len(instructions), budgetInstructionBytes)
+	if len(instructions) > budgetInstructionBytes {
+		t.Errorf("instructions %d bytes exceed budget %d", len(instructions), budgetInstructionBytes)
+	}
+}
 
 // seedBudgetCorpus creates a representative corpus for apollo: one document with
 // a large body (to prove list/search payloads do not carry bodies) plus several

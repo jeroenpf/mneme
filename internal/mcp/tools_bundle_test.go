@@ -16,12 +16,8 @@ func TestGetContextBundle(t *testing.T) {
 	call(t, cs, "log_decision", map[string]any{
 		"project": "apollo", "title": "use pgx", "decision": "pgx/v5",
 	}, nil)
-	call(t, cs, "set_env", map[string]any{
-		"project": "apollo", "key": "API_PORT", "value": "8443",
-	}, nil)
-
 	// The MCP handler returns only the pre-rendered markdown digest — no
-	// structured project/memory/decisions/env fields.
+	// structured project/memory/decisions fields.
 	var m map[string]any
 	call(t, cs, "get_context_bundle", map[string]any{"project": "apollo"}, &m)
 	md, _ := m["markdown"].(string)

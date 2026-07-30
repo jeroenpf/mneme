@@ -39,6 +39,8 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newMigrateCmd())
 	root.AddCommand(newExportCmd())
 	root.AddCommand(newImportCmd())
+	root.AddCommand(newLintCmd())
+	root.AddCommand(newEmbedRetryCmd())
 	return root
 }
 

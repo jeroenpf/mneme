@@ -1,10 +1,12 @@
 package mcp_test
 
 import (
+	"context"
 	"sync"
 	"testing"
 
 	"github.com/jeroenpf/mneme/internal/live"
+	"github.com/jeroenpf/mneme/internal/store"
 )
 
 // recordingBroadcaster captures the live events emitted by tool calls so a
@@ -50,22 +52,28 @@ func (r *recordingBroadcaster) has(want live.Event) bool {
 }
 
 // TestWritesBroadcastEvents drives each broadcast choke point end-to-end
-// through the MCP client: enqueue-routed (log_decision), and the three
-// direct broadcasts (set_memory, set_env, archive_document).
+// through the MCP client: enqueue-routed (log_decision), and the two
+// direct broadcasts (set_memory, archive_document).
 func TestWritesBroadcastEvents(t *testing.T) {
 	bc := &recordingBroadcaster{}
 	cs := newClientWithBroadcaster(t, bc)
 	seedProject(t, "apollo")
 
-	// log_decision → decisions event (routed through enqueue).
+	// log_decision → decisions event (routed through enqueue). The ack
+	// carries the public id only; the event carries the internal id, so
+	// resolve it through the store.
 	var dec struct {
-		ID string `json:"id"`
+		PublicID string `json:"public_id"`
 	}
 	call(t, cs, "log_decision", map[string]any{
 		"title": "Use SSE", "decision": "SSE over WebSockets", "project": "apollo",
 	}, &dec)
-	if !bc.has(live.Event{Type: "decisions", ID: dec.ID}) {
-		t.Errorf("no decisions event for id %q; events=%+v", dec.ID, bc.snapshot())
+	stored, err := store.NewWithPool(testPool).GetDecisionByPublicID(context.Background(), dec.PublicID)
+	if err != nil {
+		t.Fatalf("load stored decision: %v", err)
+	}
+	if !bc.has(live.Event{Type: "decisions", ID: stored.ID}) {
+		t.Errorf("no decisions event for id %q; events=%+v", stored.ID, bc.snapshot())
 	}
 
 	// set_memory → memory event carrying the project.
@@ -74,14 +82,6 @@ func TestWritesBroadcastEvents(t *testing.T) {
 	}, nil)
 	if !bc.has(live.Event{Type: "memory", ID: "stack", Project: "apollo"}) {
 		t.Errorf("no memory event; events=%+v", bc.snapshot())
-	}
-
-	// set_env → env event carrying the project (env view is project-scoped).
-	call(t, cs, "set_env", map[string]any{
-		"project": "apollo", "key": "API_PORT", "value": "8443",
-	}, nil)
-	if !bc.has(live.Event{Type: "env", ID: "API_PORT", Project: "apollo"}) {
-		t.Errorf("no env event; events=%+v", bc.snapshot())
 	}
 
 	// archive_document → documents event tagged with the op.

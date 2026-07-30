@@ -32,16 +32,23 @@ func TestToolsAdvertiseMinimalOutputSchemas(t *testing.T) {
 func TestInstructionsUseContextBundleAsTheSingleStartupRead(t *testing.T) {
 	cs := newClient(t)
 	instructions := cs.InitializeResult().Instructions
-	if !strings.Contains(instructions, "At the start of every session, call get_context_bundle") {
+	if !strings.Contains(instructions, "Session start: call get_context_bundle") {
 		t.Fatal("instructions do not direct startup through get_context_bundle")
 	}
 
-	for _, duplicate := range []string{
-		"At session start, call get_memory",
-		"call get_journal at the start",
+	// No per-type startup reads: the deleted readers must not resurface.
+	for _, gone := range []string{
+		"get_memory",
+		"get_journal",
+		"get_decisions",
+		"query_decisions",
+		"search_documents",
+		"get_snippets",
+		"find_solution",
+		"create_project",
 	} {
-		if strings.Contains(instructions, duplicate) {
-			t.Errorf("instructions retain duplicate startup read %q", duplicate)
+		if strings.Contains(instructions, gone) {
+			t.Errorf("instructions reference deleted tool %q", gone)
 		}
 	}
 }

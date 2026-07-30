@@ -78,7 +78,7 @@ func (w *Worker) markReconciled() {
 
 // RetryFailed re-enqueues every source in the terminal-failure bucket for
 // another embedding attempt, returning how many it queued. It is the manual
-// retry control behind the operations UI (and mirrors the MCP retry tool).
+// retry control behind the operations UI.
 func (w *Worker) RetryFailed(ctx context.Context) (int, error) {
 	refs, err := w.store.FailedSourceRefs(ctx)
 	if err != nil {
@@ -86,6 +86,21 @@ func (w *Worker) RetryFailed(ctx context.Context) (int, error) {
 	}
 	for _, r := range refs {
 		w.Enqueue(SourceRef{Type: r.Type, ID: r.ID})
+	}
+	return len(refs), nil
+}
+
+// RetryFailedNow is RetryFailed for a worker with no Run loop: it processes
+// every terminally-failed source synchronously, with the same success/failure
+// bookkeeping, and returns how many it attempted. Behind `mneme embed-retry`,
+// which runs in its own process where an async enqueue would never drain.
+func (w *Worker) RetryFailedNow(ctx context.Context) (int, error) {
+	refs, err := w.store.FailedSourceRefs(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("retry failed: list failures: %w", err)
+	}
+	for _, r := range refs {
+		w.processOnce(ctx, SourceRef{Type: r.Type, ID: r.ID})
 	}
 	return len(refs), nil
 }
