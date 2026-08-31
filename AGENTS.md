@@ -1,16 +1,24 @@
 # Mneme
 
-Local AI dev knowledge service. A single Go binary — SQLite by default (PostgreSQL optional), Vue3 SPA embedded via `//go:embed`, terminates its own TLS (no reverse proxy). Ships as a self-contained portable binary (`make build-portable`); for local development it runs under Docker Compose with Postgres. Exposes an MCP server so Codex can push/query documents. Reachable at `http://localhost:8765` (default) or `https://mneme.dev:8443` (trusted HTTPS via mkcert + `/etc/hosts`, `mneme.dev` → `127.0.0.1`). The host is `mneme.dev`, **not** `mneme.local` — macOS routes `*.local` through mDNS, which stalls resolution ~5s before reading `/etc/hosts`.
+Local AI dev knowledge service. A single Go binary — SQLite by default (PostgreSQL optional), Vue3 SPA embedded via `//go:embed`, terminates its own TLS (no reverse proxy). Ships as a self-contained portable binary (`make build-portable`); for local development it runs under Docker Compose with Postgres. Exposes an MCP server so coding agents (Claude Code, Codex) can push/query documents. Reachable at `http://localhost:8765` (default) or `https://mneme.dev:8443` (trusted HTTPS via mkcert + `/etc/hosts`, `mneme.dev` → `127.0.0.1`). The host is `mneme.dev`, **not** `mneme.local` — macOS routes `*.local` through mDNS, which stalls resolution ~5s before reading `/etc/hosts`.
 
 **Source of truth:** [`docs/specs/architecture.md`](docs/specs/architecture.md) — stack, run modes, storage & data model, block types. Read it before making non-trivial changes; deeper design specs live in [`docs/specs/`](docs/specs/).
 
 ## Constraints worth remembering
 
 - **Personal-scale dataset** — Postgres tuned to `shared_buffers=256MB`, `work_mem=8MB`, `max_connections=20`. Right-sized for a single-user dev tool; no reason to consume more.
-- **Local-only by design** — reachable only from this Mac. Phone/iPad/other devices can't hit `mneme.dev`. Acceptable: the consumer is Codex on the laptop.
+- **Local-only by design** — reachable only from this Mac. Phone/iPad/other devices can't hit `mneme.dev`. Acceptable: the consumer is the coding agent on the laptop.
 - **Repo owns the code, Mneme owns the work** — git holds durable, present-tense docs about the artifact (README, accepted specs/ADRs); Mneme holds evolving work docs (plans, journals, notes, brainstorms). Docs are born in Mneme and graduate to the repo as md when they harden. Pointers only across the line, never copies; Mneme never ingests repo files. The Vue UI is a read-mostly viewer — mutations go through MCP. Full decision: [`docs/specs/2026-07-11-repo-vs-mneme-delineation.md`](docs/specs/2026-07-11-repo-vs-mneme-delineation.md).
 - **Pragmatic Dependencies (Go)** — Prefer the standard library, but use high-quality dependencies (e.g., config managers, routers) if they significantly simplify the code. Avoid heavy "magic" frameworks like ORMs; stick to raw SQL (`pgx/v5`).
 - **Vue3 standard runtime** — body is structured JSON dispatched via `<component :is>`, no runtime template compilation.
+
+## Git conventions
+
+- **Branch per unit of work** — `feat/<slug>` or `fix/<slug>`. A branch covers a whole piece of work, not one phase of it.
+- **Small fixes may go straight to `main`** — this is a solo project. Revise this section if that stops being true.
+- **Conventional commits with a scope** — `feat(mcp):`, `fix(relations):`, `docs(specs):`, `test(mcp):`, `perf(mcp):`, `refactor(mcp):`.
+- **Default to merge commits** — subject: `Merge feat/x: summary — detail, detail`. Squash when a branch's commits read better as one; rebase when history should be linear. Judge per case, don't default to preserving noise.
+- **Delete the branch after merging.** Merges happen locally; no PRs.
 
 ## Go Guidelines & Idioms
 
